@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --neon-primary: #22d3ee;
+  --neon-secondary: #3b82f6;
+  --neon-accent: #06b6d4;
+  --neon-glow: rgba(34, 211, 238, 0.4);
+  --neon-bg: #030712;
+  --neon-card-bg: rgba(8, 16, 33, 0.6);
+  --neon-border: rgba(34, 211, 238, 0.2);
+  --neon-text: #e0f2fe;
+  --neon-muted: #64748b;
+}
+
+/* Theme: Cyberpunk Neon Blue & Cyan */
+.theme-cyber {
+  --neon-primary: #22d3ee;
+  --neon-secondary: #3b82f6;
+  --neon-accent: #06b6d4;
+  --neon-glow: rgba(34, 211, 238, 0.4);
+  --neon-bg: #030712;
+  --neon-card-bg: rgba(8, 16, 33, 0.6);
+  --neon-border: rgba(34, 211, 238, 0.2);
+  --neon-text: #e0f2fe;
+  --neon-muted: #64748b;
+}
+
+/* Theme: Matrix Emerald Green */
+.theme-matrix {
+  --neon-primary: #22c55e;
+  --neon-secondary: #16a34a;
+  --neon-accent: #4ade80;
+  --neon-glow: rgba(34, 197, 94, 0.4);
+  --neon-bg: #02140a;
+  --neon-card-bg: rgba(5, 25, 18, 0.6);
+  --neon-border: rgba(34, 197, 94, 0.2);
+  --neon-text: #d1fae5;
+  --neon-muted: #4b6b54;
+}
+
+/* Theme: Solar Flare Amber / Orange */
+.theme-solar {
+  --neon-primary: #fbbf24;
+  --neon-secondary: #f59e0b;
+  --neon-accent: #fb923c;
+  --neon-glow: rgba(251, 191, 36, 0.4);
+  --neon-bg: #0a0301;
+  --neon-card-bg: rgba(20, 10, 3, 0.6);
+  --neon-border: rgba(251, 191, 36, 0.2);
+  --neon-text: #fef3c7;
+  --neon-muted: #78716c;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--neon-bg);
+  color: var(--neon-text);
+}
+
+/* Neon glassmorphic card */
+.neon-card {
+  background: var(--neon-card-bg);
+  border: 1px solid var(--neon-border);
+  box-shadow: 0 0 20px var(--neon-glow), inset 0 0 20px rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+}
+
+.neon-border {
+  border-color: var(--neon-border);
+}
+
+.neon-text {
+  color: var(--neon-text);
+}
+
+.neon-muted {
+  color: var(--neon-muted);
+}
+
+.neon-primary-text {
+  color: var(--neon-primary);
+}
+
+.neon-glow-text {
+  text-shadow: 0 0 10px var(--neon-glow);
+}
+
+.neon-glow-box {
+  box-shadow: 0 0 15px var(--neon-glow), 0 0 30px var(--neon-glow);
+}
+
+.neon-primary-bg {
+  background: linear-gradient(135deg, var(--neon-primary), var(--neon-secondary));
+}
+
+.neon-primary-border {
+  border: 1px solid var(--neon-primary);
+}
+
+/* Animated neon background particles */
+.neon-bg-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.neon-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--neon-primary);
+  box-shadow: 0 0 6px var(--neon-primary);
+  opacity: 0.4;
+  animation: neon-float 8s linear infinite;
+}
+
+@keyframes neon-float {
+  0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+  10% { opacity: 0.4; }
+  90% { opacity: 0.4; }
+  100% { transform: translateY(-10vh) translateX(20px); opacity: 0; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--neon-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-primary);
+}
+
+/* Neon button hover */
+.neon-btn-primary {
+  background: linear-gradient(135deg, var(--neon-primary), var(--neon-secondary));
+  color: #000;
+  box-shadow: 0 0 15px var(--neon-glow);
+  font-weight: 600;
+}
+.neon-btn-primary:hover {
+  box-shadow: 0 0 25px var(--neon-glow), 0 0 40px var(--neon-glow);
+}
+
+.neon-btn-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--neon-text);
+  border: 1px solid var(--neon-border);
+}
+.neon-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--neon-primary);
+}
+
+.neon-btn-danger {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+}
+.neon-btn-danger:hover {
+  background: rgb(239 68 68);
+}

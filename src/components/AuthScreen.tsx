@@ -1,0 +1,1075 @@
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, PanInfo } from 'framer-motion';
+import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useApp } from '@/lib/AppContext';
+import { useToast } from '@/components/Toast';
+
+export function AuthScreen() {
+  const { t, lang, setLang } = useApp();
+  const { notify } = useToast();
+  const [lit, setLit] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [pwdFocused, setPwdFocused] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+
+  const email = `${phone.replace(/\D/g, '')}@lumora.app`;
+
+  const pwdChecks = useMemo(() => {
+    const minLen = password.length >= 6;
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password);
+    return { minLen, hasNumber, hasSpecial };
+  }, [password]);
+  const pwdValid = pwdChecks.minLen && pwdChecks.hasNumber && pwdChecks.hasSpecial;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (phone.replace(/\D/g, '').length < 10) {
+      setError(lang === 'bn' ? 'সঠিক ফোন নাম্বার দাও' : 'Enter a valid phone number');
+      return;
+    }
+    setBusy(true);
+    try {
+      let referrerId: string | null = null;
+      if (mode === 'signup' && referralCode.trim()) {
+        const { data: refProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('referral_code', referralCode.trim().toUpperCase())
+          .maybeSingle();
+        if (!refProfile) {
+          setError(t('referralInvalid'));
+          setBusy(false);
+          return;
+        }
+        referrerId = refProfile.id;
+      }
+      if (mode === 'signup') {
+        const { data, error: err } = await supabase.auth.signUp({ email, password, options: { data: { phone, full_name: name, referred_by: referrerId } } });
+        if (err) throw err;
+        if (data.user && referrerId) {
+          const { data: settings } = await supabase.from('app_settings').select('referral_bonus, referee_bonus').eq('id', 1).maybeSingle();
+          const refBonus = settings?.referral_bonus ?? 500;
+          const refereeBonus = settings?.referee_bonus ?? 200;
+          await supabase.from('profiles').update({ referred_by: referrerId, lumora_coins: refereeBonus, referral_earned: refereeBonus }).eq('id', data.user.id);
+          await supabase.from('transactions').insert({ user_id: data.user.id, type: 'referral_signup', amount: refereeBonus, status: 'completed', note: 'Referral signup bonus' });
+          const { data: refProf } = await supabase.from('profiles').select('lumora_coins, referral_earned').eq('id', referrerId).maybeSingle();
+          if (refProf) {
+            await supabase.from('profiles').update({ lumora_coins: refProf.lumora_coins + refBonus, referral_earned: refProf.referral_earned + refBonus }).eq('id', referrerId);
+            await supabase.from('transactions').insert({ user_id: referrerId, type: 'referral_signup', amount: refBonus, status: 'completed', note: 'Referral signup bonus' });
+          }
+        }
+      } else {
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+        if (err) throw err;
+      }
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (/weak.*password|password.*weak|password.*strength/i.test(msg)) {
+        notify(t('pwdWeakToast'), 'error');
+      }
+      setError(err.message || (lang === 'bn' ? 'কিছু সমস্যা হয়েছে' : 'Something went wrong'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleLight = useCallback(() => {
+    playClick();
+    setLit((v) => !v);
+  }, []);
+
+  return (
+    <div
+      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      style={{
+        background: lit
+          ? 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.18) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)'
+          : 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
+        perspective: '1200px',
+      }}
+    >
+      {/* Ambient volumetric glow when lit */}
+      <motion.div
+        className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none"
+        style={{
+          width: 800,
+          height: 700,
+          background: 'radial-gradient(ellipse, rgba(251,191,36,0.15) 0%, rgba(251,140,0,0.06) 30%, transparent 65%)',
+          filter: 'blur(20px)',
+        }}
+        animate={{ opacity: lit ? 1 : 0, scale: lit ? 1 : 0.3 }}
+        transition={{ duration: 1.2 }}
+      />
+
+      {/* Dust motes in light beam */}
+      <AnimatePresence>
+        {lit && (
+          <motion.div
+            className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{ width: 300, height: 600 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1, delay: 0.3 }}
+          >
+            {Array.from({ length: 15 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  left: `${20 + i * 4}%`,
+                  width: 2 + (i % 3),
+                  height: 2 + (i % 3),
+                  background: 'rgba(251,191,36,0.3)',
+                  boxShadow: '0 0 4px rgba(251,191,36,0.4)',
+                }}
+                animate={{
+                  y: [0, 400 + (i % 3) * 50],
+                  x: [0, (i % 2 ? 1 : -1) * 30],
+                  opacity: [0, 0.6, 0],
+                }}
+                transition={{ duration: 6 + (i % 4), repeat: Infinity, delay: i * 0.5, ease: 'linear' }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating language toggle */}
+      <motion.button
+        onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
+        whileTap={{ scale: 0.9 }}
+        className="absolute top-5 right-5 z-40 flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-xl text-sm font-medium transition-colors hover:bg-white/15"
+        style={{
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(251,191,36,0.25)',
+          boxShadow: lit ? '0 4px 20px rgba(251,191,36,0.15)' : 'none',
+        }}
+      >
+        <span className={lang === 'bn' ? 'text-amber-400' : 'text-slate-500'}>বাংলা</span>
+        <span className="text-slate-600">/</span>
+        <span className={lang === 'en' ? 'text-amber-400' : 'text-slate-500'}>EN</span>
+      </motion.button>
+
+      {/* 3D Chandelier + pull cord */}
+      <Chandelier3D lit={lit} onToggle={toggleLight} />
+
+      {/* Main content */}
+      <div className="relative z-20 w-full max-w-md flex flex-col items-center">
+        {/* 3D Mascot */}
+        <AnimatePresence>
+          {lit && (
+            <Mascot3D
+              phoneFocused={phoneFocused}
+              pwdFocused={pwdFocused}
+              showPwd={showPwd}
+              phoneValue={phone}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* 3D Glassmorphic login card with tilt */}
+        <AnimatePresence>
+          {lit && (
+            <GlassCard3D>
+              {/* Welcome micro-copy */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="text-center mb-5"
+              >
+                <h1
+                  className="text-3xl font-bold"
+                  style={{
+                    background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fb923c)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.3))',
+                  }}
+                >
+                  Lumora IT
+                </h1>
+                <motion.p
+                  key={lang}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-amber-200/80 mt-2 text-sm font-medium px-2"
+                >
+                  {t('lightOnWelcome')}
+                </motion.p>
+              </motion.div>
+
+              {/* Tab switcher */}
+              <div
+                className="flex gap-2 mb-6 rounded-xl p-1"
+                style={{ background: 'rgba(8,12,24,0.7)', border: '1px solid rgba(251,191,36,0.1)' }}
+              >
+                {(['login', 'signup'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className="relative flex-1 py-2 rounded-lg text-sm font-medium transition"
+                    style={{
+                      background: mode === m ? 'linear-gradient(135deg, rgba(251,191,36,0.9), rgba(245,158,11,0.9))' : 'transparent',
+                      color: mode === m ? '#0a0301' : '#94a3b8',
+                      boxShadow: mode === m ? '0 4px 15px rgba(251,191,36,0.3)' : 'none',
+                    }}
+                  >
+                    {t(m)}
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={submit} className="space-y-4">
+                {mode === 'signup' && (
+                  <Field3D icon={<UserIcon size={18} />}>
+                    <input className="w-full bg-transparent outline-none text-white placeholder-slate-500" placeholder={t('fullName')} value={name} onChange={(e) => setName(e.target.value)} />
+                  </Field3D>
+                )}
+                <Field3D icon={<Phone size={18} />} focused={phoneFocused}>
+                  <input
+                    className="w-full bg-transparent outline-none text-white placeholder-slate-500"
+                    placeholder={t('enterPhone')}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    onFocus={() => setPhoneFocused(true)}
+                    onBlur={() => setPhoneFocused(false)}
+                  />
+                </Field3D>
+                <div className="flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-300"
+                  style={{
+                    background: pwdFocused ? 'rgba(251,191,36,0.08)' : 'rgba(8,12,24,0.6)',
+                    border: `1px solid ${pwdFocused ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                    boxShadow: pwdFocused ? '0 0 15px rgba(251,191,36,0.1), inset 0 0 10px rgba(251,191,36,0.03)' : 'none',
+                  }}
+                >
+                  <span className="text-slate-400"><Lock size={18} /></span>
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    className="w-full bg-transparent outline-none text-white placeholder-slate-500"
+                    placeholder={t('enterPassword')}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onFocus={() => setPwdFocused(true)}
+                    onBlur={() => setPwdFocused(false)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    className="text-slate-400 hover:text-amber-400 transition-colors shrink-0"
+                  >
+                    {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+
+                {/* Password checklist — signup only */}
+                {mode === 'signup' && (
+                  <PasswordChecklist checks={pwdChecks} lang={lang} t={t} />
+                )}
+
+                {/* Referral code — signup only */}
+                {mode === 'signup' && (
+                  <Field3D icon={<Ticket size={18} />}>
+                    <input
+                      className="w-full bg-transparent outline-none text-white placeholder-slate-500"
+                      placeholder={t('referralPlaceholder')}
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value)}
+                    />
+                  </Field3D>
+                )}
+
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  type="submit"
+                  disabled={busy || (mode === 'signup' && !pwdValid) || phone.replace(/\D/g, '').length < 10}
+                  className="w-full py-3.5 rounded-xl font-semibold transition-all duration-300"
+                  style={{
+                    background: (mode === 'login' || pwdValid) && phone.replace(/\D/g, '').length >= 10
+                      ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
+                      : 'rgba(30,41,59,0.6)',
+                    color: (mode === 'login' || pwdValid) && phone.replace(/\D/g, '').length >= 10 ? '#0a0301' : '#64748b',
+                    boxShadow: (mode === 'login' || pwdValid) && phone.replace(/\D/g, '').length >= 10
+                      ? '0 8px 25px rgba(251,191,36,0.3), 0 0 20px rgba(251,191,36,0.15)'
+                      : 'none',
+                  }}
+                >
+                  {busy ? '...' : mode === 'login' ? t('login') : t('signup')}
+                </motion.button>
+              </form>
+            </GlassCard3D>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Pre-light hint */}
+      <AnimatePresence>
+        {!lit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ delay: 0.6 }}
+            className="absolute bottom-14 left-0 right-0 text-center z-10"
+          >
+            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }} className="inline-flex flex-col items-center gap-2">
+              <Hand size={24} className="text-amber-400/50" />
+              <p className="text-slate-400 text-sm">{t('pullTheCord')}</p>
+              <p className="text-slate-600 text-xs">{t('lightOnHint')}</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ============== 3D GLASSMORPHIC CARD WITH TILT ============== */
+
+function GlassCard3D({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const rotX = useSpring(useMotionValue(0), { stiffness: 150, damping: 20 });
+  const rotY = useSpring(useMotionValue(0), { stiffness: 150, damping: 20 });
+  const glowX = useMotionValue(50);
+  const glowY = useMotionValue(50);
+  const glowLeft = useTransform(glowX, (v) => `${v}%`);
+  const glowTop = useTransform(glowY, (v) => `${v}%`);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    rotY.set((px - 0.5) * 8);
+    rotX.set((0.5 - py) * 8);
+    glowX.set(px * 100);
+    glowY.set(py * 100);
+  };
+
+  const handleMouseLeave = () => {
+    rotX.set(0);
+    rotY.set(0);
+    glowX.set(50);
+    glowY.set(50);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 60, scale: 0.92, rotateX: 15 }}
+      animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+      exit={{ opacity: 0, y: 60, scale: 0.92 }}
+      transition={{ type: 'spring', stiffness: 120, damping: 18, delay: 0.25 }}
+      style={{ transformStyle: 'preserve-3d', rotateX: rotX, rotateY: rotY, perspective: 1000 }}
+      className="w-full"
+    >
+      <div
+        ref={ref}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        className="relative rounded-3xl p-6 overflow-hidden"
+        style={{
+          background: 'rgba(15,20,35,0.35)',
+          backdropFilter: 'blur(24px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(140%)',
+          border: '1px solid rgba(251,191,36,0.18)',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 30px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        {/* Cursor-following spotlight glow */}
+        <motion.div
+          className="absolute pointer-events-none rounded-full"
+          style={{
+            width: 300,
+            height: 300,
+            left: glowLeft,
+            top: glowTop,
+            x: '-50%',
+            y: '-50%',
+            background: 'radial-gradient(circle, rgba(251,191,36,0.08) 0%, transparent 60%)',
+          }}
+        />
+
+        {/* Top metallic shimmer line */}
+        <div
+          className="absolute top-0 left-0 right-0 h-px"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(251,191,36,0.4), transparent)' }}
+        />
+
+        {children}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ============== 3D REALISTIC CHANDELIER ============== */
+
+function Chandelier3D({ lit, onToggle }: { lit: boolean; onToggle: () => void }) {
+  const dragY = useMotionValue(0);
+  const springY = useSpring(dragY, { stiffness: 350, damping: 12, mass: 1.2 });
+  const [pulling, setPulling] = useState(false);
+  const cordRef = useRef<HTMLDivElement>(null);
+
+  const sway = useSpring(0, { stiffness: 40, damping: 5, mass: 4 });
+  useEffect(() => {
+    if (!pulling) {
+      let dir = 1;
+      const iv = setInterval(() => {
+        dir *= -1;
+        sway.set(dir * 2);
+      }, 3500);
+      return () => clearInterval(iv);
+    }
+  }, [pulling, sway]);
+
+  const fixtureX = useTransform([springY, sway], ([dy, sw]: number[]) => sw + dy * 0.08);
+  const fixtureRotate = useTransform([springY, sway], ([dy, sw]: number[]) => sw + dy * 0.025);
+
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    setPulling(false);
+    if (Math.abs(info.offset.y) > 40 || Math.abs(info.velocity.y) > 250) {
+      dragY.set(0);
+      onToggle();
+    } else {
+      dragY.set(0);
+    }
+  };
+
+  return (
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 select-none pointer-events-none" style={{ height: 320, perspective: '800px' }}>
+      {/* Ceiling mounting plate — 3D metallic */}
+      <div
+        className="absolute top-0 left-1/2 -translate-x-1/2 rounded-full"
+        style={{
+          width: 90,
+          height: 6,
+          background: 'linear-gradient(180deg, #475569 0%, #1e293b 50%, #0f172a 100%)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+        }}
+      />
+      <div
+        className="absolute top-2 left-1/2 -translate-x-1/2 rounded-b-lg"
+        style={{
+          width: 60,
+          height: 12,
+          background: 'linear-gradient(180deg, #64748b 0%, #334155 60%, #1e293b 100%)',
+          boxShadow: '0 3px 10px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+        }}
+      />
+
+      {/* Swinging unit */}
+      <motion.div
+        className="absolute top-6 left-1/2 -translate-x-1/2"
+        style={{ x: fixtureX, rotate: fixtureRotate, originY: 0, transformStyle: 'preserve-3d' }}
+      >
+        {/* Chain — multi-segment for 3D depth */}
+        <div className="flex flex-col items-center" style={{ gap: 0 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-full"
+              style={{
+                width: 6 - i * 0.3,
+                height: 10,
+                background: `linear-gradient(135deg, #64748b 0%, #334155 50%, #1e293b 100%)`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+                marginTop: -1,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Chandelier body — 3D metallic fixture */}
+        <div className="relative flex flex-col items-center" style={{ transformStyle: 'preserve-3d' }}>
+          {/* Top canopy */}
+          <div
+            className="rounded-t-xl"
+            style={{
+              width: 52,
+              height: 18,
+              background: 'linear-gradient(180deg, #92400e 0%, #78350f 50%, #451a03 100%)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(251,191,36,0.2)',
+              border: '1px solid rgba(251,191,36,0.15)',
+            }}
+          />
+          {/* Mid band — polished brass */}
+          <div
+            className="rounded-full"
+            style={{
+              width: 68,
+              height: 8,
+              background: 'linear-gradient(180deg, #b45309 0%, #92400e 40%, #78350f 100%)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(251,191,36,0.3)',
+              border: '1px solid rgba(251,191,36,0.2)',
+            }}
+          />
+
+          {/* Arm ring — decorative 3D arms */}
+          <div className="relative my-1" style={{ width: 80, height: 20 }}>
+            {[0, 120, 240].map((angle) => (
+              <div
+                key={angle}
+                className="absolute top-1/2 left-1/2 origin-center"
+                style={{
+                  width: 38,
+                  height: 3,
+                  background: 'linear-gradient(90deg, #92400e, #b45309, #78350f)',
+                  borderRadius: '2px',
+                  transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }}
+              >
+                <div
+                  className="absolute rounded-full"
+                  style={{
+                    right: -3, top: -3, width: 9, height: 9,
+                    background: 'radial-gradient(circle at 30% 30%, #fde68a, #fbbf24 40%, #92400e 100%)',
+                    boxShadow: lit ? '0 0 12px rgba(251,191,36,0.6)' : '0 1px 3px rgba(0,0,0,0.4)',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Central bulb housing */}
+          <div
+            className="rounded-full"
+            style={{
+              width: 28,
+              height: 8,
+              background: 'linear-gradient(180deg, #78350f 0%, #451a03 100%)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+            }}
+          />
+
+          {/* Main bulb — 3D glass */}
+          <Bulb3D lit={lit} />
+
+          {/* Pull cord — physically weighted */}
+          <motion.div
+            ref={cordRef}
+            className="absolute left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none pointer-events-auto"
+            style={{ y: dragY, originY: 0, top: 35 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 120 }}
+            dragElastic={0.15 }
+            onDragStart={() => setPulling(true)}
+            onDragEnd={handleDragEnd}
+            onClick={() => { if (!pulling) onToggle(); }}
+          >
+            {/* Beaded chain cord */}
+            <div className="flex flex-col items-center" style={{ gap: 0 }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-full"
+                  style={{
+                    width: 4, height: 7, marginTop: -1,
+                    background: 'linear-gradient(135deg, #64748b, #334155, #1e293b)',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Pull knob — 3D metallic bead */}
+            <motion.div
+              className="relative mt-0 rounded-full flex items-center justify-center"
+              style={{
+                width: 28, height: 28,
+                background: 'radial-gradient(circle at 30% 25%, #fde68a 0%, #fbbf24 30%, #d97706 60%, #78350f 100%)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5), 0 0 10px rgba(251,191,36,0.2), inset 0 2px 4px rgba(255,255,255,0.2)',
+                border: '1px solid rgba(251,191,36,0.3)',
+              }}
+              animate={{ scale: pulling ? 1.15 : 1 }}
+              whileHover={{ scale: 1.08 }}
+            >
+              <span className="rounded-full" style={{ width: 6, height: 6, background: 'rgba(254,243,199,0.4)' }} />
+            </motion.div>
+          </motion.div>
+        </div>
+      </motion.div>
+
+      {/* Dynamic drop shadow on floor */}
+      <motion.div
+        className="absolute left-1/2 -translate-x-1/2 rounded-full pointer-events-none"
+        style={{
+          bottom: -20,
+          width: 100,
+          height: 20,
+          background: 'radial-gradient(ellipse, rgba(0,0,0,0.3) 0%, transparent 70%)',
+          filter: 'blur(8px)',
+        }}
+        animate={{ opacity: lit ? 0.5 : 0.3, scale: lit ? 1.1 : 0.9 }}
+      />
+    </div>
+  );
+}
+
+/* ============== 3D REALISTIC BULB ============== */
+
+function Bulb3D({ lit }: { lit: boolean }) {
+  return (
+    <div className="relative" style={{ marginTop: 2 }}>
+      {/* Volumetric light cone when lit */}
+      <AnimatePresence>
+        {lit && (
+          <motion.div
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{
+              top: 20,
+              width: 0,
+              height: 0,
+              borderLeft: '80px solid transparent',
+              borderRight: '80px solid transparent',
+              borderTop: '300px solid rgba(251,191,36,0.04)',
+              filter: 'blur(15px)',
+            }}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.8 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Glow halo */}
+      <motion.div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+        style={{
+          width: 200, height: 200,
+          background: 'radial-gradient(circle, rgba(251,191,36,0.35) 0%, rgba(251,140,0,0.1) 30%, transparent 60%)',
+        }}
+        animate={{ opacity: lit ? [0, 1, 0.85] : 0, scale: lit ? [0.3, 1.1, 1] : 0 }}
+        transition={{ duration: 0.8 }}
+      />
+
+      {/* Light rays */}
+      <AnimatePresence>
+        {lit && (
+          <motion.div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {Array.from({ length: 8 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  width: 1, height: 14,
+                  left: 0, top: -85,
+                  transformOrigin: 'bottom center',
+                  rotate: i * 45,
+                  background: 'linear-gradient(180deg, rgba(251,191,36,0.4), transparent)',
+                }}
+                animate={{ scaleY: [0.4, 1, 0.4], opacity: [0.2, 0.5, 0.2] }}
+                transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.15 }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3D Glass bulb SVG with gradients */}
+      <motion.div animate={{ scale: lit ? [1, 1.05, 1] : 1 }} transition={{ duration: 0.4 }}>
+        <svg width="70" height="90" viewBox="0 0 70 90" fill="none">
+          <defs>
+            <radialGradient id="bulbGlass3d" cx="0.35" cy="0.3" r="0.7">
+              <stop offset="0%" stopColor={lit ? '#fffbeb' : '#1e293b'} />
+              <stop offset="30%" stopColor={lit ? '#fde68a' : '#1e293b'} />
+              <stop offset="70%" stopColor={lit ? '#fbbf24' : '#0f172a'} />
+              <stop offset="100%" stopColor={lit ? '#d97706' : '#020617'} />
+            </radialGradient>
+            <radialGradient id="bulbHighlight3d" cx="0.25" cy="0.2" r="0.3">
+              <stop offset="0%" stopColor="white" stopOpacity={lit ? 0.6 : 0.1} />
+              <stop offset="100%" stopColor="white" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id="bulbBase3d" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#64748b" />
+              <stop offset="50%" stopColor="#334155" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+          </defs>
+
+          {/* Screw base */}
+          <rect x="25" y="54" width="20" height="4" rx="1" fill="url(#bulbBase3d)" />
+          <rect x="24" y="59" width="22" height="4" rx="1" fill="#1e293b" />
+          <rect x="23" y="64" width="24" height="6" rx="2" fill="#0f172a" />
+          <rect x="22" y="70" width="26" height="4" rx="2" fill="#020617" />
+
+          {/* Glass dome — 3D gradient */}
+          <ellipse
+            cx="35" cy="32" rx="28" ry="30"
+            fill="url(#bulbGlass3d)"
+            stroke={lit ? 'rgba(251,191,36,0.6)' : 'rgba(51,65,85,0.5)'}
+            strokeWidth="1"
+            style={{ filter: lit ? 'drop-shadow(0 0 8px rgba(251,191,36,0.4))' : 'none' }}
+          />
+
+          {/* Glass highlight reflection */}
+          <ellipse cx="25" cy="22" rx="10" ry="14" fill="url(#bulbHighlight3d)" />
+
+          {/* Filament */}
+          <motion.path
+            d="M 24 30 Q 30 18 35 30 Q 40 42 46 30"
+            stroke={lit ? '#f59e0b' : '#475569'}
+            strokeWidth="1.5"
+            fill="none"
+            animate={{ stroke: lit ? '#f59e0b' : '#475569' }}
+            transition={{ duration: 0.35 }}
+          />
+          {lit && (
+            <motion.path
+              d="M 24 30 Q 30 18 35 30 Q 40 42 46 30"
+              stroke="#fef3c7"
+              strokeWidth="0.8"
+              fill="none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 0.7] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+            />
+          )}
+        </svg>
+      </motion.div>
+
+      {/* Sleeping zzz */}
+      <AnimatePresence>
+        {!lit && (
+          <motion.div
+            className="absolute text-slate-700 text-xs font-bold"
+            style={{ right: -10, top: 5 }}
+            initial={{ opacity: 0, x: -5 }}
+            animate={{ opacity: [0, 1, 0], x: [0, 10, 16], y: [0, -6, -12] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2.5, repeat: Infinity }}
+          >
+            zzz
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ============== 3D VOLUMETRIC MASCOT ============== */
+
+function Mascot3D({
+  phoneFocused,
+  pwdFocused,
+  showPwd,
+  phoneValue,
+}: {
+  phoneFocused: boolean;
+  pwdFocused: boolean;
+  showPwd: boolean;
+  phoneValue: string;
+}) {
+  // 3D eye tracking — follows cursor in 3D space
+  const trackX = useSpring(0, { stiffness: 100, damping: 15 });
+  const trackY = useSpring(0, { stiffness: 100, damping: 15 });
+  const headRotX = useSpring(0, { stiffness: 80, damping: 12 });
+  const headRotY = useSpring(0, { stiffness: 80, damping: 12 });
+
+  useEffect(() => {
+    const handleMouse = (e: MouseEvent) => {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const dx = (e.clientX - cx) / cx;
+      const dy = (e.clientY - cy) / cy;
+      trackX.set(dx * 5);
+      trackY.set(dy * 4);
+      headRotY.set(dx * 8);
+      headRotX.set(-dy * 6);
+    };
+    window.addEventListener('mousemove', handleMouse);
+    return () => window.removeEventListener('mousemove', handleMouse);
+  }, [trackX, trackY, headRotX, headRotY]);
+
+  // Also respond to phone typing
+  useEffect(() => {
+    if (phoneFocused) {
+      const len = phoneValue.length;
+      const offset = Math.min(len * 1.0, 5) - 2.5;
+      trackX.set(offset);
+      trackY.set(2);
+    }
+  }, [phoneFocused, phoneValue, trackX, trackY]);
+
+  const covering = pwdFocused && !showPwd;
+  const peeking = pwdFocused && showPwd;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -30, scale: 0.8, rotateX: -20 }}
+      animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+      exit={{ opacity: 0, y: -20, scale: 0.8 }}
+      transition={{ type: 'spring', stiffness: 120, damping: 16 }}
+      className="mb-2 -mt-4"
+      style={{ perspective: '600px' }}
+    >
+      <motion.div
+        style={{
+          rotateX: headRotX,
+          rotateY: headRotY,
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        <svg width="130" height="120" viewBox="0 0 130 120" fill="none">
+          <defs>
+            {/* 3D volumetric body gradient */}
+            <radialGradient id="body3d" cx="0.35" cy="0.3" r="0.75">
+              <stop offset="0%" stopColor="#fef3c7" />
+              <stop offset="25%" stopColor="#fde68a" />
+              <stop offset="55%" stopColor="#fbbf24" />
+              <stop offset="85%" stopColor="#d97706" />
+              <stop offset="100%" stopColor="#92400e" />
+            </radialGradient>
+            <radialGradient id="ear3d" cx="0.3" cy="0.3" r="0.8">
+              <stop offset="0%" stopColor="#fde68a" />
+              <stop offset="50%" stopColor="#fbbf24" />
+              <stop offset="100%" stopColor="#b45309" />
+            </radialGradient>
+            <radialGradient id="earInner3d" cx="0.3" cy="0.3" r="0.8">
+              <stop offset="0%" stopColor="#fbbf24" />
+              <stop offset="60%" stopColor="#d97706" />
+              <stop offset="100%" stopColor="#78350f" />
+            </radialGradient>
+            <radialGradient id="cheek3d" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0%" stopColor="#fb7185" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="#fb7185" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="hand3d" cx="0.3" cy="0.3" r="0.7">
+              <stop offset="0%" stopColor="#fde68a" />
+              <stop offset="50%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#92400e" />
+            </radialGradient>
+            <radialGradient id="eyeWhite3d" cx="0.4" cy="0.35" r="0.6">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="70%" stopColor="#f1f5f9" />
+              <stop offset="100%" stopColor="#cbd5e1" />
+            </radialGradient>
+            <filter id="mascotShadow3d">
+              <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="rgba(0,0,0,0.3)" />
+            </filter>
+            <filter id="mascotGlow3d">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Drop shadow */}
+          <ellipse cx="65" cy="112" rx="30" ry="4" fill="rgba(0,0,0,0.2)" />
+
+          {/* Ears — 3D volumetric */}
+          <ellipse cx="30" cy="30" rx="15" ry="20" fill="url(#ear3d)" filter="url(#mascotShadow3d)" />
+          <ellipse cx="100" cy="30" rx="15" ry="20" fill="url(#ear3d)" filter="url(#mascotShadow3d)" />
+          <ellipse cx="30" cy="32" rx="7" ry="11" fill="url(#earInner3d)" />
+          <ellipse cx="100" cy="32" rx="7" ry="11" fill="url(#earInner3d)" />
+
+          {/* Head — 3D sphere with volumetric gradient */}
+          <circle cx="65" cy="62" r="40" fill="url(#body3d)" filter="url(#mascotShadow3d)" />
+
+          {/* Specular highlight — top-left */}
+          <ellipse cx="48" cy="45" rx="14" ry="18" fill="white" opacity="0.25" />
+
+          {/* Blush cheeks — soft 3D */}
+          <circle cx="33" cy="70" r="8" fill="url(#cheek3d)" />
+          <circle cx="97" cy="70" r="8" fill="url(#cheek3d)" />
+
+          {/* Eyes — 3D glossy spheres */}
+          {!covering && (
+            <>
+              {/* Eye whites with 3D shading */}
+              <ellipse cx="48" cy="58" rx="12" ry="14" fill="url(#eyeWhite3d)" />
+              <ellipse cx="82" cy="58" rx="12" ry="14" fill="url(#eyeWhite3d)" />
+              {/* Pupil + highlight tracked in 3D */}
+              <motion.g style={{ x: trackX, y: trackY }}>
+                <circle cx="48" cy="58" r="6" fill="#0f172a" />
+                <circle cx="82" cy="58" r="6" fill="#0f172a" />
+                {/* Eye shine */}
+                <circle cx="50" cy="55" r="2" fill="white" opacity="0.9" />
+                <circle cx="84" cy="55" r="2" fill="white" opacity="0.9" />
+                <circle cx="46" cy="61" r="1" fill="white" opacity="0.5" />
+                <circle cx="80" cy="61" r="1" fill="white" opacity="0.5" />
+              </motion.g>
+            </>
+          )}
+
+          {/* 3D Hands covering eyes */}
+          <AnimatePresence>
+            {covering && (
+              <motion.g
+                initial={{ y: -35, opacity: 0, scale: 0.5 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: -35, opacity: 0, scale: 0.5 }}
+                transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+                style={{ transformBox: 'fill-box' }}
+              >
+                <ellipse cx="48" cy="59" rx="15" ry="17" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
+                <ellipse cx="82" cy="59" rx="15" ry="17" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
+                {/* Finger lines for 3D depth */}
+                <path d="M 42 55 Q 44 50 46 55" stroke="#92400e" strokeWidth="0.8" fill="none" opacity="0.4" />
+                <path d="M 76 55 Q 78 50 80 55" stroke="#92400e" strokeWidth="0.8" fill="none" opacity="0.4" />
+              </motion.g>
+            )}
+          </AnimatePresence>
+
+          {/* Peeking — hands slightly raised */}
+          <AnimatePresence>
+            {peeking && (
+              <motion.g
+                initial={{ y: -35, opacity: 0 }}
+                animate={{ y: -8, opacity: 1 }}
+                exit={{ y: -35, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+              >
+                <ellipse cx="48" cy="53" rx="15" ry="13" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
+                <ellipse cx="82" cy="53" rx="15" ry="13" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
+                {/* Peek eyes */}
+                <circle cx="48" cy="60" r="3.5" fill="#0f172a" />
+                <circle cx="82" cy="60" r="3.5" fill="#0f172a" />
+                <circle cx="49.5" cy="58.5" r="1.2" fill="white" opacity="0.8" />
+                <circle cx="83.5" cy="58.5" r="1.2" fill="white" opacity="0.8" />
+              </motion.g>
+            )}
+          </AnimatePresence>
+
+          {/* Smile */}
+          <motion.path
+            d={covering || peeking ? 'M 54 80 Q 65 87 76 80' : 'M 52 78 Q 65 90 78 78'}
+            stroke="#451a03"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            fill="none"
+            animate={{ d: covering || peeking ? 'M 54 80 Q 65 86 76 80' : 'M 52 78 Q 65 90 78 78' }}
+          />
+        </svg>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ============== PASSWORD CHECKLIST ============== */
+
+function PasswordChecklist({
+  checks,
+  lang,
+  t,
+}: {
+  checks: { minLen: boolean; hasNumber: boolean; hasSpecial: boolean };
+  lang: string;
+  t: (k: any) => string;
+}) {
+  const items: { key: any; ok: boolean }[] = [
+    { key: 'pwdMinLen', ok: checks.minLen },
+    { key: 'pwdHasNumber', ok: checks.hasNumber },
+    { key: 'pwdHasSpecial', ok: checks.hasSpecial },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      className="rounded-xl p-3 space-y-2"
+      style={{
+        background: 'rgba(8,12,24,0.5)',
+        border: '1px solid rgba(251,191,36,0.1)',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      <p className="text-xs font-medium text-amber-300/80 mb-1">{t('pwdInstructions')}</p>
+      {items.map((item) => (
+        <CheckRow key={item.key} ok={item.ok} label={t(item.key)} />
+      ))}
+    </motion.div>
+  );
+}
+
+function CheckRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <motion.div
+        animate={{ scale: ok ? [0.8, 1.15, 1] : 1, backgroundColor: ok ? 'rgb(34 197 94)' : 'rgb(51 65 85)' }}
+        transition={{ duration: 0.3 }}
+        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+        style={ok ? { boxShadow: '0 0 8px rgba(34,197,94,0.4)' } : {}}
+      >
+        <AnimatePresence mode="wait">
+          {ok ? (
+            <motion.div
+              key="check"
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            >
+              <Check size={13} className="text-white" strokeWidth={3} />
+            </motion.div>
+          ) : (
+            <motion.div key="x" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <X size={12} className="text-slate-500" strokeWidth={2.5} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+      <span className={`text-xs transition-colors duration-300 ${ok ? 'text-green-400' : 'text-slate-500'}`}>{label}</span>
+    </div>
+  );
+}
+
+/* ============== 3D GLASS FIELD ============== */
+
+function Field3D({ icon, children, focused }: { icon: React.ReactNode; children: React.ReactNode; focused?: boolean }) {
+  return (
+    <div
+      className="flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-300"
+      style={{
+        background: focused ? 'rgba(251,191,36,0.06)' : 'rgba(8,12,24,0.6)',
+        border: `1px solid ${focused ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.08)'}`,
+        boxShadow: focused ? '0 0 12px rgba(251,191,36,0.08)' : 'none',
+      }}
+    >
+      <span className="text-slate-400">{icon}</span>
+      {children}
+    </div>
+  );
+}
+
+/* ============== CLICK SOUND ============== */
+
+function playClick() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch {
+    // audio not available
+  }
+}
