@@ -1,0 +1,3 @@
+[functions.daily-ai-content]
+verify_jwt = false
+entrypoint = "./functions/daily-ai-content/index.ts"
