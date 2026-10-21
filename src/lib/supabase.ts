@@ -14,6 +14,10 @@ export type Profile = {
   avatar_url: string | null;
   role: 'user' | 'admin';
   lumora_coins: number;
+  withdrawable_coins: number;
+  bonus_coins: number;
+  kyc_verified: boolean;
+  kyc_fee_paid: boolean;
   trust_score: number;
   streak_days: number;
   last_check_in: string | null;
@@ -23,6 +27,8 @@ export type Profile = {
   spin_used_today: number;
   spin_reset_date: string | null;
   banned: boolean;
+  referral_step2_paid: boolean;
+  referral_activated_at: string | null;
   created_at: string;
 };
 

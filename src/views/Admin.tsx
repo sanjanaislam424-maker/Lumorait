@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 
-type AdminTab = 'overview' | 'users' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo';
+type AdminTab = 'overview' | 'users' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals';
 
 export function Admin() {
   const { t, profile } = useApp();
@@ -25,6 +25,7 @@ export function Admin() {
     { key: 'settings', icon: <Settings size={16} />, label: t('settings') },
     { key: 'broadcast', icon: <Bell size={16} />, label: t('broadcast') },
     { key: 'promo', icon: <Ticket size={16} />, label: t('promoManager') },
+    { key: 'appeals', icon: <FileWarning size={16} />, label: t('kycAppeals') },
   ];
 
   return (
@@ -49,6 +50,7 @@ export function Admin() {
       {tab === 'settings' && <SettingsTab />}
       {tab === 'broadcast' && <BroadcastTab />}
       {tab === 'promo' && <PromoCodesTab />}
+      {tab === 'appeals' && <AppealsTab />}
     </div>
   );
 }
@@ -165,25 +167,95 @@ function VerificationsTab() {
 
   const act = async (id: string, status: string) => {
     await supabase.from('id_verifications').update({ status, reviewed_at: new Date().toISOString() }).eq('id', id);
+    if (status === 'approved') {
+      // Mark user as KYC verified
+      const { data: verif } = await supabase.from('id_verifications').select('user_id').eq('id', id).maybeSingle();
+      if (verif) {
+        await supabase.from('profiles').update({ kyc_verified: true }).eq('id', verif.user_id);
+        // Process referral Step 1 if referrer exists
+        const { data: prof } = await supabase.from('profiles').select('referred_by, lumora_coins, bonus_coins').eq('id', verif.user_id).maybeSingle();
+        if (prof?.referred_by) {
+          const { data: referrer } = await supabase.from('profiles').select('lumora_coins, bonus_coins, referral_earned').eq('id', prof.referred_by).maybeSingle();
+          if (referrer) {
+            const step1Bonus = 500;
+            await supabase.from('profiles').update({
+              lumora_coins: referrer.lumora_coins + step1Bonus,
+              bonus_coins: (referrer.bonus_coins || 0) + step1Bonus,
+              referral_earned: (referrer.referral_earned || 0) + step1Bonus,
+            }).eq('id', prof.referred_by);
+            await supabase.from('transactions').insert({ user_id: prof.referred_by, type: 'referral_signup', amount: step1Bonus, status: 'completed', note: 'Referral Step 1: KYC verified' });
+          }
+        }
+      }
+    }
     notify(status === 'approved' ? t('approved') : t('rejected'), 'success');
     load();
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {reqs.length === 0 ? <EmptyState message={t('verifications')} /> : reqs.map((r) => (
         <div key={r.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <div>
               <p className="text-sm text-white">{r.profiles?.full_name || r.profiles?.phone || 'User'}</p>
-              <p className="text-xs text-slate-500">{r.id_type}: {r.id_number}</p>
+              <p className="text-xs text-slate-500">NID: {r.id_number}</p>
             </div>
             <div className="flex gap-1">
               <Button className="text-xs px-2 py-1" onClick={() => act(r.id, 'approved')}><Check size={14} /></Button>
               <Button variant="danger" className="text-xs px-2 py-1" onClick={() => act(r.id, 'rejected')}><X size={14} /></Button>
             </div>
           </div>
-          {r.document_url && <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs underline">View document</a>}
+          <div className="grid grid-cols-3 gap-2">
+            {r.nid_front_url && <a href={r.nid_front_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs underline truncate">NID Front</a>}
+            {r.nid_back_url && <a href={r.nid_back_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs underline truncate">NID Back</a>}
+            {r.video_selfie_url && <a href={r.video_selfie_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs underline truncate">Video Selfie</a>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AppealsTab() {
+  const { t } = useApp();
+  const { notify } = useToast();
+  const [appeals, setAppeals] = useState<any[]>([]);
+
+  const load = async () => {
+    const { data } = await supabase.from('kyc_appeals').select('*, profiles(full_name, phone)').eq('status', 'pending').order('created_at', { ascending: false });
+    setAppeals(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const act = async (appeal: any, status: string) => {
+    await supabase.from('kyc_appeals').update({ status, reviewed_at: new Date().toISOString() }).eq('id', appeal.id);
+    if (status === 'approved') {
+      // Remove from deleted_account_nids so the NID can be reused
+      await supabase.from('deleted_account_nids').delete().eq('nid_number', appeal.nid_number);
+      // Mark user as KYC verified
+      await supabase.from('profiles').update({ kyc_verified: true }).eq('id', appeal.user_id);
+      await supabase.from('id_verifications').update({ status: 'appeal_approved' }).eq('user_id', appeal.user_id).eq('id_number', appeal.nid_number);
+    }
+    notify(status === 'approved' ? t('approved') : t('rejected'), 'success');
+    load();
+  };
+
+  return (
+    <div className="space-y-3">
+      {appeals.length === 0 ? <EmptyState message={t('kycAppeals')} /> : appeals.map((a) => (
+        <div key={a.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-sm text-white">{a.profiles?.full_name || a.profiles?.phone || 'User'}</p>
+              <p className="text-xs text-slate-500">NID: {a.nid_number}</p>
+            </div>
+            <div className="flex gap-1">
+              <Button className="text-xs px-2 py-1" onClick={() => act(a, 'approved')}><Check size={14} /></Button>
+              <Button variant="danger" className="text-xs px-2 py-1" onClick={() => act(a, 'rejected')}><X size={14} /></Button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">{a.reason}</p>
         </div>
       ))}
     </div>

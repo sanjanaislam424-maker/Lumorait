@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -12,6 +12,7 @@ export function Wallet() {
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [depOpen, setDepOpen] = useState(false);
   const [wdOpen, setWdOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
 
   const load = async () => {
     if (!profile) return;
@@ -25,16 +26,42 @@ export function Wallet() {
 
   return (
     <div>
-      {/* Balance card */}
-      <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 mb-4 relative overflow-hidden">
+      {/* Tappable balance card with breakdown */}
+      <motion.div
+        whileTap={{ scale: 0.98 }}
+        onClick={() => setCalcOpen(true)}
+        className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 mb-4 relative overflow-hidden cursor-pointer"
+      >
         <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10" />
-        <p className="text-amber-100 text-sm">{t('lumoraCoin')}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <Coins size={28} className="text-white" />
-          <span className="text-4xl font-bold text-white">{profile.lumora_coins.toLocaleString()}</span>
+        <div className="flex items-center justify-between relative">
+          <div>
+            <p className="text-amber-100 text-sm">{t('lumoraCoin')}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Coins size={28} className="text-white" />
+              <span className="text-4xl font-bold text-white">{profile.lumora_coins.toLocaleString()}</span>
+            </div>
+            <p className="text-amber-100 text-xs mt-2">≈ {(profile.lumora_coins / 100).toFixed(2)} BDT</p>
+          </div>
+          <Calculator size={24} className="text-white/70" />
         </div>
-        <p className="text-amber-100 text-xs mt-2">≈ {(profile.lumora_coins / 100).toFixed(2)} BDT</p>
-      </div>
+        {/* Balance breakdown */}
+        <div className="grid grid-cols-2 gap-2 mt-4 relative">
+          <div className="bg-white/10 rounded-xl p-2.5">
+            <div className="flex items-center gap-1.5">
+              <WalletIcon size={12} className="text-green-200" />
+              <p className="text-[10px] text-amber-100">{t('withdrawableCoins')}</p>
+            </div>
+            <p className="text-lg font-bold text-white">{(profile.withdrawable_coins || 0).toLocaleString()}</p>
+          </div>
+          <div className="bg-white/10 rounded-xl p-2.5">
+            <div className="flex items-center gap-1.5">
+              <Gift size={12} className="text-pink-200" />
+              <p className="text-[10px] text-amber-100">{t('bonusCoins')}</p>
+            </div>
+            <p className="text-lg font-bold text-white">{(profile.bonus_coins || 0).toLocaleString()}</p>
+          </div>
+        </div>
+      </motion.div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
         <motion.button whileTap={{ scale: 0.95 }} onClick={() => setDepOpen(true)} className="flex flex-col items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-2xl py-4 text-green-300">
@@ -73,8 +100,58 @@ export function Wallet() {
       </div>
 
       <DepositModal open={depOpen} onClose={() => setDepOpen(false)} onDone={() => { load(); refreshProfile(); }} />
-      <WithdrawModal open={wdOpen} onClose={() => setWdOpen(false)} onDone={() => { load(); refreshProfile(); }} balance={profile.lumora_coins} />
+      <WithdrawModal open={wdOpen} onClose={() => setWdOpen(false)} onDone={() => { load(); refreshProfile(); }} balance={profile.withdrawable_coins || 0} />
+      <CoinCalculatorModal open={calcOpen} onClose={() => setCalcOpen(false)} />
     </div>
+  );
+}
+
+function CoinCalculatorModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t, profile } = useApp();
+  const [coins, setCoins] = useState(100);
+
+  if (!profile) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title={t('coinCalculator')}>
+      <div className="space-y-4">
+        {/* Balance breakdown */}
+        <div className="space-y-2">
+          <p className="text-xs text-slate-400 font-semibold">{t('balanceBreakdown')}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3">
+              <p className="text-[10px] text-green-400">{t('withdrawableCoins')}</p>
+              <p className="text-xl font-bold text-white">{(profile.withdrawable_coins || 0).toLocaleString()}</p>
+            </div>
+            <div className="bg-pink-500/10 border border-pink-500/20 rounded-xl p-3">
+              <p className="text-[10px] text-pink-400">{t('bonusCoins')}</p>
+              <p className="text-xl font-bold text-white">{(profile.bonus_coins || 0).toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+            <p className="text-[10px] text-amber-400">{t('lumoraCoin')} (Total)</p>
+            <p className="text-xl font-bold text-white">{profile.lumora_coins.toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* Converter */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('enterCoins')}</label>
+          <input
+            type="number"
+            min={0}
+            value={coins}
+            onChange={(e) => setCoins(Math.max(0, +e.target.value))}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+          />
+          <div className="mt-2 bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+            <span className="text-xs text-slate-400">{t('bdtEquivalent')}</span>
+            <span className="text-lg font-bold text-amber-300">{(coins / 100).toFixed(2)} BDT</span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">1 BDT = 100 LM Coins</p>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -138,6 +215,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           <label className="text-xs text-slate-400 block mb-1">{t('amount')} ({t('lumoraCoins')})</label>
           <input type="number" min={1000} value={coins} onChange={(e) => setCoins(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           <p className="text-xs text-amber-300 mt-1">= {(coins / 100).toFixed(2)} BDT</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">{t('withdrawableCoins')}: {balance.toLocaleString()}</p>
         </div>
         <div>
           <label className="text-xs text-slate-400 block mb-1">{t('method')}</label>
@@ -174,9 +252,14 @@ function RedeemCodeBox({ onRedeemed }: { onRedeemed: () => void }) {
 
       await supabase.from('promo_redemptions').insert({ promo_code_id: promo.id, user_id: profile.id, coins_awarded: promo.coin_value });
       await supabase.from('promo_codes').update({ uses_count: promo.uses_count + 1 }).eq('id', promo.id);
-      const { data: prof } = await supabase.from('profiles').select('lumora_coins').eq('id', profile.id).maybeSingle();
+
+      // Promo coins go to bonus_coins, not withdrawable
+      const { data: prof } = await supabase.from('profiles').select('lumora_coins, bonus_coins').eq('id', profile.id).maybeSingle();
       if (prof) {
-        await supabase.from('profiles').update({ lumora_coins: prof.lumora_coins + promo.coin_value }).eq('id', profile.id);
+        await supabase.from('profiles').update({
+          lumora_coins: prof.lumora_coins + promo.coin_value,
+          bonus_coins: (prof.bonus_coins || 0) + promo.coin_value,
+        }).eq('id', profile.id);
       }
       await supabase.from('transactions').insert({ user_id: profile.id, type: 'promo', amount: promo.coin_value, status: 'completed', note: `Promo code: ${trimmed}` });
 
