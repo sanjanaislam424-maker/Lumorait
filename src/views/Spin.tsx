@@ -7,15 +7,21 @@ import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 
-// 8 clearly distinct slices with high-contrast labels
-const segments = [0, 20, 50, 100, 200, 300, -1, 10];
+// 8 distinct slices: 0, 20, 50, 100, 200, Mystery, 300, 500
+const segments = [0, 20, 50, 100, 200, -1, 300, 500];
+const segmentLabels = ['0', '20', '50', '100', '200', '?', '300', '500'];
+// Vibrant alternating metallic/neon slice base colors
 const segmentColors = [
-  '#1e293b', '#fbbf24', '#22c55e', '#3b82f6',
-  '#f59e0b', '#ec4899', '#a855f7', '#84cc16',
+  '#0f172a', '#f59e0b', '#10b981', '#2563eb',
+  '#d97706', '#ec4899', '#7c3aed', '#dc2626',
 ];
-const segmentLabels = ['0', '20', '50', '100', '200', '300', '?', '10'];
+// Bright high-contrast text colors per slice (glow)
+const segmentTextColors = [
+  '#94a3b8', '#fffbeb', '#d1fae5', '#dbeafe',
+  '#fef3c7', '#fce7f3', '#ede9fe', '#fee2e2',
+];
 
-const weightedOdds = [14, 10, 8, 5, 3, 1, 2, 7];
+const weightedOdds = [14, 10, 8, 5, 3, 2, 1, 1];
 const mysteryRewards = [15, 30, 75, 150, 200, 10, 50, 5];
 
 function pickWeightedIndex(): number {
@@ -400,8 +406,16 @@ export function Spin() {
                     <stop offset="55%" stopColor="rgba(255,255,255,0)" />
                     <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
                   </radialGradient>
-                  <filter id="textGlow">
-                    <feGaussianBlur stdDeviation="1.2" result="blur" />
+                  {/* Per-slice metallic radial gradients */}
+                  {segmentColors.map((c, i) => (
+                    <radialGradient key={`sg${i}`} id={`slice${i}`} cx="0.5" cy="0.5" r="0.7">
+                      <stop offset="0%" stopColor={c} stopOpacity="0.85" />
+                      <stop offset="60%" stopColor={c} />
+                      <stop offset="100%" stopColor={c} stopOpacity="0.6" />
+                    </radialGradient>
+                  ))}
+                  <filter id="textGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="1.8" result="blur" />
                     <feMerge>
                       <feMergeNode in="blur" />
                       <feMergeNode in="SourceGraphic" />
@@ -416,40 +430,45 @@ export function Spin() {
                   const x2 = 100 + 88 * Math.cos(a1);
                   const y2 = 100 + 88 * Math.sin(a1);
                   const midA = (i * segAngle + segAngle / 2 - 90) * (Math.PI / 180);
-                  const tx = 100 + 56 * Math.cos(midA);
-                  const ty = 100 + 56 * Math.sin(midA);
+                  const tx = 100 + 58 * Math.cos(midA);
+                  const ty = 100 + 58 * Math.sin(midA);
                   const isZero = val === 0;
                   const isMystery = val === -1;
-                  const fillColor = isZero ? '#0f172a' : segmentColors[i];
-                  const textColor = isZero ? '#94a3b8' : '#ffffff';
+                  const fillColor = `url(#slice${i})`;
+                  const textColor = segmentTextColors[i];
+                  const labelSize = isMystery ? 20 : (val >= 100 ? 16 : 18);
                   return (
                     <g key={i}>
                       <path
                         d={`M 100 100 L ${x1} ${y1} A 88 88 0 0 1 ${x2} ${y2} Z`}
                         fill={fillColor}
-                        stroke="rgba(0,0,0,0.5)"
-                        strokeWidth={1}
+                        stroke="rgba(0,0,0,0.6)"
+                        strokeWidth={1.2}
                       />
-                      {/* Glow ring on non-zero slices */}
+                      {/* Inner neon edge glow on non-zero slices */}
                       {!isZero && (
                         <path
                           d={`M 100 100 L ${x1} ${y1} A 88 88 0 0 1 ${x2} ${y2} Z`}
                           fill="none"
                           stroke={segmentColors[i]}
-                          strokeWidth={1.5}
-                          opacity={0.4}
-                          style={{ filter: 'blur(3px)' }}
+                          strokeWidth={2}
+                          opacity={0.5}
+                          style={{ filter: 'blur(2px)' }}
                         />
                       )}
+                      {/* Dark stroke behind text for guaranteed contrast, then bright fill on top */}
                       <text
                         x={tx} y={ty}
                         fill={textColor}
-                        fontSize={isMystery ? 18 : 15}
+                        stroke="#0a0a0a"
+                        strokeWidth={isZero ? 0 : 3.5}
+                        paintOrder="stroke"
+                        fontSize={labelSize}
                         fontWeight="bold"
                         textAnchor="middle"
                         dominantBaseline="middle"
                         filter="url(#textGlow)"
-                        style={{ textShadow: isZero ? 'none' : `0 0 8px ${segmentColors[i]}` }}
+                        fontFamily="system-ui, sans-serif"
                       >
                         {segmentLabels[i]}
                       </text>
@@ -483,21 +502,33 @@ export function Spin() {
       </div>
 
       {result !== null && (
-        <Card className="text-center mb-4">
-          <p className="text-slate-400 text-sm">{t('spinReward')}</p>
-          <p className="text-3xl font-bold mt-1">
-            {result.isMystery ? (
-              <span className="text-pink-400">{t('mysteryReward')} <span className="text-amber-300">{result.amount}</span> {t('lumoraCoins')}!</span>
-            ) : result.amount === 0 ? (
-              <span className="text-slate-400">{t('betterLuck')}</span>
-            ) : (
-              <span className="text-amber-300">{result.amount} {t('lumoraCoins')}</span>
-            )}
-          </p>
-          <p className="text-sm text-slate-400 mt-2 px-4">
-            {result.isMystery ? t('spinMysteryFunny') : result.amount === 0 ? t('spinZeroFunny') : result.amount >= 50 ? t('spinBigFunny') : t('spinSmallFunny')}
-          </p>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+        >
+          <div style={{ boxShadow: result.amount > 0 ? '0 0 30px rgba(251,191,36,0.25)' : 'none', borderRadius: 16 }}>
+          <Card className="text-center mb-4">
+            <p className="text-slate-400 text-sm font-medium">{t('spinReward')}</p>
+            <p className="text-4xl font-extrabold mt-2">
+              {result.isMystery ? (
+                <span className="text-pink-400" style={{ filter: 'drop-shadow(0 0 10px rgba(236,72,153,0.5))' }}>
+                  {t('mysteryReward')} <span className="text-amber-300">{result.amount}</span> {t('lumoraCoins')}!
+                </span>
+              ) : result.amount === 0 ? (
+                <span className="text-slate-400">{t('betterLuck')}</span>
+              ) : (
+                <span className="text-amber-300" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }}>
+                  {result.amount} {t('lumoraCoins')}
+                </span>
+              )}
+            </p>
+            <p className="text-sm text-slate-400 mt-3 px-4">
+              {result.isMystery ? t('spinMysteryFunny') : result.amount === 0 ? t('spinZeroFunny') : result.amount >= 50 ? t('spinBigFunny') : t('spinSmallFunny')}
+            </p>
+          </Card>
+          </div>
+        </motion.div>
       )}
 
       {/* Two prominent extra-spin unlock cards — always visible below the wheel */}
