@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, PanInfo } from 'framer-motion';
-import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket, KeyRound } from 'lucide-react';
+import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket, KeyRound, Mail, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useToast } from '@/components/Toast';
@@ -20,8 +20,11 @@ export function AuthScreen() {
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [referralCode, setReferralCode] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
 
-  const email = `${phone.replace(/\D/g, '')}@lumora.app`;
+  const isEmail = phone.includes('@');
+  const email = isEmail ? phone.trim() : `${phone.replace(/\D/g, '')}@lumora.app`;
 
   const pwdChecks = useMemo(() => {
     const minLen = password.length >= 6;
@@ -34,8 +37,16 @@ export function AuthScreen() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (phone.replace(/\D/g, '').length < 10) {
+    if (!acceptTerms) {
+      notify(t('termsToast'), 'error');
+      return;
+    }
+    if (!isEmail && phone.replace(/\D/g, '').length < 10) {
       setError(lang === 'bn' ? 'সঠিক ফোন নাম্বার দাও' : 'Enter a valid phone number');
+      return;
+    }
+    if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(phone.trim())) {
+      setError(lang === 'bn' ? 'সঠিক ইমেইল দাও' : 'Enter a valid email');
       return;
     }
     setBusy(true);
@@ -255,10 +266,10 @@ export function AuthScreen() {
                     <input className="w-full bg-transparent outline-none text-white placeholder-slate-500" placeholder={t('fullName')} value={name} onChange={(e) => setName(e.target.value)} />
                   </Field3D>
                 )}
-                <Field3D icon={<Phone size={18} />} focused={phoneFocused}>
+                <Field3D icon={isEmail ? <Mail size={18} /> : <Phone size={18} />} focused={phoneFocused}>
                   <input
                     className="w-full bg-transparent outline-none text-white placeholder-slate-500"
-                    placeholder={t('enterPhone')}
+                    placeholder={t('enterPhoneOrEmail')}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     onFocus={() => setPhoneFocused(true)}
@@ -308,6 +319,35 @@ export function AuthScreen() {
                   </Field3D>
                 )}
 
+                {/* Mandatory Terms & Conditions checkbox */}
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => setAcceptTerms((v) => !v)}
+                    className="mt-0.5 shrink-0 rounded-md flex items-center justify-center transition-colors"
+                    style={{
+                      width: 18,
+                      height: 18,
+                      background: acceptTerms ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' : 'rgba(8,12,24,0.6)',
+                      border: `1px solid ${acceptTerms ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                      boxShadow: acceptTerms ? '0 0 8px rgba(251,191,36,0.3)' : 'none',
+                    }}
+                  >
+                    {acceptTerms && <Check size={12} className="text-slate-900" strokeWidth={3} />}
+                  </button>
+                  <span className="text-xs text-slate-300 leading-relaxed">
+                    {t('acceptTerms')}{' '}
+                    <button
+                      type="button"
+                      onClick={() => setTermsOpen(true)}
+                      className="text-amber-400 hover:text-amber-300 underline underline-offset-2"
+                    >
+                      {t('termsLink')}
+                    </button>
+                    {lang === 'bn' ? ' মেনে নিচ্ছি' : ''}
+                  </span>
+                </label>
+
                 {error && <p className="text-red-400 text-sm">{error}</p>}
 
                 {mode === 'login' && (
@@ -334,6 +374,51 @@ export function AuthScreen() {
                   {busy ? '...' : mode === 'login' ? t('login') : t('signup')}
                 </motion.button>
               </form>
+
+                {/* Social auth buttons */}
+                <div className="pt-2">
+                  <div className="flex items-center gap-3 my-1">
+                    <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                    <span className="text-slate-500 text-xs">{lang === 'bn' ? 'অথবা' : 'or'}</span>
+                    <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  </div>
+                  <div className="flex flex-col gap-2.5 mt-3">
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      type="button"
+                      onClick={() => notify(t('socialError'), 'info')}
+                      className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-medium transition-all duration-200"
+                      style={{
+                        background: 'rgba(255,255,255,0.95)',
+                        color: '#1e293b',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                      </svg>
+                      {t('continueGoogle')}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      type="button"
+                      onClick={() => notify(t('socialError'), 'info')}
+                      className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-medium transition-all duration-200"
+                      style={{
+                        background: '#1877F2',
+                        color: '#ffffff',
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M24 12.07C24 5.41 18.63 0 12 0S0 5.41 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.69.24 2.69.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z" />
+                      </svg>
+                      {t('continueFacebook')}
+                    </motion.button>
+                  </div>
+                </div>
             </GlassCard3D>
           )}
         </AnimatePresence>
@@ -359,7 +444,61 @@ export function AuthScreen() {
       </AnimatePresence>
 
       <ResetPasswordModal open={resetOpen} onClose={() => setResetOpen(false)} />
+      <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />
     </div>
+  );
+}
+
+function TermsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useApp();
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[9990] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 20 }}
+            className="relative rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
+            style={{
+              background: 'rgba(15,20,35,0.95)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(251,191,36,0.2)',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-amber-300 flex items-center gap-2">
+                <FileText size={20} /> {t('termsTitle')}
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto text-sm text-slate-300 leading-relaxed space-y-3 pr-1">
+              <p>{t('termsBody')}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-4 w-full py-3 rounded-xl font-semibold transition-all"
+              style={{
+                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                color: '#0a0301',
+                boxShadow: '0 8px 25px rgba(251,191,36,0.3)',
+              }}
+            >
+              {t('termsClose')}
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
