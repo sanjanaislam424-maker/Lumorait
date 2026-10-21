@@ -29,6 +29,11 @@ export type Profile = {
   banned: boolean;
   referral_step2_paid: boolean;
   referral_activated_at: string | null;
+  cash_balance: number;
+  membership_tier: string;
+  membership_expires: string | null;
+  box_blasts_used_today: number;
+  box_blast_date: string | null;
   created_at: string;
 };
 
@@ -82,5 +87,7 @@ export type SettingsRow = {
   referral_bonus: number;
   referee_bonus: number;
   referrer_deposit_pct: number;
+  service_charge_pct: number;
+  vip_service_charge_pct: number;
   updated_at: string;
 };

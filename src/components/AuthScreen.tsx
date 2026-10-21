@@ -37,7 +37,7 @@ export function AuthScreen() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!acceptTerms) {
+    if (!acceptTerms && mode === 'signup') {
       notify(t('termsToast'), 'error');
       return;
     }
@@ -319,7 +319,8 @@ export function AuthScreen() {
                   </Field3D>
                 )}
 
-                {/* Mandatory Terms & Conditions checkbox */}
+                {/* Mandatory Terms & Conditions checkbox — signup only */}
+                {mode === 'signup' && (
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <button
                     type="button"
@@ -347,6 +348,7 @@ export function AuthScreen() {
                     {lang === 'bn' ? ' মেনে নিচ্ছি' : ''}
                   </span>
                 </label>
+                )}
 
                 {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -359,14 +361,14 @@ export function AuthScreen() {
                 <motion.button
                   whileTap={{ scale: 0.96 }}
                   type="submit"
-                  disabled={busy || (mode === 'signup' && !pwdValid) || phone.replace(/\D/g, '').length < 10}
+                  disabled={busy || (mode === 'signup' && !pwdValid) || (mode === 'signup' && !acceptTerms) || phone.replace(/\D/g, '').length < 10}
                   className="w-full py-3.5 rounded-xl font-semibold transition-all duration-300"
                   style={{
-                    background: (mode === 'login' || pwdValid) && phone.replace(/\D/g, '').length >= 10
+                    background: (mode === 'login' || (pwdValid && acceptTerms)) && phone.replace(/\D/g, '').length >= 10
                       ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
                       : 'rgba(30,41,59,0.6)',
-                    color: (mode === 'login' || pwdValid) && phone.replace(/\D/g, '').length >= 10 ? '#0a0301' : '#64748b',
-                    boxShadow: (mode === 'login' || pwdValid) && phone.replace(/\D/g, '').length >= 10
+                    color: (mode === 'login' || (pwdValid && acceptTerms)) && phone.replace(/\D/g, '').length >= 10 ? '#0a0301' : '#64748b',
+                    boxShadow: (mode === 'login' || (pwdValid && acceptTerms)) && phone.replace(/\D/g, '').length >= 10
                       ? '0 8px 25px rgba(251,191,36,0.3), 0 0 20px rgba(251,191,36,0.15)'
                       : 'none',
                   }}

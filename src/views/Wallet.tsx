@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift, Banknote, Crown } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 
 export function Wallet() {
-  const { t, profile, refreshProfile } = useApp();
+  const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [depOpen, setDepOpen] = useState(false);
@@ -24,8 +24,28 @@ export function Wallet() {
 
   if (!profile) return null;
 
+  const isVip = profile.membership_tier === 'vip' || profile.membership_tier === 'pro';
+
   return (
     <div>
+      {/* Card A: Cash Balance (BDT) */}
+      <motion.div
+        whileTap={{ scale: 0.98 }}
+        className="bg-gradient-to-br from-green-500 to-emerald-700 rounded-2xl p-6 mb-4 relative overflow-hidden"
+      >
+        <motion.div animate={{ rotate: 360 }} transition={{ duration: 25, repeat: Infinity, ease: 'linear' }} className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10" />
+        <div className="flex items-center justify-between relative">
+          <div>
+            <p className="text-green-100 text-sm flex items-center gap-1.5"><Banknote size={14} /> {t('cashBalance')}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-4xl font-bold text-white">{(profile.cash_balance || 0).toLocaleString()}</span>
+              <span className="text-lg text-green-200">BDT</span>
+            </div>
+            <p className="text-green-100 text-xs mt-2">{lang === 'bn' ? 'মোবাইল ব্যাংকিং বা কয়েন কনভার্ট থেকে' : 'From mobile banking or coin conversion'}</p>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Tappable balance card with breakdown */}
       <motion.div
         whileTap={{ scale: 0.98 }}
@@ -63,7 +83,7 @@ export function Wallet() {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <motion.button whileTap={{ scale: 0.95 }} onClick={() => setDepOpen(true)} className="flex flex-col items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-2xl py-4 text-green-300">
           <ArrowDownToLine size={24} />
           <span className="text-sm font-medium">{t('deposit')}</span>
@@ -72,6 +92,14 @@ export function Wallet() {
           <ArrowUpFromLine size={24} />
           <span className="text-sm font-medium">{t('withdraw')}</span>
         </motion.button>
+      </div>
+
+      {/* VIP service charge notice */}
+      <div className={`mb-6 rounded-xl p-3 flex items-center gap-2 border ${isVip ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-700/30 border-white/10'}`}>
+        <Crown size={16} className={isVip ? 'text-amber-400' : 'text-slate-500'} />
+        <p className={`text-xs ${isVip ? 'text-amber-300' : 'text-slate-400'}`}>
+          {isVip ? t('vipExempt') : `${t('serviceCharge')}: ${lang === 'bn' ? 'ডিপোজিট ও উইথড্রয়ে প্রযোজ্য' : 'applies on deposits & withdrawals'}`}
+        </p>
       </div>
 
       {/* Promo code redeem */}

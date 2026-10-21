@@ -11,6 +11,9 @@ import { Spin } from '@/views/Spin';
 import { Leaderboard } from '@/views/Leaderboard';
 import { ProfileView } from '@/views/Profile';
 import { Admin } from '@/views/Admin';
+import { Membership } from '@/views/Membership';
+import { BuyConvert } from '@/views/BuyConvert';
+import { ReferView } from '@/views/Refer';
 
 function Main() {
   const { session, profile, loading } = useApp();
@@ -54,6 +57,9 @@ function Main() {
           {view === 'leaderboard' && <Leaderboard />}
           {view === 'profile' && <ProfileView />}
           {view === 'admin' && <Admin />}
+          {view === 'membership' && <Membership />}
+          {view === 'buyconvert' && <BuyConvert />}
+          {view === 'refer' && <ReferView />}
         </motion.div>
       </AnimatePresence>
     </AppShell>
