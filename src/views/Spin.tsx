@@ -7,22 +7,21 @@ import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 
-// ---- 8 slices: capped coin values (max 100) + mystery box (100-500) ----
-type Slice = { label: string; value: number; color: string; comment: string };
-const SLICES: Slice[] = [
-  { label: '0 Coins', value: 0, color: '#1e293b', comment: 'আজ কপালটা একটু পচা দোস্ত! জিরো লুমোরা কয়েন পেলো। মন খারাপ করিস না, আবার চেষ্টা কর!' },
-  { label: '5 Coins', value: 5, color: '#f59e0b', comment: 'আরে বাহ্! ৫ কয়েন দিয়ে এক কাপ চা খাওয়ার ব্যবস্থা হলো!' },
-  { label: '10 Coins', value: 10, color: '#10b981', comment: '১০ কয়েন জিতেছে! একবারে লাফ দিয়ে বড়লোক হওয়া যায় না দোস্ত!' },
-  { label: '20 Coins', value: 20, color: '#3b82f6', comment: '২০ লুমোরা কয়েন পকেটে পুরে নাও! ধীরে ধীরে তো কপাল খুলছে!' },
-  { label: '50 Coins', value: 50, color: '#06b6d4', comment: 'বুম! ৫০ কয়েন পকেটে! আজকের দিনটা মন্দ যাবে না কিন্তু!' },
-  { label: '100 Coins', value: 100, color: '#ef4444', comment: 'সাবাস বিটলা! এক শটে ১০০ কয়েন হাঁকিয়ে দিলে!' },
-  { label: 'Mystery Box 🎁', value: -1, color: '#ec4899', comment: 'বুম! রহস্যময় বাক্স থেকে ১০০-৫০০ কয়েনের জ্যাকপট বেরিয়ে এসেছে! আজ তো তুই পার্টি দিবি!' },
-  { label: '0 Coins', value: 0, color: '#334155', comment: 'আবারো জিরো! ভাগ্য দেবতা মনে হয় একটু ঘুমাচ্ছে, আবার ঘুরাও!' },
+// ---- Reward tiers with distinct funny comments ----
+type Reward = { value: number; label: string; color: string; comment: string; emoji: string };
+const REWARDS: Reward[] = [
+  { value: 0, label: '0 Coins', color: '#64748b', emoji: '💨', comment: 'ধুর দোস্ত! বক্স ফাটালি ঠিকই কিন্তু ভেতরে তো শুধু বাতাস! মন খারাপ করিস না, আবার চেষ্টা কর।' },
+  { value: 5, label: '5 Coins', color: '#f59e0b', emoji: '🪙', comment: 'আরে বাহ্! ৫ কয়েন জিতেছে! এক কাপ লাল চা খাওয়ার ব্যবস্থা তো হলো!' },
+  { value: 10, label: '10 Coins', color: '#10b981', emoji: '🪙', comment: '১০ কয়েন পকেটে! একবারে তো আর লাফ দিয়ে কোটিপতি হওয়া যায় না দোস্ত, ধীরে ধীরে এগোও!' },
+  { value: 20, label: '20 Coins', color: '#3b82f6', emoji: '💎', comment: '২০ লুমোরা কয়েন পকেটে পুরে নাও! কপাল কিন্তু আস্তে আস্তে খুলতেছে!' },
+  { value: 50, label: '50 Coins', color: '#06b6d4', emoji: '💥', comment: 'বুম! ৫০ কয়েন উড়িয়ে নিলে! আজকের দিনটা কিন্তু বেশ জমে উঠেছে!' },
+  { value: 100, label: '100 Coins', color: '#ef4444', emoji: '🔥', comment: 'সাবাস বিটলা! এক শটে ১০০ কয়েন হাঁকিয়ে দিলে! তুই তো বস হয়া গেলি রে!' },
+  { value: 200, label: '200 Coins', color: '#fb923c', emoji: '🎆', comment: 'ফাটিয়ে দিলি তো! ২০০ কয়েনের ধামাকা বোনাস! আজ রাতে বিরিয়ানি খাওয়া চাই কিন্তু!' },
+  { value: 500, label: 'Mystery Jackpot', color: '#ec4899', emoji: '🎁', comment: 'বুম বুম জ্যাকপট! মিস্ট্রি বক্স থেকে ৫০০ কয়েন বেরিয়ে এলো! আজ তো পুরো পার্টি হবে দোস্ত!' },
 ];
-const SEG_COUNT = 8;
-const SEG_ANGLE = 360 / SEG_COUNT; // 45
-// Rigged: vast majority land on 0/5/10; 50/100 rare; mystery very rare
-const WEIGHTED_ODDS = [25, 20, 15, 8, 4, 2, 1, 25];
+
+// Rigged probability: low values dominate, jackpot very rare
+const WEIGHTED_ODDS = [28, 22, 16, 10, 6, 3, 2, 1];
 
 function pickWeightedIndex(): number {
   const total = WEIGHTED_ODDS.reduce((a, b) => a + b, 0);
@@ -34,16 +33,12 @@ function pickWeightedIndex(): number {
   return 0;
 }
 
-function rollMystery(): number {
-  return Math.floor(Math.random() * 401) + 100; // 100-500
-}
-
-// Conic gradient with thin dark dividers between slices
-const CONIC_GRADIENT = `conic-gradient(from 0deg, ${
-  SLICES.map((s, i) =>
-    `${s.color} ${i * SEG_ANGLE}deg ${(i + 1) * SEG_ANGLE - 0.5}deg, #050505 ${(i + 1) * SEG_ANGLE - 0.5}deg ${(i + 1) * SEG_ANGLE}deg`,
-  ).join(', ')
-})`;
+// ---- Box visual configs ----
+const BOX_COLORS = [
+  { glow: 'rgba(236, 72, 153, 0.5)', accent: '#ec4899', surface: 'linear-gradient(135deg, #831843, #ec4899, #be185d)' },
+  { glow: 'rgba(34, 211, 238, 0.5)', accent: '#22d3ee', surface: 'linear-gradient(135deg, #0c4a6e, #22d3ee, #0e7490)' },
+  { glow: 'rgba(251, 191, 36, 0.5)', accent: '#fbbf24', surface: 'linear-gradient(135deg, #78350f, #fbbf24, #b45309)' },
+];
 
 // ---- Audio helpers ----
 let audioCtx: AudioContext | null = null;
@@ -65,62 +60,64 @@ function playTone(freq: number, dur: number, type: OscillatorType = 'sine', vol 
     osc.start(); osc.stop(ctx.currentTime + dur);
   } catch { /* ignore */ }
 }
-function playTick() { playTone(880, 0.05, 'square', 0.04); }
+function playExplosion() {
+  playTone(80, 0.3, 'sawtooth', 0.12);
+  setTimeout(() => playTone(120, 0.2, 'square', 0.08), 50);
+  setTimeout(() => playTone(60, 0.4, 'sawtooth', 0.1), 100);
+}
 function playFanfare() {
   playTone(523, 0.15, 'sine', 0.1);
   setTimeout(() => playTone(659, 0.15, 'sine', 0.1), 120);
   setTimeout(() => playTone(784, 0.25, 'sine', 0.1), 240);
 }
-function playLose() { playTone(220, 0.3, 'sawtooth', 0.06); }
+function playLose() { playTone(180, 0.3, 'sawtooth', 0.06); }
 
-// ---- Fireworks particle system (canvas) ----
-type Particle = { x: number; y: number; vx: number; vy: number; color: string; size: number; life: number; maxLife: number };
-const FW_COLORS = ['#fbbf24', '#22d3ee', '#ec4899', '#22c55e', '#f59e0b', '#3b82f6', '#fde68a', '#fb923c'];
+// ---- Particle canvas (explosion + confetti) ----
+type Particle = { x: number; y: number; vx: number; vy: number; color: string; size: number; life: number; maxLife: number; rot: number; vrot: number; shape: 'circle' | 'rect' };
+const CONFETTI_COLORS = ['#fbbf24', '#22d3ee', '#ec4899', '#22c55e', '#f59e0b', '#3b82f6', '#fde68a', '#fb923c', '#a855f7'];
+
+type BlastedBox = { index: number } | null;
 
 export function Spin() {
   const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
 
-  // STRICT: starts at 1, only decrements on spin, never increments via spin
-  const [spinsLeft, setSpinsLeft] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [spinning, setSpinning] = useState(false);
+  // STRICT: starts at 1, only decrements on blast, never increments via blast
+  const [blastsLeft, setBlastsLeft] = useState(1);
+  const [blasting, setBlasting] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
-  const [result, setResult] = useState<{ amount: number; label: string; isMystery: boolean; comment: string } | null>(null);
+  const [result, setResult] = useState<{ reward: Reward } | null>(null);
   const [celebrate, setCelebrate] = useState(false);
+  const [blastedBox, setBlastedBox] = useState<BlastedBox>(null);
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(15);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
 
-  const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number | null>(null);
   const fwActiveRef = useRef(false);
+  const blastCenterRef = useRef<{ x: number; y: number } | null>(null);
 
-  const clearTick = useCallback(() => {
-    if (tickTimer.current) { clearInterval(tickTimer.current); tickTimer.current = null; }
-  }, []);
-
-  // ---- Canvas fireworks ----
-  const fwSpawn = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const count = 6 + Math.floor(Math.random() * 6);
+  // ---- Canvas explosion system ----
+  const spawnExplosion = useCallback((cx: number, cy: number) => {
+    const count = 60 + Math.floor(Math.random() * 30);
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 2 + Math.random() * 5;
+      const speed = 3 + Math.random() * 8;
+      const isRect = Math.random() > 0.4;
       particlesRef.current.push({
         x: cx, y: cy,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        color: FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)],
-        size: 2 + Math.random() * 4,
+        vy: Math.sin(angle) * speed - 2,
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        size: isRect ? 4 + Math.random() * 6 : 3 + Math.random() * 5,
         life: 0,
-        maxLife: 40 + Math.random() * 50,
+        maxLife: 60 + Math.random() * 60,
+        rot: Math.random() * Math.PI * 2,
+        vrot: (Math.random() - 0.5) * 0.3,
+        shape: isRect ? 'rect' : 'circle',
       });
     }
   }, []);
@@ -131,24 +128,33 @@ export function Spin() {
     const ctx = canvas.getContext('2d');
     if (!ctx) { rafRef.current = null; return; }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (fwActiveRef.current) fwSpawn();
+    // Secondary bursts while active
+    if (fwActiveRef.current && blastCenterRef.current) {
+      spawnExplosion(blastCenterRef.current.x, blastCenterRef.current.y);
+    }
     particlesRef.current = particlesRef.current.filter((p) => {
       p.life++;
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.04;
-      p.vx *= 0.99;
-      p.vy *= 0.99;
+      p.vy += 0.12;
+      p.vx *= 0.98;
+      p.rot += p.vrot;
       const alpha = 1 - p.life / p.maxLife;
       if (alpha <= 0) return false;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
-      ctx.shadowBlur = p.size * 3;
+      ctx.shadowBlur = p.size * 2;
       ctx.shadowColor = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.shape === 'rect') {
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
       return true;
     });
@@ -157,75 +163,48 @@ export function Spin() {
     } else {
       rafRef.current = null;
     }
-  }, [fwSpawn]);
+  }, [spawnExplosion]);
 
-  const startFireworks = useCallback(() => {
+  const triggerExplosion = useCallback((boxEl: HTMLElement) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const canvasRect = canvas.getBoundingClientRect();
+    const boxRect = boxEl.getBoundingClientRect();
+    const cx = boxRect.left + boxRect.width / 2 - canvasRect.left;
+    const cy = boxRect.top + boxRect.height / 2 - canvasRect.top;
+    blastCenterRef.current = { x: cx, y: cy };
+    spawnExplosion(cx, cy);
     fwActiveRef.current = true;
     if (rafRef.current == null) rafRef.current = requestAnimationFrame(fwLoop);
-  }, [fwLoop]);
-
-  const stopFireworks = useCallback(() => {
-    fwActiveRef.current = false;
-  }, []);
+    // Stop secondary bursts after initial explosion
+    setTimeout(() => { fwActiveRef.current = false; }, 300);
+  }, [spawnExplosion, fwLoop]);
 
   useEffect(() => () => {
-    clearTick();
     fwActiveRef.current = false;
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-  }, [clearTick]);
+  }, []);
 
-  // ---- CORE SPIN: strictly decrements spinsLeft ----
-  const doSpin = async () => {
-    if (spinning || spinsLeft <= 0 || !profile) return;
+  // ---- CORE: blast a box ----
+  const blastBox = async (boxIndex: number, boxEl: HTMLElement) => {
+    if (blasting || blastsLeft <= 0 || !profile) return;
 
     // STRICT DECREMENT — never increments
-    setSpinsLeft((prev) => Math.max(0, prev - 1));
-
-    setSpinning(true);
+    setBlastsLeft((prev) => Math.max(0, prev - 1));
+    setBlasting(true);
+    setBlastedBox({ index: boxIndex });
     setResult(null);
-    clearTick();
-    startFireworks();
 
-    if (soundOn) {
-      let elapsed = 0;
-      tickTimer.current = setInterval(() => {
-        if (soundOn) playTick();
-        elapsed += 180;
-        if (elapsed > 4200) clearTick();
-      }, 180);
-    }
+    if (soundOn) playExplosion();
+    triggerExplosion(boxEl);
 
     const winIdx = pickWeightedIndex();
-    const slice = SLICES[winIdx];
-    const isMystery = slice.value === -1;
-
-    const segCenter = winIdx * SEG_ANGLE + SEG_ANGLE / 2;
-    const targetAngle = 360 * 6 + (360 - segCenter);
-    setRotation((prev) => {
-      const prevMod = prev % 360;
-      return prev + (targetAngle - prevMod);
-    });
+    const reward = REWARDS[winIdx];
 
     setTimeout(async () => {
-      setSpinning(false);
-      clearTick();
-      stopFireworks();
+      setBlasting(false);
 
-      let actualReward: number;
-      let label: string;
-
-      if (isMystery) {
-        actualReward = rollMystery();
-        label = `${t('mysteryBox')} (${actualReward})`;
-      } else if (slice.value === 0) {
-        actualReward = 0;
-        label = t('betterLuck');
-      } else {
-        actualReward = slice.value;
-        label = `${slice.value} ${t('lumoraCoins')}`;
-      }
-
-      // Persist reward + spin history
+      // Persist reward + blast history
       if (profile) {
         const { data: fresh } = await supabase
           .from('profiles')
@@ -233,33 +212,31 @@ export function Spin() {
           .eq('id', profile.id)
           .maybeSingle();
         await supabase.from('profiles').update({
-          lumora_coins: (fresh?.lumora_coins ?? profile.lumora_coins) + actualReward,
+          lumora_coins: (fresh?.lumora_coins ?? profile.lumora_coins) + reward.value,
         }).eq('id', profile.id);
-        await supabase.from('spin_history').insert({ user_id: profile.id, reward: actualReward, label });
-        if (actualReward > 0) {
+        await supabase.from('spin_history').insert({ user_id: profile.id, reward: reward.value, label: reward.label });
+        if (reward.value > 0) {
           await supabase.from('transactions').insert({
-            user_id: profile.id, type: 'spin', amount: actualReward, status: 'completed', note: `Lucky spin: ${label}`,
+            user_id: profile.id, type: 'spin', amount: reward.value, status: 'completed', note: `Mystery box blast: ${reward.label}`,
           });
         }
         await refreshProfile();
       }
 
-      setResult({ amount: actualReward, label, isMystery, comment: slice.comment });
+      setResult({ reward });
 
-      if (actualReward > 0) {
+      if (reward.value > 0) {
         setCelebrate(true);
-        startFireworks();
-        setTimeout(() => stopFireworks(), 1500);
         if (soundOn) playFanfare();
-        notify(`${t('spinReward')} ${actualReward} ${t('lumoraCoins')}!`, 'success');
+        notify(`${t('boxBlasted')} ${reward.value} ${t('lumoraCoins')}!`, 'success');
       } else {
         if (soundOn) playLose();
-        notify(slice.comment, 'info');
+        notify(reward.comment, 'info');
       }
-    }, 4200);
+    }, 1200);
   };
 
-  // ---- EXTRA SPIN: Watch ad (15s) -> +1 spinsLeft ----
+  // ---- EXTRA BLAST: Watch ad (15s) -> +1 ----
   const watchAd = () => {
     if (adWatching || !profile) return;
     setAdWatching(true);
@@ -270,13 +247,14 @@ export function Spin() {
     setTimeout(() => {
       clearInterval(countdown);
       setAdWatching(false);
-      setSpinsLeft((prev) => prev + 1);
+      setBlastsLeft((prev) => prev + 1);
+      setBlastedBox(null);
       if (soundOn) playFanfare();
-      notify(t('adDone'), 'success');
+      notify(t('adDoneBlast'), 'success');
     }, 15000);
   };
 
-  // ---- EXTRA SPIN: Complete task -> +1 spinsLeft ----
+  // ---- EXTRA BLAST: Complete task -> +1 ----
   const openTaskPicker = async () => {
     if (!profile) return;
     const { data } = await supabase
@@ -290,30 +268,31 @@ export function Spin() {
     setShowTaskPicker(true);
   };
 
-  const completeTaskForSpin = async (task: TaskRow) => {
+  const completeTaskForBlast = async (task: TaskRow) => {
     if (!profile) return;
     await supabase.from('task_submissions').insert({
       task_id: task.id, doer_id: profile.id, proof_urls: ['[]'],
-      notes: 'Completed for extra spin', status: 'approved',
+      notes: 'Completed for extra box blast', status: 'approved',
     });
     setShowTaskPicker(false);
-    setSpinsLeft((prev) => prev + 1);
+    setBlastsLeft((prev) => prev + 1);
+    setBlastedBox(null);
     if (soundOn) playFanfare();
-    notify(t('extraSpinEarned'), 'success');
+    notify(t('extraBlastEarned'), 'success');
   };
 
   if (!profile) return null;
 
-  const btnLabelTask = lang === 'bn' ? 'টাস্ক করে স্পিন নাও' : t('taskForSpinBtn');
-  const btnLabelAd = lang === 'bn' ? 'অ্যাড দেখে স্পিন নাও' : t('adWatchBtn');
+  const btnLabelTask = lang === 'bn' ? 'টাস্ক করে আরেকটি বক্স ফোটাও' : t('taskForBlastBtn');
+  const btnLabelAd = lang === 'bn' ? 'অ্যাড দেখে আরেকটি বক্স ফোটাও' : t('adWatchBlastBtn');
 
   return (
     <div>
-      {/* Header + spin counter */}
+      {/* Header + blast counter */}
       <Card className="mb-4 text-center">
         <div className="flex items-center justify-center gap-2 mb-1">
           <Gift className="text-amber-400" size={20} />
-          <h2 className="text-lg font-bold text-white">{t('spin')}</h2>
+          <h2 className="text-lg font-bold text-white">{t('mysteryBlast')}</h2>
           <button
             onClick={() => setSoundOn((v) => !v)}
             className="ml-2 p-1.5 rounded-lg hover:bg-white/10 transition"
@@ -322,131 +301,107 @@ export function Spin() {
             {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
         </div>
-        <p className="text-sm text-slate-400">
-          {t('freeSpinsLeft')}: <span className="text-amber-300 font-bold text-base">{spinsLeft}</span>
+        <p className="text-sm text-slate-300 mt-2 px-4 leading-relaxed">
+          {t('mysteryBlastHeader')}
+        </p>
+        <p className="text-sm text-slate-400 mt-2">
+          {t('freeBlastsLeft')}: <span className="text-amber-300 font-bold text-base">{blastsLeft}</span>
         </p>
       </Card>
 
-      {/* ===== 3D WHEEL WITH FIREWORKS CANVAS BEHIND ===== */}
-      <div className="flex justify-center mb-6 relative" style={{ perspective: '1000px' }}>
-        {/* Fireworks canvas layer (behind wheel) */}
+      {/* ===== 3 GLOWING 3D MYSTERY BOXES ===== */}
+      <div className="relative mb-6">
+        {/* Explosion canvas (covers the boxes area) */}
         <canvas
           ref={canvasRef}
-          width={420}
-          height={420}
+          width={800}
+          height={500}
           className="absolute pointer-events-none"
-          style={{ top: '-60px', left: '50%', transform: 'translateX(-50%)', zIndex: 0 }}
+          style={{ top: '-80px', left: '50%', transform: 'translateX(-50%)', zIndex: 20, maxWidth: '120%', width: '100%' }}
         />
 
-        <div className="relative" style={{ width: 300, height: 300, zIndex: 1 }}>
-          {/* Glow halo */}
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: 'radial-gradient(circle, var(--neon-glow) 0%, transparent 70%)',
-              filter: 'blur(24px)', transform: 'translateZ(-60px)',
-              opacity: spinning ? 1 : 0.4, transition: 'opacity 0.4s',
-            }}
-          />
+        <div className="grid grid-cols-3 gap-3 sm:gap-4" style={{ perspective: '800px' }}>
+          {[0, 1, 2].map((i) => {
+            const cfg = BOX_COLORS[i];
+            const isBlasted = blastedBox?.index === i;
+            const disabled = blasting || blastsLeft <= 0;
+            return (
+              <div key={i} className="flex justify-center">
+                <motion.button
+                  whileHover={!disabled ? { scale: 1.06, y: -4 } : {}}
+                  whileTap={!disabled ? { scale: 0.92 } : {}}
+                  animate={disabled ? {} : { y: [0, -6, 0] }}
+                  transition={disabled ? {} : { duration: 2 + i * 0.3, repeat: Infinity, ease: 'easeInOut' }}
+                  onClick={(e) => blastBox(i, e.currentTarget as HTMLElement)}
+                  disabled={disabled}
+                  className="relative"
+                  style={{ width: '100%', maxWidth: 120, aspectRatio: '1', transformStyle: 'preserve-3d', transform: 'rotateX(15deg) rotateY(0deg)' }}
+                >
+                  {/* Glow halo */}
+                  <div className="absolute inset-0 rounded-2xl" style={{
+                    background: `radial-gradient(circle, ${cfg.glow} 0%, transparent 70%)`,
+                    filter: 'blur(16px)', transform: 'translateZ(-30px)',
+                    opacity: isBlasted ? 0 : 1,
+                  }} />
 
-          {/* Pointer */}
-          <div className="absolute top-[-8px] left-1/2 -translate-x-1/2 z-30" style={{ filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.8))' }}>
-            <div className="w-0 h-0" style={{ borderLeft: '16px solid transparent', borderRight: '16px solid transparent', borderTop: '30px solid #fbbf24' }} />
-          </div>
+                  {/* Box body */}
+                  <AnimatePresence>
+                    {!isBlasted && (
+                      <motion.div
+                        exit={{ scale: 1.5, opacity: 0, rotate: 15 }}
+                        transition={{ duration: 0.4, ease: 'easeOut' }}
+                        className="absolute inset-0 rounded-2xl"
+                        style={{
+                          background: cfg.surface,
+                          border: `2px solid ${cfg.accent}`,
+                          boxShadow: `0 8px 24px rgba(0,0,0,0.5), inset 0 -8px 16px rgba(0,0,0,0.4), inset 0 4px 8px rgba(255,255,255,0.15), 0 0 20px ${cfg.glow}`,
+                          transform: 'translateZ(20px)',
+                        }}
+                      >
+                        {/* Lid line */}
+                        <div className="absolute top-[20%] left-0 right-0 h-[3px]" style={{ background: 'rgba(0,0,0,0.3)' }} />
+                        {/* Question mark */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span style={{
+                            fontSize: '40px',
+                            fontWeight: 900,
+                            color: 'rgba(255,255,255,0.9)',
+                            textShadow: `0 0 12px ${cfg.accent}, 0 2px 4px rgba(0,0,0,0.6)`,
+                          }}>?</span>
+                        </div>
+                        {/* Metallic corner studs */}
+                        <div className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full" style={{ background: cfg.accent, boxShadow: `0 0 4px ${cfg.accent}` }} />
+                        <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: cfg.accent, boxShadow: `0 0 4px ${cfg.accent}` }} />
+                        <div className="absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full" style={{ background: cfg.accent, boxShadow: `0 0 4px ${cfg.accent}` }} />
+                        <div className="absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: cfg.accent, boxShadow: `0 0 4px ${cfg.accent}` }} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-          {/* 3D tilted wheel container */}
-          <div className="absolute inset-0" style={{ transformStyle: 'preserve-3d', transform: 'rotateX(12deg)' }}>
-            {/* Metallic outer ring */}
-            <div className="absolute inset-0 rounded-full" style={{
-              background: 'conic-gradient(from 0deg, #475569, #94a3b8, #334155, #cbd5e1, #475569)',
-              boxShadow: '0 12px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(0,0,0,0.5)',
-              transform: 'translateZ(-2px)',
-            }} />
-            {/* Inner neon ring */}
-            <div className="absolute rounded-full" style={{
-              inset: '6px', background: 'linear-gradient(135deg, #0f172a, #1e293b)',
-              boxShadow: '0 0 20px var(--neon-glow), inset 0 0 12px rgba(0,0,0,0.8)',
-              border: '2px solid var(--neon-primary)', transform: 'translateZ(2px)',
-            }} />
-
-            {/* ===== ROTATING WHEEL FACE (Pure HTML/CSS conic-gradient + labels) ===== */}
-            <motion.div
-              animate={{ rotate: rotation }}
-              transition={{ duration: 4.2, ease: [0.17, 0.67, 0.3, 0.99] }}
-              className="absolute rounded-full overflow-hidden"
-              style={{ inset: '12px', transform: 'translateZ(8px)', background: CONIC_GRADIENT }}
-            >
-              {/* Radial sheen overlay */}
-              <div className="absolute inset-0 rounded-full" style={{
-                background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 0%, transparent 55%, rgba(0,0,0,0.3) 100%)',
-              }} />
-
-              {/* Slice labels — high-contrast glowing white text */}
-              {SLICES.map((slice, i) => {
-                const angle = i * SEG_ANGLE + SEG_ANGLE / 2;
-                const fontSize = slice.label.includes('Mystery') ? 12 : 16;
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      position: 'absolute',
-                      left: '50%',
-                      top: '50%',
-                      transformOrigin: '0 0',
-                      transform: `rotate(${angle}deg)`,
-                    }}
-                  >
-                    <div style={{
-                      position: 'absolute',
-                      top: '-88px',
-                      left: '0',
-                      transform: 'translate(-50%, -50%)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      <span style={{
-                        display: 'inline-block',
-                        color: '#FFFFFF',
-                        fontSize: `${fontSize}px`,
-                        fontWeight: 800,
-                        textShadow: '0px 2px 4px #000',
-                        letterSpacing: '0.02em',
-                      }}>
-                        {slice.label}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </motion.div>
-
-            {/* Center hub */}
-            <div className="absolute left-1/2 top-1/2 rounded-full flex items-center justify-center z-20" style={{
-              width: 48, height: 48, transform: 'translate(-50%,-50%) translateZ(18px)',
-              background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b 60%, #92400e)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.6), inset 0 -3px 6px rgba(0,0,0,0.3)',
-              border: '2px solid #fbbf24',
-            }}>
-              <Gift size={20} className="text-amber-950" />
-            </div>
-          </div>
+                  {/* Blasted placeholder */}
+                  {isBlasted && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 0.3 }}
+                      className="absolute inset-0 rounded-2xl border-2 border-dashed"
+                      style={{ borderColor: cfg.accent, transform: 'translateZ(10px)' }}
+                    />
+                  )}
+                </motion.button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Spin button */}
-      <div className="flex justify-center mb-6">
-        <Button onClick={doSpin} disabled={spinning || spinsLeft <= 0} className="px-8 py-3 text-lg">
-          {spinning ? (lang === 'bn' ? 'ঘুরছে...' : 'Spinning...') : t('spinNow')}
-        </Button>
-      </div>
-
-      {/* ===== TWO EXTRA-SPIN ACTION CARDS (shown once free spin reaches 0) ===== */}
-      {spinsLeft === 0 && !spinning && (
+      {/* ===== TWO EXTRA-BLAST ACTION CARDS (shown once free blast reaches 0) ===== */}
+      {blastsLeft === 0 && !blasting && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-4"
         >
-          <p className="text-center text-amber-300 font-medium text-sm mb-3">{t('getMoreSpins')}</p>
+          <p className="text-center text-amber-300 font-medium text-sm mb-3">{t('getMoreBlasts')}</p>
           <div className="grid grid-cols-2 gap-3">
             {/* Task card */}
             <motion.button
@@ -462,8 +417,8 @@ export function Spin() {
                 <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
                   <ListChecks size={24} />
                 </div>
-                <span className="text-sm font-bold text-center">{btnLabelTask}</span>
-                <span className="text-xs text-green-400/60 flex items-center gap-1"><Sparkles size={10} /> +1 {t('spin')}</span>
+                <span className="text-sm font-bold text-center leading-tight">{btnLabelTask}</span>
+                <span className="text-xs text-green-400/60 flex items-center gap-1"><Sparkles size={10} /> +1</span>
               </div>
             </motion.button>
             {/* Ad card */}
@@ -480,8 +435,8 @@ export function Spin() {
                 <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
                   <Play size={24} />
                 </div>
-                <span className="text-sm font-bold text-center">{adWatching ? `${adCountdown}s...` : btnLabelAd}</span>
-                <span className="text-xs text-blue-400/60 flex items-center gap-1"><Star size={10} /> +1 {t('spin')}</span>
+                <span className="text-sm font-bold text-center leading-tight">{adWatching ? `${adCountdown}s...` : btnLabelAd}</span>
+                <span className="text-xs text-blue-400/60 flex items-center gap-1"><Star size={10} /> +1</span>
               </div>
             </motion.button>
           </div>
@@ -499,17 +454,19 @@ export function Spin() {
             onClick={() => setResult(null)}
           >
             <motion.div
-              initial={{ scale: 0.85, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.85, y: 10 }}
+              initial={{ scale: 0.7, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.7, y: 20, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 260, damping: 18 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full text-center relative"
               style={{
-                boxShadow: result.amount > 0
-                  ? '0 0 40px rgba(251,191,36,0.35)'
+                boxShadow: result.reward.value > 0
+                  ? `0 0 40px ${result.reward.color}55`
                   : '0 0 20px rgba(0,0,0,0.6)',
-                border: result.amount > 0 ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                border: result.reward.value > 0
+                  ? `1px solid ${result.reward.color}55`
+                  : '1px solid rgba(255,255,255,0.1)',
               }}
             >
               <button
@@ -519,27 +476,58 @@ export function Spin() {
                 <X size={20} />
               </button>
 
-              {result.isMystery ? (
+              {/* Emoji */}
+              <motion.div
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                className="text-6xl mb-3"
+              >
+                {result.reward.emoji}
+              </motion.div>
+
+              {/* Reward amount in glowing 3D text */}
+              {result.reward.value === 0 ? (
+                <p className="text-3xl font-extrabold text-slate-400">{t('betterLuck')}</p>
+              ) : result.reward.value === 500 ? (
                 <>
-                  <div className="text-5xl mb-2">🎁</div>
-                  <p className="text-slate-400 text-sm font-medium">{t('mysteryReward')}</p>
-                  <p className="text-4xl font-extrabold mt-2 text-pink-400" style={{ filter: 'drop-shadow(0 0 12px rgba(236,72,153,0.5))' }}>
-                    {result.amount} <span className="text-amber-300 text-2xl">{t('lumoraCoins')}</span>
-                  </p>
+                  <p className="text-sm text-pink-300 font-medium">{t('mysteryJackpot')}</p>
+                  <motion.p
+                    initial={{ scale: 0.5 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
+                    className="text-5xl font-extrabold mt-2"
+                    style={{
+                      color: result.reward.color,
+                      textShadow: `0 0 20px ${result.reward.color}, 0 4px 8px rgba(0,0,0,0.6)`,
+                    }}
+                  >
+                    {result.reward.value}
+                  </motion.p>
+                  <p className="text-lg text-amber-300 font-bold mt-1">{t('lumoraCoins')}</p>
                 </>
-              ) : result.amount === 0 ? (
-                <p className="text-3xl font-extrabold mt-2 text-slate-400">{t('betterLuck')}</p>
               ) : (
                 <>
                   <p className="text-slate-400 text-sm font-medium">{t('spinReward')}</p>
-                  <p className="text-4xl font-extrabold mt-2 text-amber-300" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }}>
-                    {result.amount} <span className="text-2xl">{t('lumoraCoins')}</span>
-                  </p>
+                  <motion.p
+                    initial={{ scale: 0.5 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
+                    className="text-5xl font-extrabold mt-2"
+                    style={{
+                      color: result.reward.color,
+                      textShadow: `0 0 16px ${result.reward.color}, 0 4px 8px rgba(0,0,0,0.6)`,
+                    }}
+                  >
+                    {result.reward.value}
+                  </motion.p>
+                  <p className="text-lg text-amber-300 font-bold mt-1">{t('lumoraCoins')}</p>
                 </>
               )}
 
-              <p className="text-sm text-slate-300 mt-4 px-2 leading-relaxed">
-                {result.comment}
+              {/* Funny best-friend comment */}
+              <p className="text-sm text-slate-200 mt-4 px-2 leading-relaxed">
+                {result.reward.comment}
               </p>
 
               <Button className="w-full mt-5" onClick={() => setResult(null)}>
@@ -597,9 +585,9 @@ export function Spin() {
                   <div key={task.id} className="bg-slate-700/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white font-medium truncate">{task.title}</p>
-                      <p className="text-xs text-slate-500 flex items-center gap-1"><Sparkles size={10} /> {t('extraSpinEarned')}</p>
+                      <p className="text-xs text-slate-500 flex items-center gap-1"><Sparkles size={10} /> {t('extraBlastEarned')}</p>
                     </div>
-                    <Button className="text-xs py-1.5 px-3" onClick={() => completeTaskForSpin(task)}>{t('accept')}</Button>
+                    <Button className="text-xs py-1.5 px-3" onClick={() => completeTaskForBlast(task)}>{t('accept')}</Button>
                   </div>
                 ))}
               </div>
