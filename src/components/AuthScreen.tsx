@@ -92,23 +92,40 @@ export function AuthScreen() {
     <div
       className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
       style={{
-        background: lit
-          ? 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.18) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)'
-          : 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
         perspective: '1200px',
       }}
     >
-      {/* Ambient volumetric glow when lit */}
+      {/* Animated room illumination layer */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none z-0"
+        initial={false}
+        animate={{ opacity: lit ? 1 : 0 }}
+        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+        style={{
+          background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)',
+        }}
+      />
+      <motion.div
+        className="absolute inset-0 pointer-events-none z-0"
+        initial={false}
+        animate={{ opacity: lit ? 0 : 1 }}
+        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+        style={{
+          background: 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
+        }}
+      />
+      {/* Ambient volumetric glow — spring-driven ease-in-out expansion */}
       <motion.div
         className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none"
         style={{
           width: 800,
           height: 700,
-          background: 'radial-gradient(ellipse, rgba(251,191,36,0.15) 0%, rgba(251,140,0,0.06) 30%, transparent 65%)',
-          filter: 'blur(20px)',
+          background: 'radial-gradient(ellipse, rgba(251,191,36,0.16) 0%, rgba(251,140,0,0.06) 30%, transparent 65%)',
+          filter: 'blur(24px)',
+          x: '-50%',
         }}
-        animate={{ opacity: lit ? 1 : 0, scale: lit ? 1 : 0.3 }}
-        transition={{ duration: 1.2 }}
+        animate={{ opacity: lit ? 1 : 0, scale: lit ? 1 : 0.25 }}
+        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
       />
 
       {/* Dust motes in light beam */}
@@ -420,7 +437,7 @@ function GlassCard3D({ children }: { children: React.ReactNode }) {
 
 function Chandelier3D({ lit, onToggle }: { lit: boolean; onToggle: () => void }) {
   const dragY = useMotionValue(0);
-  const springY = useSpring(dragY, { stiffness: 350, damping: 12, mass: 1.2 });
+  const springY = useSpring(dragY, { stiffness: 120, damping: 14, mass: 1.5 });
   const [pulling, setPulling] = useState(false);
   const cordRef = useRef<HTMLDivElement>(null);
 
@@ -615,6 +632,7 @@ function Chandelier3D({ lit, onToggle }: { lit: boolean; onToggle: () => void })
           filter: 'blur(8px)',
         }}
         animate={{ opacity: lit ? 0.5 : 0.3, scale: lit ? 1.1 : 0.9 }}
+        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
       />
     </div>
   );
@@ -639,23 +657,23 @@ function Bulb3D({ lit }: { lit: boolean }) {
               borderTop: '300px solid rgba(251,191,36,0.04)',
               filter: 'blur(15px)',
             }}
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.4 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.8 }}
+            exit={{ opacity: 0, scale: 0.4 }}
+            transition={{ type: 'spring', stiffness: 120, damping: 14 }}
           />
         )}
       </AnimatePresence>
 
-      {/* Glow halo */}
+      {/* Glow halo — spring-smoothed ease-in-out expansion */}
       <motion.div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
         style={{
           width: 200, height: 200,
           background: 'radial-gradient(circle, rgba(251,191,36,0.35) 0%, rgba(251,140,0,0.1) 30%, transparent 60%)',
         }}
-        animate={{ opacity: lit ? [0, 1, 0.85] : 0, scale: lit ? [0.3, 1.1, 1] : 0 }}
-        transition={{ duration: 0.8 }}
+        animate={{ opacity: lit ? 1 : 0, scale: lit ? 1 : 0.2 }}
+        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
       />
 
       {/* Light rays */}
@@ -687,7 +705,7 @@ function Bulb3D({ lit }: { lit: boolean }) {
       </AnimatePresence>
 
       {/* 3D Glass bulb SVG with gradients */}
-      <motion.div animate={{ scale: lit ? [1, 1.05, 1] : 1 }} transition={{ duration: 0.4 }}>
+      <motion.div animate={{ scale: lit ? 1.05 : 1 }} transition={{ type: 'spring', stiffness: 120, damping: 14 }}>
         <svg width="70" height="90" viewBox="0 0 70 90" fill="none">
           <defs>
             <radialGradient id="bulbGlass3d" cx="0.35" cy="0.3" r="0.7">
@@ -914,36 +932,33 @@ function Mascot3D({
             </>
           )}
 
-          {/* 3D Hands covering eyes */}
+          {/* 3D Paw hands covering eyes */}
           <AnimatePresence>
             {covering && (
               <motion.g
-                initial={{ y: -35, opacity: 0, scale: 0.5 }}
+                initial={{ y: 45, opacity: 0, scale: 0.6 }}
                 animate={{ y: 0, opacity: 1, scale: 1 }}
-                exit={{ y: -35, opacity: 0, scale: 0.5 }}
-                transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+                exit={{ y: 45, opacity: 0, scale: 0.6 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 16 }}
                 style={{ transformBox: 'fill-box' }}
               >
-                <ellipse cx="48" cy="59" rx="15" ry="17" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
-                <ellipse cx="82" cy="59" rx="15" ry="17" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
-                {/* Finger lines for 3D depth */}
-                <path d="M 42 55 Q 44 50 46 55" stroke="#92400e" strokeWidth="0.8" fill="none" opacity="0.4" />
-                <path d="M 76 55 Q 78 50 80 55" stroke="#92400e" strokeWidth="0.8" fill="none" opacity="0.4" />
+                <MascotPaw cx={48} cy={58} side="left" />
+                <MascotPaw cx={82} cy={58} side="right" />
               </motion.g>
             )}
           </AnimatePresence>
 
-          {/* Peeking — hands slightly raised */}
+          {/* Peeking — paws slightly raised */}
           <AnimatePresence>
             {peeking && (
               <motion.g
-                initial={{ y: -35, opacity: 0 }}
-                animate={{ y: -8, opacity: 1 }}
-                exit={{ y: -35, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+                initial={{ y: 45, opacity: 0 }}
+                animate={{ y: -12, opacity: 1 }}
+                exit={{ y: 45, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 16 }}
               >
-                <ellipse cx="48" cy="53" rx="15" ry="13" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
-                <ellipse cx="82" cy="53" rx="15" ry="13" fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
+                <MascotPaw cx={48} cy={52} side="left" peek />
+                <MascotPaw cx={82} cy={52} side="right" peek />
                 {/* Peek eyes */}
                 <circle cx="48" cy="60" r="3.5" fill="#0f172a" />
                 <circle cx="82" cy="60" r="3.5" fill="#0f172a" />
@@ -965,6 +980,36 @@ function Mascot3D({
         </svg>
       </motion.div>
     </motion.div>
+  );
+}
+
+/* ============== MASCOT PAW HAND ============== */
+
+function MascotPaw({ cx, cy, side, peek }: { cx: number; cy: number; side: 'left' | 'right'; peek?: boolean }) {
+  const dir = side === 'left' ? -1 : 1;
+  const padW = 16;
+  const padH = peek ? 12 : 17;
+  const fingerR = 3.2;
+  const thumbOffset = dir * 9;
+  return (
+    <g>
+      {/* Wrist/arm stub */}
+      <ellipse cx={cx - thumbOffset * 0.3} cy={cy + padH + 4} rx={6} ry={6} fill="url(#hand3d)" opacity={0.85} />
+      {/* Main palm pad */}
+      <ellipse cx={cx} cy={cy} rx={padW} ry={padH} fill="url(#hand3d)" filter="url(#mascotShadow3d)" />
+      {/* Finger pads — 4 small toes-beans across the top */}
+      <ellipse cx={cx - dir * 7} cy={cy - padH + 4} rx={fingerR} ry={fingerR + 0.5} fill="url(#hand3d)" />
+      <ellipse cx={cx - dir * 2.5} cy={cy - padH + 1} rx={fingerR} ry={fingerR + 0.5} fill="url(#hand3d)" />
+      <ellipse cx={cx + dir * 2.5} cy={cy - padH + 1} rx={fingerR} ry={fingerR + 0.5} fill="url(#hand3d)" />
+      <ellipse cx={cx + dir * 7} cy={cy - padH + 4} rx={fingerR} ry={fingerR + 0.5} fill="url(#hand3d)" />
+      {/* Thumb pad on outer side */}
+      <ellipse cx={cx + thumbOffset} cy={cy - 1} rx={fingerR - 0.4} ry={fingerR} fill="url(#hand3d)" />
+      {/* Inner shadow crease lines for depth */}
+      <path d={`M ${cx - 4} ${cy - 3} Q ${cx} ${cy - 1} ${cx + 4} ${cy - 3}`} stroke="#92400e" strokeWidth={0.7} fill="none" opacity={0.35} />
+      <path d={`M ${cx - dir * 9} ${cy + 2} Q ${cx - dir * 5} ${cy + 5} ${cx - dir * 2} ${cy + 2}`} stroke="#92400e" strokeWidth={0.6} fill="none" opacity={0.25} />
+      {/* Specular highlight */}
+      <ellipse cx={cx - dir * 4} cy={cy - 4} rx={4} ry={3} fill="white" opacity={0.22} />
+    </g>
   );
 }
 
