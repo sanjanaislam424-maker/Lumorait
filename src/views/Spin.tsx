@@ -1,27 +1,28 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star } from 'lucide-react';
+import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 
-// ---- Wheel configuration: 8 slices ----
-const SEGMENT_VALUES = [0, 20, 50, 100, 200, -1, 300, 500] as const;
-const SEGMENT_LABELS = ['0', '20', '50', '100', '200', 'Mystery', '300', '500'];
-const SEGMENT_COLORS = [
-  '#0f172a', '#f59e0b', '#10b981', '#2563eb',
-  '#d97706', '#ec4899', '#7c3aed', '#dc2626',
+// ---- 8 slices: capped coin values (max 100) + mystery box (100-500) ----
+type Slice = { label: string; value: number; color: string; comment: string };
+const SLICES: Slice[] = [
+  { label: '0 Coins', value: 0, color: '#1e293b', comment: 'আজ কপালটা একটু পচা দোস্ত! জিরো লুমোরা কয়েন পেলো। মন খারাপ করিস না, আবার চেষ্টা কর!' },
+  { label: '5 Coins', value: 5, color: '#f59e0b', comment: 'আরে বাহ্! ৫ কয়েন দিয়ে এক কাপ চা খাওয়ার ব্যবস্থা হলো!' },
+  { label: '10 Coins', value: 10, color: '#10b981', comment: '১০ কয়েন জিতেছে! একবারে লাফ দিয়ে বড়লোক হওয়া যায় না দোস্ত!' },
+  { label: '20 Coins', value: 20, color: '#3b82f6', comment: '২০ লুমোরা কয়েন পকেটে পুরে নাও! ধীরে ধীরে তো কপাল খুলছে!' },
+  { label: '50 Coins', value: 50, color: '#06b6d4', comment: 'বুম! ৫০ কয়েন পকেটে! আজকের দিনটা মন্দ যাবে না কিন্তু!' },
+  { label: '100 Coins', value: 100, color: '#ef4444', comment: 'সাবাস বিটলা! এক শটে ১০০ কয়েন হাঁকিয়ে দিলে!' },
+  { label: 'Mystery Box 🎁', value: -1, color: '#ec4899', comment: 'বুম! রহস্যময় বাক্স থেকে ১০০-৫০০ কয়েনের জ্যাকপট বেরিয়ে এসেছে! আজ তো তুই পার্টি দিবি!' },
+  { label: '0 Coins', value: 0, color: '#334155', comment: 'আবারো জিরো! ভাগ্য দেবতা মনে হয় একটু ঘুমাচ্ছে, আবার ঘুরাও!' },
 ];
-const SEGMENT_TEXT = [
-  '#94a3b8', '#fffbeb', '#d1fae5', '#dbeafe',
-  '#fef3c7', '#fce7f3', '#ede9fe', '#fee2e2',
-];
-const WEIGHTED_ODDS = [14, 10, 8, 5, 3, 2, 1, 1];
-const MYSTERY_REWARDS = [15, 30, 75, 150, 200, 10, 50, 5];
-const SEG_COUNT = SEGMENT_VALUES.length;
-const SEG_ANGLE = 360 / SEG_COUNT;
+const SEG_COUNT = 8;
+const SEG_ANGLE = 360 / SEG_COUNT; // 45
+// Rigged: vast majority land on 0/5/10; 50/100 rare; mystery very rare
+const WEIGHTED_ODDS = [25, 20, 15, 8, 4, 2, 1, 25];
 
 function pickWeightedIndex(): number {
   const total = WEIGHTED_ODDS.reduce((a, b) => a + b, 0);
@@ -32,6 +33,17 @@ function pickWeightedIndex(): number {
   }
   return 0;
 }
+
+function rollMystery(): number {
+  return Math.floor(Math.random() * 401) + 100; // 100-500
+}
+
+// Conic gradient with thin dark dividers between slices
+const CONIC_GRADIENT = `conic-gradient(from 0deg, ${
+  SLICES.map((s, i) =>
+    `${s.color} ${i * SEG_ANGLE}deg ${(i + 1) * SEG_ANGLE - 0.5}deg, #050505 ${(i + 1) * SEG_ANGLE - 0.5}deg ${(i + 1) * SEG_ANGLE}deg`,
+  ).join(', ')
+})`;
 
 // ---- Audio helpers ----
 let audioCtx: AudioContext | null = null;
@@ -61,60 +73,106 @@ function playFanfare() {
 }
 function playLose() { playTone(220, 0.3, 'sawtooth', 0.06); }
 
-// ---- Firework spark type ----
-type Spark = { id: number; angle: number; dist: number; color: string; size: number; delay: number };
-const SPARK_COLORS = ['#fbbf24', '#22d3ee', '#ec4899', '#22c55e', '#a855f7', '#f59e0b', '#3b82f6', '#fde68a'];
+// ---- Fireworks particle system (canvas) ----
+type Particle = { x: number; y: number; vx: number; vy: number; color: string; size: number; life: number; maxLife: number };
+const FW_COLORS = ['#fbbf24', '#22d3ee', '#ec4899', '#22c55e', '#f59e0b', '#3b82f6', '#fde68a', '#fb923c'];
 
 export function Spin() {
   const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
 
-  // ---- STRICT local spin counter: starts at 1, only decrements on spin ----
+  // STRICT: starts at 1, only decrements on spin, never increments via spin
   const [spinsLeft, setSpinsLeft] = useState(1);
-
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
-  const [result, setResult] = useState<{ amount: number; label: string; isMystery: boolean } | null>(null);
+  const [result, setResult] = useState<{ amount: number; label: string; isMystery: boolean; comment: string } | null>(null);
   const [celebrate, setCelebrate] = useState(false);
-  const [sparks, setSparks] = useState<Spark[]>([]);
-  const [winBurst, setWinBurst] = useState(false);
-
-  // Extra-spin action states
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(15);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
 
   const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sparkTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sparkId = useRef(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const rafRef = useRef<number | null>(null);
+  const fwActiveRef = useRef(false);
 
   const clearTick = useCallback(() => {
     if (tickTimer.current) { clearInterval(tickTimer.current); tickTimer.current = null; }
   }, []);
 
-  const startFireworks = useCallback(() => {
-    if (sparkTimer.current) clearInterval(sparkTimer.current);
-    sparkTimer.current = setInterval(() => {
-      const batch: Spark[] = Array.from({ length: 6 }, () => ({
-        id: sparkId.current++,
-        angle: Math.random() * 360,
-        dist: 120 + Math.random() * 100,
-        color: SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)],
-        size: 3 + Math.random() * 5,
-        delay: Math.random() * 0.3,
-      }));
-      setSparks((prev) => [...prev.slice(-60), ...batch]);
-    }, 200);
+  // ---- Canvas fireworks ----
+  const fwSpawn = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const count = 6 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 5;
+      particlesRef.current.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)],
+        size: 2 + Math.random() * 4,
+        life: 0,
+        maxLife: 40 + Math.random() * 50,
+      });
+    }
   }, []);
+
+  const fwLoop = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) { rafRef.current = null; return; }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { rafRef.current = null; return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (fwActiveRef.current) fwSpawn();
+    particlesRef.current = particlesRef.current.filter((p) => {
+      p.life++;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.04;
+      p.vx *= 0.99;
+      p.vy *= 0.99;
+      const alpha = 1 - p.life / p.maxLife;
+      if (alpha <= 0) return false;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.shadowBlur = p.size * 3;
+      ctx.shadowColor = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return true;
+    });
+    if (particlesRef.current.length > 0 || fwActiveRef.current) {
+      rafRef.current = requestAnimationFrame(fwLoop);
+    } else {
+      rafRef.current = null;
+    }
+  }, [fwSpawn]);
+
+  const startFireworks = useCallback(() => {
+    fwActiveRef.current = true;
+    if (rafRef.current == null) rafRef.current = requestAnimationFrame(fwLoop);
+  }, [fwLoop]);
 
   const stopFireworks = useCallback(() => {
-    if (sparkTimer.current) { clearInterval(sparkTimer.current); sparkTimer.current = null; }
-    setTimeout(() => setSparks([]), 800);
+    fwActiveRef.current = false;
   }, []);
 
-  useEffect(() => () => { clearTick(); stopFireworks(); }, [clearTick, stopFireworks]);
+  useEffect(() => () => {
+    clearTick();
+    fwActiveRef.current = false;
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+  }, [clearTick]);
 
   // ---- CORE SPIN: strictly decrements spinsLeft ----
   const doSpin = async () => {
@@ -125,7 +183,6 @@ export function Spin() {
 
     setSpinning(true);
     setResult(null);
-    setWinBurst(false);
     clearTick();
     startFireworks();
 
@@ -139,10 +196,9 @@ export function Spin() {
     }
 
     const winIdx = pickWeightedIndex();
-    const segVal = SEGMENT_VALUES[winIdx];
-    const isMystery = segVal === -1;
+    const slice = SLICES[winIdx];
+    const isMystery = slice.value === -1;
 
-    // Land winning segment center under the top pointer
     const segCenter = winIdx * SEG_ANGLE + SEG_ANGLE / 2;
     const targetAngle = 360 * 6 + (360 - segCenter);
     setRotation((prev) => {
@@ -159,17 +215,17 @@ export function Spin() {
       let label: string;
 
       if (isMystery) {
-        actualReward = MYSTERY_REWARDS[Math.floor(Math.random() * MYSTERY_REWARDS.length)];
+        actualReward = rollMystery();
         label = `${t('mysteryBox')} (${actualReward})`;
-      } else if (segVal === 0) {
+      } else if (slice.value === 0) {
         actualReward = 0;
         label = t('betterLuck');
       } else {
-        actualReward = segVal;
-        label = `${segVal} ${t('lumoraCoins')}`;
+        actualReward = slice.value;
+        label = `${slice.value} ${t('lumoraCoins')}`;
       }
 
-      // Persist reward + spin history to Supabase
+      // Persist reward + spin history
       if (profile) {
         const { data: fresh } = await supabase
           .from('profiles')
@@ -188,22 +244,17 @@ export function Spin() {
         await refreshProfile();
       }
 
-      const funnyMsg = isMystery ? t('spinMysteryFunny')
-        : actualReward === 0 ? t('spinZeroFunny')
-        : actualReward >= 50 ? t('spinBigFunny')
-        : t('spinSmallFunny');
-
-      setResult({ amount: actualReward, label, isMystery });
+      setResult({ amount: actualReward, label, isMystery, comment: slice.comment });
 
       if (actualReward > 0) {
         setCelebrate(true);
-        setWinBurst(true);
-        setTimeout(() => setWinBurst(false), 2000);
+        startFireworks();
+        setTimeout(() => stopFireworks(), 1500);
         if (soundOn) playFanfare();
-        notify(`${t('spinReward')} ${actualReward} ${t('lumoraCoins')}! ${funnyMsg}`, 'success');
+        notify(`${t('spinReward')} ${actualReward} ${t('lumoraCoins')}!`, 'success');
       } else {
         if (soundOn) playLose();
-        notify(funnyMsg, 'info');
+        notify(slice.comment, 'info');
       }
     }, 4200);
   };
@@ -219,7 +270,7 @@ export function Spin() {
     setTimeout(() => {
       clearInterval(countdown);
       setAdWatching(false);
-      setSpinsLeft((prev) => prev + 1); // +1 extra spin
+      setSpinsLeft((prev) => prev + 1);
       if (soundOn) playFanfare();
       notify(t('adDone'), 'success');
     }, 15000);
@@ -246,7 +297,7 @@ export function Spin() {
       notes: 'Completed for extra spin', status: 'approved',
     });
     setShowTaskPicker(false);
-    setSpinsLeft((prev) => prev + 1); // +1 extra spin
+    setSpinsLeft((prev) => prev + 1);
     if (soundOn) playFanfare();
     notify(t('extraSpinEarned'), 'success');
   };
@@ -276,30 +327,16 @@ export function Spin() {
         </p>
       </Card>
 
-      {/* ===== 3D WHEEL WITH FIREWORKS BEHIND ===== */}
+      {/* ===== 3D WHEEL WITH FIREWORKS CANVAS BEHIND ===== */}
       <div className="flex justify-center mb-6 relative" style={{ perspective: '1000px' }}>
-        {/* Fireworks layer */}
-        <div className="absolute pointer-events-none" style={{ top: '-40px', bottom: '-40px', left: '-60px', right: '-60px', zIndex: 0 }}>
-          <AnimatePresence>
-            {(spinning || winBurst) && sparks.map((s) => (
-              <motion.div
-                key={s.id}
-                className="absolute rounded-full"
-                style={{
-                  left: '50%', top: '50%', width: s.size, height: s.size,
-                  background: s.color, boxShadow: `0 0 ${s.size * 2}px ${s.color}`,
-                }}
-                initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                animate={{
-                  x: Math.cos((s.angle * Math.PI) / 180) * s.dist,
-                  y: Math.sin((s.angle * Math.PI) / 180) * s.dist,
-                  opacity: 0, scale: 0.2, rotate: Math.random() * 360,
-                }}
-                transition={{ duration: 0.8 + Math.random() * 0.6, ease: 'easeOut', delay: s.delay }}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+        {/* Fireworks canvas layer (behind wheel) */}
+        <canvas
+          ref={canvasRef}
+          width={420}
+          height={420}
+          className="absolute pointer-events-none"
+          style={{ top: '-60px', left: '50%', transform: 'translateX(-50%)', zIndex: 0 }}
+        />
 
         <div className="relative" style={{ width: 300, height: 300, zIndex: 1 }}>
           {/* Glow halo */}
@@ -332,83 +369,54 @@ export function Spin() {
               border: '2px solid var(--neon-primary)', transform: 'translateZ(2px)',
             }} />
 
-            {/* ===== ROTATING WHEEL FACE (clean SVG) ===== */}
+            {/* ===== ROTATING WHEEL FACE (Pure HTML/CSS conic-gradient + labels) ===== */}
             <motion.div
               animate={{ rotate: rotation }}
               transition={{ duration: 4.2, ease: [0.17, 0.67, 0.3, 0.99] }}
               className="absolute rounded-full overflow-hidden"
-              style={{ inset: '12px', transform: 'translateZ(8px)' }}
+              style={{ inset: '12px', transform: 'translateZ(8px)', background: CONIC_GRADIENT }}
             >
-              <svg viewBox="0 0 200 200" className="w-full h-full">
-                <defs>
-                  <radialGradient id="wheelSheen" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.12)" />
-                    <stop offset="55%" stopColor="rgba(255,255,255,0)" />
-                    <stop offset="100%" stopColor="rgba(0,0,0,0.3)" />
-                  </radialGradient>
-                  {SEGMENT_COLORS.map((c, i) => (
-                    <radialGradient key={`sg${i}`} id={`slice${i}`} cx="0.5" cy="0.5" r="0.7">
-                      <stop offset="0%" stopColor={c} stopOpacity="0.9" />
-                      <stop offset="100%" stopColor={c} stopOpacity="0.65" />
-                    </radialGradient>
-                  ))}
-                  <filter id="textGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="1.5" result="blur" />
-                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                  </filter>
-                </defs>
+              {/* Radial sheen overlay */}
+              <div className="absolute inset-0 rounded-full" style={{
+                background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 0%, transparent 55%, rgba(0,0,0,0.3) 100%)',
+              }} />
 
-                {SEGMENT_VALUES.map((val, i) => {
-                  const a0 = (i * SEG_ANGLE - 90) * (Math.PI / 180);
-                  const a1 = ((i + 1) * SEG_ANGLE - 90) * (Math.PI / 180);
-                  const x1 = 100 + 88 * Math.cos(a0);
-                  const y1 = 100 + 88 * Math.sin(a0);
-                  const x2 = 100 + 88 * Math.cos(a1);
-                  const y2 = 100 + 88 * Math.sin(a1);
-                  const midA = (i * SEG_ANGLE + SEG_ANGLE / 2 - 90) * (Math.PI / 180);
-                  const tx = 100 + 56 * Math.cos(midA);
-                  const ty = 100 + 56 * Math.sin(midA);
-                  const isZero = val === 0;
-                  const isMystery = val === -1;
-                  const fontSize = isMystery ? 13 : (val >= 100 ? 15 : 17);
-                  return (
-                    <g key={i}>
-                      {/* Slice fill */}
-                      <path
-                        d={`M 100 100 L ${x1} ${y1} A 88 88 0 0 1 ${x2} ${y2} Z`}
-                        fill={`url(#slice${i})`}
-                        stroke="rgba(0,0,0,0.6)"
-                        strokeWidth={1.2}
-                      />
-                      {/* Neon edge glow on non-zero */}
-                      {!isZero && (
-                        <path
-                          d={`M 100 100 L ${x1} ${y1} A 88 88 0 0 1 ${x2} ${y2} Z`}
-                          fill="none" stroke={SEGMENT_COLORS[i]} strokeWidth={2}
-                          opacity={0.5} style={{ filter: 'blur(2px)' }}
-                        />
-                      )}
-                      {/* High-contrast label: dark stroke behind, bright fill on top */}
-                      <text
-                        x={tx} y={ty}
-                        fill={SEGMENT_TEXT[i]}
-                        stroke="#0a0a0a"
-                        strokeWidth={isZero ? 0 : 3.5}
-                        paintOrder="stroke"
-                        fontSize={fontSize}
-                        fontWeight="bold"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        filter="url(#textGlow)"
-                        fontFamily="system-ui, sans-serif"
-                      >
-                        {SEGMENT_LABELS[i]}
-                      </text>
-                    </g>
-                  );
-                })}
-                <rect x="0" y="0" width="200" height="200" fill="url(#wheelSheen)" />
-              </svg>
+              {/* Slice labels — high-contrast glowing white text */}
+              {SLICES.map((slice, i) => {
+                const angle = i * SEG_ANGLE + SEG_ANGLE / 2;
+                const fontSize = slice.label.includes('Mystery') ? 12 : 16;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      transformOrigin: '0 0',
+                      transform: `rotate(${angle}deg)`,
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      top: '-88px',
+                      left: '0',
+                      transform: 'translate(-50%, -50%)',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      <span style={{
+                        display: 'inline-block',
+                        color: '#FFFFFF',
+                        fontSize: `${fontSize}px`,
+                        fontWeight: 800,
+                        textShadow: '0px 2px 4px #000',
+                        letterSpacing: '0.02em',
+                      }}>
+                        {slice.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </motion.div>
 
             {/* Center hub */}
@@ -431,79 +439,116 @@ export function Spin() {
         </Button>
       </div>
 
-      {/* ===== RESULT POPUP ===== */}
-      {result !== null && (
+      {/* ===== TWO EXTRA-SPIN ACTION CARDS (shown once free spin reaches 0) ===== */}
+      {spinsLeft === 0 && !spinning && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.85, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4"
         >
-          <div style={{ boxShadow: result.amount > 0 ? '0 0 30px rgba(251,191,36,0.25)' : 'none', borderRadius: 16 }}>
-            <Card className="text-center mb-4">
-              <p className="text-slate-400 text-sm font-medium">{t('spinReward')}</p>
-              <p className="text-4xl font-extrabold mt-2">
-                {result.isMystery ? (
-                  <span className="text-pink-400" style={{ filter: 'drop-shadow(0 0 10px rgba(236,72,153,0.5))' }}>
-                    {t('mysteryReward')} <span className="text-amber-300">{result.amount}</span> {t('lumoraCoins')}!
-                  </span>
-                ) : result.amount === 0 ? (
-                  <span className="text-slate-400">{t('betterLuck')}</span>
-                ) : (
-                  <span className="text-amber-300" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }}>
-                    {result.amount} {t('lumoraCoins')}
-                  </span>
-                )}
-              </p>
-              <p className="text-sm text-slate-400 mt-3 px-4">
-                {result.isMystery ? t('spinMysteryFunny') : result.amount === 0 ? t('spinZeroFunny') : result.amount >= 50 ? t('spinBigFunny') : t('spinSmallFunny')}
-              </p>
-            </Card>
+          <p className="text-center text-amber-300 font-medium text-sm mb-3">{t('getMoreSpins')}</p>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Task card */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              onClick={openTaskPicker}
+              disabled={adWatching}
+              className="flex flex-col items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-2xl py-5 text-green-300 disabled:opacity-40 transition relative overflow-hidden group"
+              style={{ boxShadow: '0 0 15px rgba(34,197,94,0.15)' }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/0 to-green-500/10 group-hover:from-green-500/5 group-hover:to-green-500/20 transition" />
+              <div className="relative z-10 flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                  <ListChecks size={24} />
+                </div>
+                <span className="text-sm font-bold text-center">{btnLabelTask}</span>
+                <span className="text-xs text-green-400/60 flex items-center gap-1"><Sparkles size={10} /> +1 {t('spin')}</span>
+              </div>
+            </motion.button>
+            {/* Ad card */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              onClick={watchAd}
+              disabled={adWatching}
+              className="flex flex-col items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-2xl py-5 text-blue-300 disabled:opacity-40 transition relative overflow-hidden group"
+              style={{ boxShadow: '0 0 15px rgba(59,130,246,0.15)' }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-500/10 group-hover:from-blue-500/5 group-hover:to-blue-500/20 transition" />
+              <div className="relative z-10 flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <Play size={24} />
+                </div>
+                <span className="text-sm font-bold text-center">{adWatching ? `${adCountdown}s...` : btnLabelAd}</span>
+                <span className="text-xs text-blue-400/60 flex items-center gap-1"><Star size={10} /> +1 {t('spin')}</span>
+              </div>
+            </motion.button>
           </div>
         </motion.div>
       )}
 
-      {/* ===== TWO EXTRA-SPIN ACTION CARDS ===== */}
-      <div className="mb-4">
-        <p className="text-center text-amber-300 font-medium text-sm mb-3">{t('getMoreSpins')}</p>
-        <div className="grid grid-cols-2 gap-3">
-          {/* Task card */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            whileHover={{ scale: 1.02 }}
-            onClick={openTaskPicker}
-            disabled={spinning || adWatching}
-            className="flex flex-col items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-2xl py-5 text-green-300 disabled:opacity-40 transition relative overflow-hidden group"
-            style={{ boxShadow: '0 0 15px rgba(34,197,94,0.15)' }}
+      {/* ===== RESULT POPUP (centered, z-50, full opacity) ===== */}
+      <AnimatePresence>
+        {result !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4"
+            onClick={() => setResult(null)}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/0 to-green-500/10 group-hover:from-green-500/5 group-hover:to-green-500/20 transition" />
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-                <ListChecks size={24} />
-              </div>
-              <span className="text-sm font-bold text-center">{btnLabelTask}</span>
-              <span className="text-xs text-green-400/60 flex items-center gap-1"><Sparkles size={10} /> +1 {t('spin')}</span>
-            </div>
-          </motion.button>
-          {/* Ad card */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            whileHover={{ scale: 1.02 }}
-            onClick={watchAd}
-            disabled={spinning || adWatching}
-            className="flex flex-col items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-2xl py-5 text-blue-300 disabled:opacity-40 transition relative overflow-hidden group"
-            style={{ boxShadow: '0 0 15px rgba(59,130,246,0.15)' }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-500/10 group-hover:from-blue-500/5 group-hover:to-blue-500/20 transition" />
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                <Play size={24} />
-              </div>
-              <span className="text-sm font-bold text-center">{adWatching ? `${adCountdown}s...` : btnLabelAd}</span>
-              <span className="text-xs text-blue-400/60 flex items-center gap-1"><Star size={10} /> +1 {t('spin')}</span>
-            </div>
-          </motion.button>
-        </div>
-      </div>
+            <motion.div
+              initial={{ scale: 0.85, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.85, y: 10 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full text-center relative"
+              style={{
+                boxShadow: result.amount > 0
+                  ? '0 0 40px rgba(251,191,36,0.35)'
+                  : '0 0 20px rgba(0,0,0,0.6)',
+                border: result.amount > 0 ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              <button
+                onClick={() => setResult(null)}
+                className="absolute top-3 right-3 text-slate-500 hover:text-white transition"
+              >
+                <X size={20} />
+              </button>
+
+              {result.isMystery ? (
+                <>
+                  <div className="text-5xl mb-2">🎁</div>
+                  <p className="text-slate-400 text-sm font-medium">{t('mysteryReward')}</p>
+                  <p className="text-4xl font-extrabold mt-2 text-pink-400" style={{ filter: 'drop-shadow(0 0 12px rgba(236,72,153,0.5))' }}>
+                    {result.amount} <span className="text-amber-300 text-2xl">{t('lumoraCoins')}</span>
+                  </p>
+                </>
+              ) : result.amount === 0 ? (
+                <p className="text-3xl font-extrabold mt-2 text-slate-400">{t('betterLuck')}</p>
+              ) : (
+                <>
+                  <p className="text-slate-400 text-sm font-medium">{t('spinReward')}</p>
+                  <p className="text-4xl font-extrabold mt-2 text-amber-300" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }}>
+                    {result.amount} <span className="text-2xl">{t('lumoraCoins')}</span>
+                  </p>
+                </>
+              )}
+
+              <p className="text-sm text-slate-300 mt-4 px-2 leading-relaxed">
+                {result.comment}
+              </p>
+
+              <Button className="w-full mt-5" onClick={() => setResult(null)}>
+                {t('close')}
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ===== AD WATCHING OVERLAY (15s) ===== */}
       <AnimatePresence>
