@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar } from 'lucide-react';
+import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar, Sparkles } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { WeatherHeader } from '@/components/WeatherHeader';
 import { Card, Button, CoinBadge } from '@/components/ui';
@@ -13,6 +13,7 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
   const { t, profile, lang, refreshProfile } = useApp();
   const [todayChecked, setTodayChecked] = useState(false);
   const [rank, setRank] = useState<number | null>(null);
+  const [referralStats, setReferralStats] = useState({ active: 0, total: 0 });
 
   useEffect(() => {
     if (profile) {
@@ -27,6 +28,15 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
       setRank((count ?? 0) + 1);
     })();
   }, [profile?.lumora_coins]);
+
+  useEffect(() => {
+    (async () => {
+      if (!profile?.id) return;
+      const { count: total } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('referred_by', profile.id);
+      const { count: active } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('referred_by', profile.id).eq('referral_step2_paid', true);
+      setReferralStats({ active: active ?? 0, total: total ?? 0 });
+    })();
+  }, [profile?.id]);
 
   const doCheckin = async () => {
     if (!profile || todayChecked) return;
@@ -98,9 +108,32 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
         <QuickAction icon={<ShieldCheck size={22} />} label={t('verifyId')} onClick={() => setView('profile')} />
       </div>
 
-      {/* Referral card */}
+      {/* Referral promotional banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-4 rounded-2xl p-4 relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, rgba(34,197,94,0.15) 0%, rgba(16,185,129,0.1) 50%, rgba(251,191,36,0.12) 100%)',
+          border: '1px solid rgba(34,197,94,0.3)',
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shrink-0">
+            <Users size={20} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-green-300">{t('referralBanner')}</p>
+            <p className="text-xs text-slate-300 mt-1 flex items-center gap-1">
+              <Sparkles size={11} className="text-amber-400" /> {t('referralCommission')}
+            </p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Referral card with 2-step rewards */}
       <Card>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
             <Users size={22} className="text-white" />
           </div>
@@ -116,7 +149,28 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
               </button>
             </div>
           </div>
-          <CoinBadge amount={500} />
+          <div className="text-right">
+            <p className="text-xs text-slate-400">{t('referralActive')}</p>
+            <p className="text-lg font-bold text-green-300">{referralStats.active}/{referralStats.total}</p>
+          </div>
+        </div>
+
+        {/* 2-step reward breakdown */}
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <div className="rounded-xl p-3 bg-green-500/10 border border-green-500/20">
+            <p className="text-xs text-green-400 font-bold mb-1">{lang === 'bn' ? 'ধাপ ১' : 'Step 1'}</p>
+            <p className="text-lg font-bold text-green-300">+500</p>
+            <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{t('referralStep1')}</p>
+          </div>
+          <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/20">
+            <p className="text-xs text-amber-400 font-bold mb-1">{lang === 'bn' ? 'ধাপ ২' : 'Step 2'}</p>
+            <p className="text-lg font-bold text-amber-300">+1500</p>
+            <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{t('referralStep2')}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between mt-2 px-1">
+          <span className="text-xs text-slate-400">{t('referralTotal')}</span>
+          <CoinBadge amount={profile.referral_earned} />
         </div>
       </Card>
 
