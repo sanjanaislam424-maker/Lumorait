@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, PanInfo } from 'framer-motion';
-import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket } from 'lucide-react';
+import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket, KeyRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useToast } from '@/components/Toast';
@@ -19,6 +19,7 @@ export function AuthScreen() {
   const [pwdFocused, setPwdFocused] = useState(false);
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [referralCode, setReferralCode] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
 
   const email = `${phone.replace(/\D/g, '')}@lumora.app`;
 
@@ -309,6 +310,12 @@ export function AuthScreen() {
 
                 {error && <p className="text-red-400 text-sm">{error}</p>}
 
+                {mode === 'login' && (
+                  <button type="button" onClick={() => setResetOpen(true)} className="text-amber-400/70 hover:text-amber-400 text-xs flex items-center gap-1 transition-colors">
+                    <KeyRound size={12} /> {t('forgotPassword')}
+                  </button>
+                )}
+
                 <motion.button
                   whileTap={{ scale: 0.96 }}
                   type="submit"
@@ -350,7 +357,120 @@ export function AuthScreen() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ResetPasswordModal open={resetOpen} onClose={() => setResetOpen(false)} />
     </div>
+  );
+}
+
+function ResetPasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t, lang } = useApp();
+  const { notify } = useToast();
+  const [resetPhone, setResetPhone] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const digits = resetPhone.replace(/\D/g, '');
+    if (digits.length < 10) {
+      notify(lang === 'bn' ? 'সঠিক ফোন নাম্বার দাও' : 'Enter a valid phone number', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      const resetEmail = `${digits}@lumora.app`;
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .like('phone', `%${digits}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!data) {
+        notify(t('accountNotFound'), 'error');
+        setBusy(false);
+        return;
+      }
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: window.location.origin,
+      });
+
+      if (resetError) throw resetError;
+      notify(t('resetSent'), 'success');
+      setResetPhone('');
+      onClose();
+    } catch {
+      notify(t('accountNotFound'), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[9990] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 20 }}
+            className="relative rounded-2xl p-6 w-full max-w-md"
+            style={{
+              background: 'rgba(15,20,35,0.9)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(251,191,36,0.2)',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-amber-300 flex items-center gap-2">
+                <KeyRound size={20} /> {t('resetPassword')}
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={submit} className="space-y-4">
+              <div
+                className="flex items-center gap-3 rounded-xl px-4 py-3"
+                style={{
+                  background: 'rgba(8,12,24,0.6)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <Phone size={18} className="text-slate-400" />
+                <input
+                  className="w-full bg-transparent outline-none text-white placeholder-slate-500"
+                  placeholder={t('resetPhone')}
+                  value={resetPhone}
+                  onChange={(e) => setResetPhone(e.target.value)}
+                />
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                type="submit"
+                disabled={busy}
+                className="w-full py-3.5 rounded-xl font-semibold transition-all"
+                style={{
+                  background: busy ? 'rgba(30,41,59,0.6)' : 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                  color: busy ? '#64748b' : '#0a0301',
+                  boxShadow: busy ? 'none' : '0 8px 25px rgba(251,191,36,0.3)',
+                }}
+              >
+                {busy ? t('resetBusy') : t('resetSend')}
+              </motion.button>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

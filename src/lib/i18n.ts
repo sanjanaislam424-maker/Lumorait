@@ -243,6 +243,13 @@ export const dict = {
     kycAppealPending: "Appeal Pending",
     kycAppeals: "KYC Appeals",
     deletedNids: "Deleted NIDs",
+    forgotPassword: "Forgot Password?",
+    resetPassword: "Reset Password",
+    resetPhone: "Enter your registered phone number",
+    resetSend: "Send Reset Link",
+    resetSent: "Password reset link sent! Check your email.",
+    accountNotFound: "Hey bestie! No account was found with this Gmail address. Please click Sign-Up to create a new account first!",
+    resetBusy: "Sending...",
   },
   bn: {
     appName: 'Lumora IT',
@@ -486,6 +493,13 @@ export const dict = {
     kycAppealPending: 'আপিল পেন্ডিং',
     kycAppeals: 'কেওয়াইসি আপিল',
     deletedNids: 'ডিলিটেড এনআইডি',
+    forgotPassword: 'পাসওয়ার্ড ভুলে গেছো?',
+    resetPassword: 'পাসওয়ার্ড রিসেট',
+    resetPhone: 'তোমার রেজিস্টার্ড ফোন নাম্বার দাও',
+    resetSend: 'রিসেট লিংক পাঠাও',
+    resetSent: 'পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে! ইমেইল চেক করো।',
+    accountNotFound: 'আরে দোস্ত! এই জিমেইল দিয়ে তো কোনো অ্যাকাউন্টই খোলা হয়নি! আগে সাইন-আপ বাটনে চাপ দিয়ে একটা অ্যাকাউন্ট খুলে নাও।',
+    resetBusy: 'পাঠানো হচ্ছে...',
   },
 } as const;
 
