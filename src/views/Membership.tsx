@@ -19,7 +19,7 @@ type PlanRow = {
   badge_label: string;
 };
 
-const featureKeys = ['boxBlasts', 'taskBonus', 'serviceChargeRate', 'taskFee', 'prioritySupport'] as const;
+const featureKeys = ['boxBlasts', 'taskBonus', 'platformChargeRate', 'taskFee', 'prioritySupport'] as const;
 
 export function Membership() {
   const { t, profile, lang, refreshProfile } = useApp();
@@ -143,7 +143,7 @@ export function Membership() {
               <div className="space-y-2 mb-4">
                 <FeatureRow label={t('boxBlasts')} value={`${plan.box_blasts_daily}/day`} highlight={plan.box_blasts_daily > 1} />
                 <FeatureRow label={t('taskBonus')} value={`+${plan.task_bonus_pct}%`} highlight={plan.task_bonus_pct > 0} />
-                <FeatureRow label={t('serviceChargeRate')} value={`${plan.service_charge_pct}%`} highlight={plan.service_charge_pct === 0} />
+                <FeatureRow label={t('platformChargeRate')} value={`${plan.service_charge_pct}%`} highlight={plan.service_charge_pct === 0} />
                 <FeatureRow label={t('taskFee')} value={`${plan.task_fee_pct}%`} highlight={plan.task_fee_pct === 0} />
                 {plan.priority_support && <FeatureRow label={t('prioritySupport')} value="✓" highlight />}
               </div>

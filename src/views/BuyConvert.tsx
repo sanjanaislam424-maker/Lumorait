@@ -160,7 +160,7 @@ export function BuyConvert() {
               />
             </div>
             <div className="space-y-1.5 text-sm">
-              <Row label={t('serviceCharge')} value={`${chargePct}% (${chargeCash.toFixed(2)} BDT)`} muted />
+              <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCash.toFixed(2)} BDT)`} muted />
               <Row label={t('convertedAmount')} value={`${coinsFromCash.toLocaleString()} LM Coins`} highlight />
             </div>
             <Button className="w-full" disabled={busy} onClick={convertCashToCoins}>

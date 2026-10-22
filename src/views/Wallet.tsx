@@ -98,7 +98,7 @@ export function Wallet() {
       <div className={`mb-6 rounded-xl p-3 flex items-center gap-2 border ${isVip ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-700/30 border-white/10'}`}>
         <Crown size={16} className={isVip ? 'text-amber-400' : 'text-slate-500'} />
         <p className={`text-xs ${isVip ? 'text-amber-300' : 'text-slate-400'}`}>
-          {isVip ? t('vipExempt') : `${t('serviceCharge')}: ${lang === 'bn' ? 'ডিপোজিট ও উইথড্রয়ে প্রযোজ্য' : 'applies on deposits & withdrawals'}`}
+          {isVip ? t('vipExempt') : `${t('platformCharge')}: ${lang === 'bn' ? 'ডিপোজিট ও উইথড্রয়ে প্রযোজ্য' : 'applies on deposits & withdrawals'}`}
         </p>
       </div>
 
