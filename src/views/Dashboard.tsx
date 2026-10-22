@@ -130,9 +130,12 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
             <Users size={20} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold text-green-300">{t('referralBannerNew')}</p>
-            <p className="text-xs text-slate-300 mt-1 flex items-center gap-1">
-              <Sparkles size={11} className="text-amber-400" /> {t('referralCommission')}
+            <p className="text-sm font-bold text-green-300">{t('referralTitle')}</p>
+            <p className="text-xs text-amber-200 mt-1 flex items-center gap-1">
+              <Sparkles size={11} className="text-amber-400" /> {t('referralKycReward')}
+            </p>
+            <p className="text-xs text-green-200 mt-1 flex items-center gap-1">
+              <Sparkles size={11} className="text-green-400" /> {t('referralLifetimeMsg')}
             </p>
           </div>
         </div>

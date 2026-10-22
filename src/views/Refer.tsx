@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Sparkles, Share2, ShieldCheck } from 'lucide-react';
+import { Users, Sparkles, Share2 } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { Card, CoinBadge } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
@@ -41,10 +41,14 @@ export function ReferView() {
             <Users size={24} className="text-white" />
           </div>
           <div>
-            <p className="text-base font-bold text-green-300">{t('referralBannerNew')}</p>
-            <p className="text-xs text-slate-300 mt-2 flex items-center gap-1">
-              <ShieldCheck size={12} className="text-green-400" />
-              {lang === 'bn' ? 'বন্ধুর কেওয়াইসি ভেরিফিকেশন হলেই কয়েন ক্রেডিট হবে' : 'Coins credited after friend completes KYC'}
+            <p className="text-base font-bold text-green-300">{t('referralTitle')}</p>
+            <p className="text-xs text-amber-200 mt-2 flex items-center gap-1">
+              <Sparkles size={12} className="text-amber-400" />
+              {t('referralKycReward')}
+            </p>
+            <p className="text-xs text-green-200 mt-1 flex items-center gap-1">
+              <Sparkles size={12} className="text-green-400" />
+              {t('referralLifetimeMsg')}
             </p>
           </div>
         </div>
@@ -103,7 +107,7 @@ export function ReferView() {
 
       <p className="text-center text-slate-500 text-xs mt-6 flex items-center justify-center gap-1">
         <Sparkles size={12} className="text-amber-400" />
-        {t('referralCommission')}
+        {t('referralDepositBlast')}
       </p>
     </div>
   );

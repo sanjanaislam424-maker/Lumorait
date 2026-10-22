@@ -21,30 +21,30 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const navItems: { key: View; icon: ReactNode; label: string }[] = [
-    { key: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('menuDashboard') },
-    { key: 'wallet', icon: <Wallet size={20} />, label: t('menuWallet') },
-    { key: 'buyconvert', icon: <ArrowLeftRight size={20} />, label: t('menuBuyConvert') },
-    { key: 'tasks', icon: <ListChecks size={20} />, label: t('menuTasks') },
-    { key: 'spin', icon: <Gift size={20} />, label: t('menuMysteryBox') },
-    { key: 'refer', icon: <Sparkles size={20} />, label: t('menuReferEarn') },
-    { key: 'profile', icon: <Shield size={20} />, label: t('menuKyc') },
-    { key: 'membership', icon: <Crown size={20} />, label: t('menuMembership') },
+    { key: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('navDashboard') },
+    { key: 'wallet', icon: <Wallet size={20} />, label: t('navWallet') },
+    { key: 'buyconvert', icon: <ArrowLeftRight size={20} />, label: t('navBuyConvert') },
+    { key: 'tasks', icon: <ListChecks size={20} />, label: t('navTasks') },
+    { key: 'spin', icon: <Gift size={20} />, label: t('navMysteryBox') },
+    { key: 'refer', icon: <Sparkles size={20} />, label: t('navReferEarn') },
+    { key: 'profile', icon: <Shield size={20} />, label: t('navKyc') },
+    { key: 'membership', icon: <Crown size={20} />, label: t('navMembership') },
     { key: 'leaderboard', icon: <Trophy size={20} />, label: t('leaderboard') },
-    { key: 'profile', icon: <UserIcon size={20} />, label: t('menuSettings') },
+    { key: 'profile', icon: <UserIcon size={20} />, label: t('navSettings') },
   ];
 
   // De-duplicate by label so Settings and KYC don't both show the same route label
   const drawerItems: { key: View; icon: ReactNode; label: string }[] = [
-    { key: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('menuDashboard') },
-    { key: 'wallet', icon: <Wallet size={20} />, label: t('menuWallet') },
-    { key: 'buyconvert', icon: <ArrowLeftRight size={20} />, label: t('menuBuyConvert') },
-    { key: 'tasks', icon: <ListChecks size={20} />, label: t('menuTasks') },
-    { key: 'spin', icon: <Gift size={20} />, label: t('menuMysteryBox') },
-    { key: 'refer', icon: <Sparkles size={20} />, label: t('menuReferEarn') },
-    { key: 'profile', icon: <Shield size={20} />, label: t('menuKyc') },
-    { key: 'membership', icon: <Crown size={20} />, label: t('menuMembership') },
+    { key: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('navDashboard') },
+    { key: 'wallet', icon: <Wallet size={20} />, label: t('navWallet') },
+    { key: 'buyconvert', icon: <ArrowLeftRight size={20} />, label: t('navBuyConvert') },
+    { key: 'tasks', icon: <ListChecks size={20} />, label: t('navTasks') },
+    { key: 'spin', icon: <Gift size={20} />, label: t('navMysteryBox') },
+    { key: 'refer', icon: <Sparkles size={20} />, label: t('navReferEarn') },
+    { key: 'profile', icon: <Shield size={20} />, label: t('navKyc') },
+    { key: 'membership', icon: <Crown size={20} />, label: t('navMembership') },
     { key: 'leaderboard', icon: <Trophy size={20} />, label: t('leaderboard') },
-    { key: 'profile', icon: <SettingsIcon size={20} />, label: t('menuSettings') },
+    { key: 'profile', icon: <SettingsIcon size={20} />, label: t('navSettings') },
   ];
 
   if (profile?.role === 'admin') {
@@ -83,7 +83,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
               onClick={() => setDrawerOpen(true)}
               className="p-2 rounded-lg hover:bg-white/10 transition relative"
               style={{ color: themeConfig.primary }}
-              title={t('menuDashboard')}
+              title={t('navDashboard')}
             >
               <Menu size={22} />
             </button>
@@ -149,7 +149,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
                 {drawerItems.map((item, i) => {
                   const active = view === item.key && (
                     // For the two 'profile' entries, only highlight the one that matches the label being shown
-                    (item.label !== t('menuSettings') || view === 'profile')
+                    (item.label !== t('navSettings') || view === 'profile')
                   );
                   return (
                     <button
@@ -177,7 +177,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
                   style={{ color: '#ef4444', background: 'rgba(239,68,68,0.08)' }}
                 >
                   <LogOut size={20} />
-                  <span className="text-sm font-medium">{t('menuLogout')}</span>
+                  <span className="text-sm font-medium">{t('navLogout')}</span>
                 </button>
               </nav>
 
@@ -189,7 +189,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
                   style={{ background: `linear-gradient(135deg, ${themeConfig.primary}15, ${themeConfig.secondary}08)`, color: themeConfig.primary, border: `1px solid ${themeConfig.border}` }}
                 >
                   <Bot size={20} />
-                  <span className="text-sm font-medium">{t('menuAIAssistant')}</span>
+                  <span className="text-sm font-medium">{t('navAIAssistant')}</span>
                 </button>
               </div>
             </motion.div>
