@@ -182,7 +182,7 @@ export function BuyConvert() {
               <p className="text-[10px] text-slate-500 mt-1">{t('withdrawableCoins')}: {profile.withdrawable_coins.toLocaleString()}</p>
             </div>
             <div className="space-y-1.5 text-sm">
-              <Row label={t('serviceCharge')} value={`${chargePct}% (${chargeCoins.toFixed(0)} coins)`} muted />
+              <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCoins.toFixed(0)} coins)`} muted />
               <Row label={t('convertedAmount')} value={`${cashFromCoins.toFixed(2)} BDT`} highlight />
             </div>
             <Button className="w-full" disabled={busy} onClick={convertCoinsToCash}>
