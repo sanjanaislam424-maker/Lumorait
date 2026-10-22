@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift, Banknote, Crown } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift, Banknote, Crown, Copy, Check } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+
+const ADMIN_NUMBER_KEYS: Record<string, string> = {
+  bKash: 'admin_bkash_number',
+  Nagad: 'admin_nagad_number',
+  Rocket: 'admin_rocket_number',
+};
+
+async function fetchAdminNumber(method: string): Promise<string | null> {
+  const col = ADMIN_NUMBER_KEYS[method];
+  if (!col) return null;
+  const { data } = await supabase.from('app_settings').select(col).eq('id', 1).maybeSingle();
+  return data ? (data[col] as string) : null;
+}
 
 export function Wallet() {
   const { t, profile, refreshProfile, lang } = useApp();
@@ -184,16 +197,64 @@ function CoinCalculatorModal({ open, onClose }: { open: boolean; onClose: () => 
 }
 
 function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
-  const { t, profile } = useApp();
+  const { t, profile, lang } = useApp();
   const { notify } = useToast();
   const [bdt, setBdt] = useState(10);
   const [method, setMethod] = useState('bKash');
+  const [senderPhone, setSenderPhone] = useState('');
+  const [trxId, setTrxId] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [adminNumber, setAdminNumber] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
+  const chargePct = isVip ? 0 : 3;
+  const coinsAfterCharge = Math.round(bdt * 100 * (1 - chargePct / 100));
+
+  useEffect(() => {
+    if (!open) return;
+    fetchAdminNumber(method).then(setAdminNumber);
+  }, [open, method]);
+
+  const copyNumber = async () => {
+    if (!adminNumber) return;
+    try {
+      await navigator.clipboard.writeText(adminNumber);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      notify(t('copyNumber'), 'error');
+    }
+  };
 
   const submit = async () => {
+    if (!profile) return;
     if (bdt < 10) { notify(t('minPurchase'), 'error'); return; }
-    const coins = bdt * 100;
-    await supabase.from('transactions').insert({ user_id: profile!.id, type: 'deposit', amount: coins, status: 'pending', method, note: `${bdt} BDT via ${method}` });
+    if (!senderPhone.trim()) { notify(t('enterSenderPhone'), 'error'); return; }
+    if (!trxId.trim()) { notify(t('enterTrxId'), 'error'); return; }
+
+    const insertData: Record<string, unknown> = {
+      user_id: profile.id,
+      type: 'deposit',
+      amount: bdt * 100,
+      status: 'pending',
+      method,
+      sender_number: senderPhone.trim(),
+      trx_id: trxId.trim(),
+      personal_admin_number: adminNumber,
+      note: `${bdt} BDT via ${method} | Sender: ${senderPhone.trim()} | TrxID: ${trxId.trim()}`,
+    };
+    if (promoCode.trim()) {
+      insertData.deposit_promo_code = promoCode.trim().toUpperCase();
+    }
+
+    const { error } = await supabase.from('transactions').insert(insertData);
+    if (error) { notify(error.message, 'error'); return; }
+
     notify(t('depositPending'), 'info');
+    setSenderPhone('');
+    setTrxId('');
+    setPromoCode('');
     onClose();
     onDone();
   };
@@ -201,20 +262,87 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
   return (
     <Modal open={open} onClose={onClose} title={t('depositRequest')}>
       <div className="space-y-3">
-        <div>
-          <label className="text-xs text-slate-400 block mb-1">BDT</label>
-          <input type="number" min={10} value={bdt} onChange={(e) => setBdt(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          <p className="text-xs text-amber-300 mt-1">= {(bdt * 100).toLocaleString()} {t('lumoraCoins')}</p>
-        </div>
+        {/* Method selector */}
         <div>
           <label className="text-xs text-slate-400 block mb-1">{t('method')}</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
-            <option value="bKash">bKash</option>
-            <option value="Nagad">Nagad</option>
-            <option value="Rocket">Rocket</option>
-          </select>
+          <div className="grid grid-cols-3 gap-2">
+            {['bKash', 'Nagad', 'Rocket'].map((m) => (
+              <button
+                key={m}
+                onClick={() => setMethod(m)}
+                className={`py-2.5 rounded-xl text-sm font-medium transition ${method === m ? 'bg-pink-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
-        <p className="text-xs text-slate-400">{t('minPurchase')}</p>
+
+        {/* Admin number display with copy */}
+        {adminNumber && (
+          <div className="bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/30 rounded-2xl p-4">
+            <p className="text-xs text-pink-300 mb-1">{t('sendMoneyTo')}</p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xl font-bold text-white tracking-wide font-mono">{adminNumber}</span>
+              <button
+                onClick={copyNumber}
+                className="flex items-center gap-1 bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/30 rounded-xl px-3 py-2 text-xs text-pink-200 transition"
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? t('copied') : t('copyNumber')}
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">{t('depositInstructions')}</p>
+          </div>
+        )}
+
+        {/* Deposit amount */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('depositAmount')}</label>
+          <input type="number" min={10} value={bdt} onChange={(e) => setBdt(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-amber-300">= {(bdt * 100).toLocaleString()} {t('lumoraCoins')}</p>
+            {!isVip && <p className="text-[10px] text-slate-500">{t('platformCharge')}: {chargePct}% → {coinsAfterCharge.toLocaleString()} {t('lumoraCoins')}</p>}
+          </div>
+        </div>
+
+        {/* Sender phone */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('senderPhone')}</label>
+          <input
+            type="tel"
+            value={senderPhone}
+            onChange={(e) => setSenderPhone(e.target.value)}
+            placeholder={t('enterSenderPhone')}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-pink-500/50"
+          />
+        </div>
+
+        {/* TrxID */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('trxId')}</label>
+          <input
+            type="text"
+            value={trxId}
+            onChange={(e) => setTrxId(e.target.value)}
+            placeholder={t('enterTrxId')}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-pink-500/50 uppercase"
+          />
+        </div>
+
+        {/* Promo code */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'ডিপোজিট প্রোমো / রেফারেল কোড (ঐচ্ছিক)' : t('depositPromoCode')}</label>
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder={t('depositPromoCode')}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50 uppercase"
+          />
+        </div>
+
+        <p className="text-xs text-slate-400">{t('minPurchase')}: 10 BDT</p>
         <Button className="w-full" onClick={submit}>{t('submit')}</Button>
       </div>
     </Modal>
@@ -222,16 +350,43 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
 }
 
 function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onClose: () => void; onDone: () => void; balance: number }) {
-  const { t, profile } = useApp();
+  const { t, profile, lang } = useApp();
   const { notify } = useToast();
-  const [coins, setCoins] = useState(1000);
+  const [bdt, setBdt] = useState(100);
   const [method, setMethod] = useState('bKash');
+  const [receiverNumber, setReceiverNumber] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+
+  const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
+  const chargePct = isVip ? 0 : 3;
+  const coinsNeeded = bdt * 100;
+  const coinsAfterCharge = Math.round(coinsNeeded * (1 + chargePct / 100));
 
   const submit = async () => {
-    if (coins > balance) { notify(t('notEnoughCoins'), 'error'); return; }
-    if (coins < 1000) { notify(t('minPurchase'), 'error'); return; }
-    await supabase.from('transactions').insert({ user_id: profile!.id, type: 'withdrawal', amount: -coins, status: 'pending', method, note: `${(coins / 100).toFixed(2)} BDT via ${method}` });
+    if (!profile) return;
+    if (coinsNeeded < 10000) { notify(`${t('minPurchase')}: 100 BDT`, 'error'); return; }
+    if (coinsAfterCharge > balance) { notify(t('insufficientCoins'), 'error'); return; }
+    if (!receiverNumber.trim()) { notify(t('enterReceiverWallet'), 'error'); return; }
+
+    const insertData: Record<string, unknown> = {
+      user_id: profile.id,
+      type: 'withdrawal',
+      amount: -coinsAfterCharge,
+      status: 'pending',
+      method,
+      receiver_number: receiverNumber.trim(),
+      note: `${bdt} BDT via ${method} | Receiver: ${receiverNumber.trim()}`,
+    };
+    if (promoCode.trim()) {
+      insertData.withdraw_promo_code = promoCode.trim().toUpperCase();
+    }
+
+    const { error } = await supabase.from('transactions').insert(insertData);
+    if (error) { notify(error.message, 'error'); return; }
+
     notify(t('withdrawPending'), 'info');
+    setReceiverNumber('');
+    setPromoCode('');
     onClose();
     onDone();
   };
@@ -239,20 +394,57 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   return (
     <Modal open={open} onClose={onClose} title={t('withdrawRequest')}>
       <div className="space-y-3">
-        <div>
-          <label className="text-xs text-slate-400 block mb-1">{t('amount')} ({t('lumoraCoins')})</label>
-          <input type="number" min={1000} value={coins} onChange={(e) => setCoins(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          <p className="text-xs text-amber-300 mt-1">= {(coins / 100).toFixed(2)} BDT</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">{t('withdrawableCoins')}: {balance.toLocaleString()}</p>
-        </div>
+        {/* Method selector */}
         <div>
           <label className="text-xs text-slate-400 block mb-1">{t('method')}</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
-            <option value="bKash">bKash</option>
-            <option value="Nagad">Nagad</option>
-            <option value="Bank">Bank Transfer</option>
-          </select>
+          <div className="grid grid-cols-3 gap-2">
+            {['bKash', 'Nagad', 'Rocket'].map((m) => (
+              <button
+                key={m}
+                onClick={() => setMethod(m)}
+                className={`py-2.5 rounded-xl text-sm font-medium transition ${method === m ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* Withdraw amount in BDT */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('withdrawAmount')}</label>
+          <input type="number" min={100} value={bdt} onChange={(e) => setBdt(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-amber-300">= {coinsNeeded.toLocaleString()} {t('lumoraCoins')}</p>
+            {!isVip && <p className="text-[10px] text-slate-500">+{chargePct}% {t('platformCharge')}: {coinsAfterCharge.toLocaleString()}</p>}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-0.5">{t('withdrawableCoins')}: {balance.toLocaleString()}</p>
+        </div>
+
+        {/* Receiver wallet number */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'তোমার বিকাশ/নগদ/রকেট নম্বর দাও' : t('receiverWallet')}</label>
+          <input
+            type="tel"
+            value={receiverNumber}
+            onChange={(e) => setReceiverNumber(e.target.value)}
+            placeholder={t('enterReceiverWallet')}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-blue-500/50"
+          />
+        </div>
+
+        {/* Withdrawal promo code */}
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'উইথড্র প্রোমো / ডিসকাউন্ট কোড (ঐচ্ছিক)' : t('withdrawPromoCode')}</label>
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder={t('withdrawPromoCode')}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50 uppercase"
+          />
+        </div>
+
         <Button className="w-full" onClick={submit}>{t('submit')}</Button>
       </div>
     </Modal>

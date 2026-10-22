@@ -74,6 +74,12 @@ export type TxRow = {
   status: string;
   method: string | null;
   note: string | null;
+  sender_number: string | null;
+  trx_id: string | null;
+  receiver_number: string | null;
+  personal_admin_number: string | null;
+  deposit_promo_code: string | null;
+  withdraw_promo_code: string | null;
   created_at: string;
 };
 
@@ -89,5 +95,8 @@ export type SettingsRow = {
   referrer_deposit_pct: number;
   service_charge_pct: number;
   vip_service_charge_pct: number;
+  admin_bkash_number: string | null;
+  admin_nagad_number: string | null;
+  admin_rocket_number: string | null;
   updated_at: string;
 };

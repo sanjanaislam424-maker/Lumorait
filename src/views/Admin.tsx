@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
-import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
+import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 
 type AdminTab = 'overview' | 'users' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals';
@@ -273,14 +273,57 @@ function FinanceTab() {
   };
   useEffect(() => { load(); }, []);
 
+  const applyDepositPromoBonus = async (userId: string, promoCode: string): Promise<number> => {
+    const trimmed = promoCode.trim().toUpperCase();
+    const { data: promo, error } = await supabase.from('promo_codes').select('*').eq('code', trimmed).maybeSingle();
+    if (error || !promo || !promo.is_active || promo.uses_count >= promo.max_uses) return 0;
+
+    const { data: existing } = await supabase.from('promo_redemptions').select('id').eq('promo_code_id', promo.id).eq('user_id', userId).maybeSingle();
+    if (existing) return 0;
+
+    await supabase.from('promo_redemptions').insert({ promo_code_id: promo.id, user_id: userId, coins_awarded: promo.coin_value });
+    await supabase.from('promo_codes').update({ uses_count: promo.uses_count + 1 }).eq('id', promo.id);
+
+    const { data: prof } = await supabase.from('profiles').select('lumora_coins, bonus_coins').eq('id', userId).maybeSingle();
+    if (prof) {
+      await supabase.from('profiles').update({
+        lumora_coins: prof.lumora_coins + promo.coin_value,
+        bonus_coins: (prof.bonus_coins || 0) + promo.coin_value,
+      }).eq('id', userId);
+    }
+    await supabase.from('transactions').insert({ user_id: userId, type: 'promo', amount: promo.coin_value, status: 'completed', note: `Deposit promo bonus: ${trimmed}` });
+    return promo.coin_value;
+  };
+
   const act = async (tx: TxRow, status: string) => {
     await supabase.from('transactions').update({ status }).eq('id', tx.id);
     if (status === 'approved') {
-      const delta = tx.type === 'withdrawal' ? tx.amount : tx.amount;
-      const { data: prof } = await supabase.from('profiles').select('lumora_coins').eq('id', tx.user_id).maybeSingle();
-      if (prof) {
-        const newBal = tx.type === 'withdrawal' ? Math.max(0, prof.lumora_coins + tx.amount) : prof.lumora_coins + tx.amount;
-        await supabase.from('profiles').update({ lumora_coins: newBal }).eq('id', tx.user_id);
+      if (tx.type === 'deposit') {
+        // Credit cash_balance BDT (amount is in coins = BDT * 100)
+        const bdtAmount = Math.abs(tx.amount) / 100;
+        const { data: prof } = await supabase.from('profiles').select('cash_balance').eq('id', tx.user_id).maybeSingle();
+        if (prof) {
+          await supabase.from('profiles').update({
+            cash_balance: (prof.cash_balance || 0) + bdtAmount,
+          }).eq('id', tx.user_id);
+        }
+        // Apply non-withdrawable bonus coins if valid promo code submitted
+        if (tx.deposit_promo_code) {
+          const bonus = await applyDepositPromoBonus(tx.user_id, tx.deposit_promo_code);
+          if (bonus > 0) {
+            notify(`${t('bonusCoinsCredited')} +${bonus}`, 'success');
+          }
+        }
+      } else if (tx.type === 'withdrawal') {
+        // Deduct coins from withdrawable balance (amount is already negative)
+        const { data: prof } = await supabase.from('profiles').select('lumora_coins, withdrawable_coins').eq('id', tx.user_id).maybeSingle();
+        if (prof) {
+          const coinAmt = Math.abs(tx.amount);
+          await supabase.from('profiles').update({
+            lumora_coins: Math.max(0, prof.lumora_coins - coinAmt),
+            withdrawable_coins: Math.max(0, (prof.withdrawable_coins || 0) - coinAmt),
+          }).eq('id', tx.user_id);
+        }
       }
     }
     notify(status === 'approved' ? t('approved') : t('rejected'), 'success');
@@ -290,16 +333,51 @@ function FinanceTab() {
   return (
     <div className="space-y-2">
       {txs.length === 0 ? <EmptyState message={t('finance')} /> : txs.map((tx) => (
-        <div key={tx.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-white capitalize">{tx.type} • {tx.method}</p>
-            <p className="text-xs text-slate-500">{tx.note}</p>
+        <div key={tx.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white capitalize">
+                {tx.type} • {tx.method}
+                {tx.deposit_promo_code && <span className="ml-1.5 text-amber-400 text-xs">[{tx.deposit_promo_code}]</span>}
+                {tx.withdraw_promo_code && <span className="ml-1.5 text-amber-400 text-xs">[{tx.withdraw_promo_code}]</span>}
+              </p>
+              <p className="text-xs text-slate-500">{tx.note}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-sm font-bold text-amber-300">{Math.abs(tx.amount) >= 100 ? `${(Math.abs(tx.amount) / 100).toFixed(0)} BDT` : Math.abs(tx.amount)}</span>
+              <Button className="text-xs px-2 py-1" onClick={() => act(tx, 'approved')}><Check size={14} /></Button>
+              <Button variant="danger" className="text-xs px-2 py-1" onClick={() => act(tx, 'rejected')}><X size={14} /></Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <CoinBadge amount={Math.abs(tx.amount)} />
-            <Button className="text-xs px-2 py-1" onClick={() => act(tx, 'approved')}><Check size={14} /></Button>
-            <Button variant="danger" className="text-xs px-2 py-1" onClick={() => act(tx, 'rejected')}><X size={14} /></Button>
-          </div>
+          {/* Verification details */}
+          {tx.type === 'deposit' && (
+            <div className="grid grid-cols-3 gap-2 mt-2 bg-slate-900/40 rounded-lg p-2">
+              {tx.sender_number && (
+                <div>
+                  <p className="text-[10px] text-slate-500">{t('senderPhone')}</p>
+                  <p className="text-xs text-white font-mono">{tx.sender_number}</p>
+                </div>
+              )}
+              {tx.trx_id && (
+                <div>
+                  <p className="text-[10px] text-slate-500">{t('trxId')}</p>
+                  <p className="text-xs text-white font-mono">{tx.trx_id}</p>
+                </div>
+              )}
+              {tx.personal_admin_number && (
+                <div>
+                  <p className="text-[10px] text-slate-500">Admin #</p>
+                  <p className="text-xs text-white font-mono">{tx.personal_admin_number}</p>
+                </div>
+              )}
+            </div>
+          )}
+          {tx.type === 'withdrawal' && tx.receiver_number && (
+            <div className="mt-2 bg-slate-900/40 rounded-lg p-2">
+              <p className="text-[10px] text-slate-500">{t('receiverWallet')}</p>
+              <p className="text-xs text-white font-mono">{tx.receiver_number}</p>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -374,6 +452,7 @@ function SettingsTab() {
       spin_rewards: s.spin_rewards, free_spins_daily: s.free_spins_daily,
       checkin_rewards: s.checkin_rewards, referral_bonus: s.referral_bonus,
       referee_bonus: s.referee_bonus, referrer_deposit_pct: s.referrer_deposit_pct,
+      admin_bkash_number: s.admin_bkash_number, admin_nagad_number: s.admin_nagad_number, admin_rocket_number: s.admin_rocket_number,
     }).eq('id', 1);
     notify(t('saved'), 'success');
   };
@@ -406,6 +485,25 @@ function SettingsTab() {
           <label className="text-xs text-slate-400 block mb-1">Check-in rewards</label>
           <input value={s.checkin_rewards} onChange={(e) => setS({ ...s, checkin_rewards: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
         </div>
+
+        <div className="pt-2 border-t border-white/10">
+          <p className="text-xs text-amber-400 font-semibold mb-2">{t('personalAdminNumbers')}</p>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">{t('adminBkashNumber')}</label>
+              <input value={s.admin_bkash_number || ''} onChange={(e) => setS({ ...s, admin_bkash_number: e.target.value })} placeholder="017XXXXXXXX" className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-mono" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">{t('adminNagadNumber')}</label>
+              <input value={s.admin_nagad_number || ''} onChange={(e) => setS({ ...s, admin_nagad_number: e.target.value })} placeholder="018XXXXXXXX" className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-mono" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">{t('adminRocketNumber')}</label>
+              <input value={s.admin_rocket_number || ''} onChange={(e) => setS({ ...s, admin_rocket_number: e.target.value })} placeholder="019XXXXXXXX" className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm font-mono" />
+            </div>
+          </div>
+        </div>
+
         <Button className="w-full" onClick={save}>{t('save')}</Button>
       </div>
     </Card>
