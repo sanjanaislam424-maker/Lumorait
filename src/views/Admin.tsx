@@ -1,12 +1,44 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 
-type AdminTab = 'overview' | 'users' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals';
+type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals';
+
+const PERM_KEYS = [
+  'manage_deposits',
+  'manage_withdrawals',
+  'moderate_tasks',
+  'verify_kyc',
+  'manage_promo_codes',
+  'balance_adjustments',
+  'system_settings',
+] as const;
+
+type PermKey = typeof PERM_KEYS[number];
+
+const TAB_PERMISSIONS: Record<AdminTab, PermKey | null> = {
+  overview: null,
+  users: 'balance_adjustments',
+  staff: null,
+  verifications: 'verify_kyc',
+  finance: 'manage_deposits',
+  disputes: 'moderate_tasks',
+  settings: 'system_settings',
+  broadcast: null,
+  promo: 'manage_promo_codes',
+  appeals: 'verify_kyc',
+};
+
+function hasPermission(profile: Profile | null, perm: PermKey | null): boolean {
+  if (!profile || profile.role !== 'admin') return false;
+  if (profile.is_super_admin) return true;
+  if (perm === null) return true;
+  return profile.admin_permissions?.[perm] === true;
+}
 
 export function Admin() {
   const { t, profile } = useApp();
@@ -19,6 +51,7 @@ export function Admin() {
   const tabs: { key: AdminTab; icon: React.ReactNode; label: string }[] = [
     { key: 'overview', icon: <BarChart3 size={16} />, label: 'Overview' },
     { key: 'users', icon: <Users size={16} />, label: t('users') },
+    { key: 'staff', icon: <UserCog size={16} />, label: t('staffManagement') },
     { key: 'verifications', icon: <ShieldCheck size={16} />, label: t('verifications') },
     { key: 'finance', icon: <DollarSign size={16} />, label: t('finance') },
     { key: 'disputes', icon: <Gavel size={16} />, label: t('disputes') },
@@ -28,29 +61,39 @@ export function Admin() {
     { key: 'appeals', icon: <FileWarning size={16} />, label: t('kycAppeals') },
   ];
 
+  const visibleTabs = tabs.filter((tb) => hasPermission(profile, TAB_PERMISSIONS[tb.key]));
+
+  const activeTab = visibleTabs.some((tb) => tb.key === tab) ? tab : 'overview';
+
   return (
     <div>
       <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-        <ShieldCheck className="text-amber-400" size={24} /> {t('admin')}
+        <ShieldCheck className="text-amber-400" size={24} /> {t('adminPanel')}
+        {profile.is_super_admin && (
+          <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full px-2 py-0.5 flex items-center gap-1">
+            <Lock size={10} /> {t('superAdmin')}
+          </span>
+        )}
       </h2>
 
       <div className="flex gap-1.5 overflow-x-auto mb-4 pb-1">
-        {tabs.map((tb) => (
-          <button key={tb.key} onClick={() => setTab(tb.key)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition ${tab === tb.key ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+        {visibleTabs.map((tb) => (
+          <button key={tb.key} onClick={() => setTab(tb.key)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition ${activeTab === tb.key ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
             {tb.icon} {tb.label}
           </button>
         ))}
       </div>
 
-      {tab === 'overview' && <Overview />}
-      {tab === 'users' && <UsersTab />}
-      {tab === 'verifications' && <VerificationsTab />}
-      {tab === 'finance' && <FinanceTab />}
-      {tab === 'disputes' && <DisputesTab />}
-      {tab === 'settings' && <SettingsTab />}
-      {tab === 'broadcast' && <BroadcastTab />}
-      {tab === 'promo' && <PromoCodesTab />}
-      {tab === 'appeals' && <AppealsTab />}
+      {activeTab === 'overview' && <Overview />}
+      {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'staff' && <StaffTab />}
+      {activeTab === 'verifications' && <VerificationsTab />}
+      {activeTab === 'finance' && <FinanceTab />}
+      {activeTab === 'disputes' && <DisputesTab />}
+      {activeTab === 'settings' && <SettingsTab />}
+      {activeTab === 'broadcast' && <BroadcastTab />}
+      {activeTab === 'promo' && <PromoCodesTab />}
+      {activeTab === 'appeals' && <AppealsTab />}
     </div>
   );
 }
@@ -92,12 +135,170 @@ function Overview() {
   );
 }
 
+function StaffTab() {
+  const { t, profile } = useApp();
+  const { notify } = useToast();
+  const [admins, setAdmins] = useState<Profile[]>([]);
+  const [allUsers, setAllUsers] = useState<Profile[]>([]);
+  const [search, setSearch] = useState('');
+  const [editPerms, setEditPerms] = useState<Profile | null>(null);
+  const [permState, setPermState] = useState<Record<string, boolean>>({});
+
+  const isSuperAdmin = profile?.is_super_admin === true;
+
+  const load = async () => {
+    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(100);
+    const all = (data as Profile[]) || [];
+    setAllUsers(all);
+    setAdmins(all.filter((u) => u.role === 'admin'));
+  };
+  useEffect(() => { load(); }, []);
+
+  const filtered = allUsers.filter((u) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (u.full_name || '').toLowerCase().includes(q) || (u.phone || '').toLowerCase().includes(q);
+  });
+
+  const openPerms = (u: Profile) => {
+    setEditPerms(u);
+    const perms: Record<string, boolean> = {};
+    PERM_KEYS.forEach((k) => { perms[k] = u.admin_permissions?.[k] === true; });
+    setPermState(perms);
+  };
+
+  const savePerms = async () => {
+    if (!editPerms) return;
+    await supabase.from('profiles').update({ admin_permissions: permState }).eq('id', editPerms.id);
+    notify(t('saved'), 'success');
+    setEditPerms(null);
+    load();
+  };
+
+  const togglePerm = (key: string) => {
+    setPermState((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const setRole = async (u: Profile, role: 'admin' | 'user') => {
+    if (u.is_super_admin) { notify(t('superAdminLocked'), 'error'); return; }
+    await supabase.from('profiles').update({ role }).eq('id', u.id);
+    notify(role === 'admin' ? t('makeAdmin') : t('removeAdmin'), 'success');
+    load();
+  };
+
+  const toggleSuperAdmin = async (u: Profile) => {
+    if (profile?.is_super_admin !== true) { notify(t('noPermissions'), 'error'); return; }
+    await supabase.from('profiles').update({ is_super_admin: !u.is_super_admin }).eq('id', u.id);
+    notify(t('saved'), 'success');
+    load();
+  };
+
+  const permLabels: Record<PermKey, string> = {
+    manage_deposits: t('permManageDeposits'),
+    manage_withdrawals: t('permManageWithdrawals'),
+    moderate_tasks: t('permModerateTasks'),
+    verify_kyc: t('permVerifyKyc'),
+    manage_promo_codes: t('permManagePromoCodes'),
+    balance_adjustments: t('permBalanceAdjustments'),
+    system_settings: t('permSystemSettings'),
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Staff list */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <UserCog size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">{t('staffManagement')}</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">{t('staffManagementDesc')}</p>
+
+        <div className="space-y-2">
+          {admins.length === 0 ? <EmptyState message={t('staffManagement')} /> : admins.map((u) => (
+            <div key={u.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium truncate flex items-center gap-1.5">
+                  {u.full_name || u.phone || 'Admin'}
+                  {u.is_super_admin && <Lock size={12} className="text-amber-400" />}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {u.is_super_admin ? t('superAdmin') : `${PERM_KEYS.filter((k) => u.admin_permissions?.[k]).length}/${PERM_KEYS.length} permissions`}
+                </p>
+              </div>
+              <div className="flex gap-1">
+                {!u.is_super_admin && (
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => openPerms(u)}>{t('staffManagement')}</Button>
+                )}
+                {isSuperAdmin && (
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleSuperAdmin(u)}>
+                    {u.is_super_admin ? t('removeAdmin') : t('makeSuperAdmin')}
+                  </Button>
+                )}
+                {!u.is_super_admin && <Button variant="danger" className="text-xs px-2 py-1" onClick={() => setRole(u, 'user')}>{t('removeAdmin')}</Button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Promote users to admin */}
+      <Card>
+        <h3 className="font-semibold text-white mb-3 text-sm">{t('makeAdmin')}</h3>
+        <div className="relative mb-3">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchUsers')}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+          />
+        </div>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {filtered.filter((u) => u.role !== 'admin').slice(0, 20).map((u) => (
+            <div key={u.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm text-white truncate">{u.full_name || u.phone || 'User'}</p>
+                <p className="text-xs text-slate-500">{u.phone}</p>
+              </div>
+              <Button className="text-xs px-2 py-1" onClick={() => { setRole(u, 'admin'); }}>{t('makeAdmin')}</Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Permission editor modal */}
+      <Modal open={!!editPerms} onClose={() => setEditPerms(null)} title={`${t('staffManagement')} — ${editPerms?.full_name || editPerms?.phone || ''}`}>
+        <div className="space-y-3">
+          {PERM_KEYS.map((key) => (
+            <label key={key} className="flex items-center justify-between bg-slate-700/50 border border-white/10 rounded-xl px-3 py-3 cursor-pointer hover:bg-slate-700/70 transition">
+              <span className="text-sm text-white">{permLabels[key]}</span>
+              <button
+                type="button"
+                onClick={() => togglePerm(key)}
+                className={`relative w-11 h-6 rounded-full transition ${permState[key] ? 'bg-amber-500' : 'bg-slate-600'}`}
+              >
+                <motion.span
+                  animate={{ x: permState[key] ? 22 : 2 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md"
+                />
+              </button>
+            </label>
+          ))}
+          <Button className="w-full" onClick={savePerms}>{t('save')}</Button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
 function UsersTab() {
   const { t, refreshProfile } = useApp();
   const { notify } = useToast();
   const [users, setUsers] = useState<Profile[]>([]);
+  const [search, setSearch] = useState('');
   const [editUser, setEditUser] = useState<Profile | null>(null);
-  const [newBalance, setNewBalance] = useState(0);
+  const [editBalances, setEditBalances] = useState({ lumora_coins: 0, withdrawable_coins: 0, bonus_coins: 0, cash_balance: 0 });
 
   const load = async () => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(50);
@@ -105,22 +306,41 @@ function UsersTab() {
   };
   useEffect(() => { load(); }, []);
 
+  const filtered = users.filter((u) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (u.full_name || '').toLowerCase().includes(q) || (u.phone || '').toLowerCase().includes(q);
+  });
+
   const toggleBan = async (u: Profile) => {
     await supabase.from('profiles').update({ banned: !u.banned }).eq('id', u.id);
     notify(u.banned ? 'Unbanned' : 'Banned', 'success');
     load();
   };
 
-  const setRole = async (u: Profile, role: string) => {
-    await supabase.from('profiles').update({ role }).eq('id', u.id);
-    notify('Role updated', 'success');
-    load();
+  const openEdit = (u: Profile) => {
+    setEditUser(u);
+    setEditBalances({
+      lumora_coins: u.lumora_coins,
+      withdrawable_coins: u.withdrawable_coins || 0,
+      bonus_coins: u.bonus_coins || 0,
+      cash_balance: u.cash_balance || 0,
+    });
   };
 
-  const saveBalance = async () => {
+  const saveBalances = async () => {
     if (!editUser) return;
-    await supabase.from('profiles').update({ lumora_coins: newBalance }).eq('id', editUser.id);
-    await supabase.from('transactions').insert({ user_id: editUser.id, type: 'admin_adjust', amount: newBalance - editUser.lumora_coins, status: 'completed', note: 'Admin balance adjustment' });
+    const updates = {
+      lumora_coins: editBalances.lumora_coins,
+      withdrawable_coins: editBalances.withdrawable_coins,
+      bonus_coins: editBalances.bonus_coins,
+      cash_balance: editBalances.cash_balance,
+    };
+    await supabase.from('profiles').update(updates).eq('id', editUser.id);
+    const delta = editBalances.lumora_coins - editUser.lumora_coins;
+    if (delta !== 0) {
+      await supabase.from('transactions').insert({ user_id: editUser.id, type: 'admin_adjust', amount: delta, status: 'completed', note: `Admin adjustment: coins ${delta > 0 ? '+' : ''}${delta}` });
+    }
     notify(t('saved'), 'success');
     setEditUser(null);
     load();
@@ -128,16 +348,28 @@ function UsersTab() {
   };
 
   return (
-    <div className="space-y-2">
-      {users.length === 0 ? <EmptyState message={t('users')} /> : users.map((u) => (
+    <div className="space-y-3">
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('searchUsers')}
+          className="w-full bg-slate-700 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+        />
+      </div>
+
+      {filtered.length === 0 ? <EmptyState message={t('users')} /> : filtered.map((u) => (
         <div key={u.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-sm text-white font-medium truncate">{u.full_name || u.phone || 'User'}</p>
-            <p className="text-xs text-slate-500">{u.role} • {u.lumora_coins} {t('lumoraCoins')} {u.banned && '• BANNED'}</p>
+            <p className="text-xs text-slate-500">
+              {u.role} • {u.lumora_coins} {t('lumoraCoins')} • {(u.cash_balance || 0)} BDT
+              {u.banned && ' • BANNED'}
+            </p>
           </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => { setEditUser(u); setNewBalance(u.lumora_coins); }}>{t('adjustCoins')}</Button>
-            <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setRole(u, u.role === 'admin' ? 'user' : 'admin')}>{t('setRole')}</Button>
+          <div className="flex gap-1 shrink-0">
+            <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => openEdit(u)}>{t('adjustCoins')}</Button>
             <Button variant={u.banned ? 'ghost' : 'danger'} className="text-xs px-2 py-1" onClick={() => toggleBan(u)}>{u.banned ? 'Unban' : t('ban')}</Button>
           </div>
         </div>
@@ -145,9 +377,24 @@ function UsersTab() {
 
       <Modal open={!!editUser} onClose={() => setEditUser(null)} title={t('adjustCoins')}>
         <div className="space-y-3">
-          <p className="text-sm text-slate-400">Current: {editUser?.lumora_coins} {t('lumoraCoins')}</p>
-          <input type="number" value={newBalance} onChange={(e) => setNewBalance(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          <Button className="w-full" onClick={saveBalance}>{t('save')}</Button>
+          <p className="text-sm text-slate-400">{editUser?.full_name || editUser?.phone}</p>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('adjustCash')}</label>
+            <input type="number" value={editBalances.cash_balance} onChange={(e) => setEditBalances({ ...editBalances, cash_balance: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('lumoraCoins')} (Total)</label>
+            <input type="number" value={editBalances.lumora_coins} onChange={(e) => setEditBalances({ ...editBalances, lumora_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('adjustWithdrawable')}</label>
+            <input type="number" value={editBalances.withdrawable_coins} onChange={(e) => setEditBalances({ ...editBalances, withdrawable_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('adjustBonus')}</label>
+            <input type="number" value={editBalances.bonus_coins} onChange={(e) => setEditBalances({ ...editBalances, bonus_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <Button className="w-full" onClick={saveBalances}>{t('save')}</Button>
         </div>
       </Modal>
     </div>
@@ -168,11 +415,9 @@ function VerificationsTab() {
   const act = async (id: string, status: string) => {
     await supabase.from('id_verifications').update({ status, reviewed_at: new Date().toISOString() }).eq('id', id);
     if (status === 'approved') {
-      // Mark user as KYC verified
       const { data: verif } = await supabase.from('id_verifications').select('user_id').eq('id', id).maybeSingle();
       if (verif) {
         await supabase.from('profiles').update({ kyc_verified: true }).eq('id', verif.user_id);
-        // Process referral Step 1 if referrer exists
         const { data: prof } = await supabase.from('profiles').select('referred_by, lumora_coins, bonus_coins').eq('id', verif.user_id).maybeSingle();
         if (prof?.referred_by) {
           const { data: referrer } = await supabase.from('profiles').select('lumora_coins, bonus_coins, referral_earned').eq('id', prof.referred_by).maybeSingle();
@@ -231,9 +476,7 @@ function AppealsTab() {
   const act = async (appeal: any, status: string) => {
     await supabase.from('kyc_appeals').update({ status, reviewed_at: new Date().toISOString() }).eq('id', appeal.id);
     if (status === 'approved') {
-      // Remove from deleted_account_nids so the NID can be reused
       await supabase.from('deleted_account_nids').delete().eq('nid_number', appeal.nid_number);
-      // Mark user as KYC verified
       await supabase.from('profiles').update({ kyc_verified: true }).eq('id', appeal.user_id);
       await supabase.from('id_verifications').update({ status: 'appeal_approved' }).eq('user_id', appeal.user_id).eq('id_number', appeal.nid_number);
     }
@@ -299,23 +542,16 @@ function FinanceTab() {
     await supabase.from('transactions').update({ status }).eq('id', tx.id);
     if (status === 'approved') {
       if (tx.type === 'deposit') {
-        // Credit cash_balance BDT (amount is in coins = BDT * 100)
         const bdtAmount = Math.abs(tx.amount) / 100;
         const { data: prof } = await supabase.from('profiles').select('cash_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
-          await supabase.from('profiles').update({
-            cash_balance: (prof.cash_balance || 0) + bdtAmount,
-          }).eq('id', tx.user_id);
+          await supabase.from('profiles').update({ cash_balance: (prof.cash_balance || 0) + bdtAmount }).eq('id', tx.user_id);
         }
-        // Apply non-withdrawable bonus coins if valid promo code submitted
         if (tx.deposit_promo_code) {
           const bonus = await applyDepositPromoBonus(tx.user_id, tx.deposit_promo_code);
-          if (bonus > 0) {
-            notify(`${t('bonusCoinsCredited')} +${bonus}`, 'success');
-          }
+          if (bonus > 0) notify(`${t('bonusCoinsCredited')} +${bonus}`, 'success');
         }
       } else if (tx.type === 'withdrawal') {
-        // Deduct coins from withdrawable balance (amount is already negative)
         const { data: prof } = await supabase.from('profiles').select('lumora_coins, withdrawable_coins').eq('id', tx.user_id).maybeSingle();
         if (prof) {
           const coinAmt = Math.abs(tx.amount);
@@ -349,27 +585,11 @@ function FinanceTab() {
               <Button variant="danger" className="text-xs px-2 py-1" onClick={() => act(tx, 'rejected')}><X size={14} /></Button>
             </div>
           </div>
-          {/* Verification details */}
           {tx.type === 'deposit' && (
             <div className="grid grid-cols-3 gap-2 mt-2 bg-slate-900/40 rounded-lg p-2">
-              {tx.sender_number && (
-                <div>
-                  <p className="text-[10px] text-slate-500">{t('senderPhone')}</p>
-                  <p className="text-xs text-white font-mono">{tx.sender_number}</p>
-                </div>
-              )}
-              {tx.trx_id && (
-                <div>
-                  <p className="text-[10px] text-slate-500">{t('trxId')}</p>
-                  <p className="text-xs text-white font-mono">{tx.trx_id}</p>
-                </div>
-              )}
-              {tx.personal_admin_number && (
-                <div>
-                  <p className="text-[10px] text-slate-500">Admin #</p>
-                  <p className="text-xs text-white font-mono">{tx.personal_admin_number}</p>
-                </div>
-              )}
+              {tx.sender_number && (<div><p className="text-[10px] text-slate-500">{t('senderPhone')}</p><p className="text-xs text-white font-mono">{tx.sender_number}</p></div>)}
+              {tx.trx_id && (<div><p className="text-[10px] text-slate-500">{t('trxId')}</p><p className="text-xs text-white font-mono">{tx.trx_id}</p></div>)}
+              {tx.personal_admin_number && (<div><p className="text-[10px] text-slate-500">Admin #</p><p className="text-xs text-white font-mono">{tx.personal_admin_number}</p></div>)}
             </div>
           )}
           {tx.type === 'withdrawal' && tx.receiver_number && (

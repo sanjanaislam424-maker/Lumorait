@@ -48,7 +48,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
   ];
 
   if (profile?.role === 'admin') {
-    drawerItems.push({ key: 'admin', icon: <Shield size={20} />, label: t('admin') });
+    drawerItems.push({ key: 'admin', icon: <Shield size={20} />, label: t('adminPanel') });
   }
 
   const openNotifs = async () => {

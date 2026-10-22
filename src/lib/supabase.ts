@@ -34,6 +34,8 @@ export type Profile = {
   membership_expires: string | null;
   box_blasts_used_today: number;
   box_blast_date: string | null;
+  admin_permissions: Record<string, boolean> | null;
+  is_super_admin: boolean;
   created_at: string;
 };
 
