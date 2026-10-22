@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X } from 'lucide-react';
+import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
@@ -32,17 +32,13 @@ function pickWeightedIndex(): number {
   return 0;
 }
 
-// ---- 3D box configs: realistic metallic/wooden textures ----
+// ---- 3D box configs ----
 type BoxConfig = {
   glow: string;
   accent: string;
-  // Front face — rich metallic gradient
   front: string;
-  // Top face — lighter (lit from above)
   top: string;
-  // Side face — darker (in shadow)
   side: string;
-  // Stud color
   stud: string;
 };
 const BOX_CONFIGS: BoxConfig[] = [
@@ -92,13 +88,16 @@ function playTone(freq: number, dur: number, type: OscillatorType = 'sine', vol 
     osc.start(); osc.stop(ctx.currentTime + dur);
   } catch { /* ignore */ }
 }
+function playCrack() {
+  // Initial crack sound
+  playTone(200, 0.08, 'square', 0.12);
+  setTimeout(() => playTone(400, 0.06, 'square', 0.08), 60);
+  setTimeout(() => playTone(250, 0.05, 'sawtooth', 0.06), 120);
+}
 function playExplosion() {
-  // Low boom
   playTone(60, 0.4, 'sawtooth', 0.15);
-  // Crackle
   setTimeout(() => playTone(140, 0.15, 'square', 0.1), 40);
   setTimeout(() => playTone(90, 0.25, 'sawtooth', 0.08), 80);
-  // Debris clatter
   setTimeout(() => playTone(200, 0.1, 'triangle', 0.06), 150);
   setTimeout(() => playTone(160, 0.12, 'triangle', 0.05), 220);
 }
@@ -109,31 +108,47 @@ function playFanfare() {
 }
 function playLose() { playTone(180, 0.3, 'sawtooth', 0.06); }
 
-// ---- Particle system: HD sparklers, 3D debris, shockwaves ----
+// ---- Particle system ----
 type Particle = {
   x: number; y: number; vx: number; vy: number;
   color: string; size: number; life: number; maxLife: number;
   rot: number; vrot: number;
   type: 'spark' | 'debris' | 'streak' | 'glow';
-  z: number; vz: number; // pseudo-3D depth
+  z: number; vz: number;
 };
 type Shockwave = { x: number; y: number; radius: number; maxRadius: number; life: number; maxLife: number; color: string };
 const SPARK_COLORS = ['#fbbf24', '#fde68a', '#fb923c', '#f59e0b', '#fef3c7', '#22d3ee', '#ec4899', '#a855f7'];
 const DEBRIS_COLORS = ['#9d174d', '#be185d', '#831843', '#0e7490', '#155e75', '#78350f', '#b45309'];
 
-type BlastedBox = { index: number } | null;
+const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function Spin() {
   const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
 
-  // STRICT: starts at 1, only decrements on blast
-  const [blastsLeft, setBlastsLeft] = useState(1);
+  // Persisted cooldown: stored per-user in localStorage
+  const getStoredLastBlast = (): number => {
+    if (!profile?.id) return 0;
+    try {
+      const v = localStorage.getItem(`lumora_blast_${profile.id}`);
+      return v ? parseInt(v, 10) : 0;
+    } catch { return 0; }
+  };
+  const setStoredLastBlast = (ts: number) => {
+    if (!profile?.id) return;
+    try { localStorage.setItem(`lumora_blast_${profile.id}`, String(ts)); } catch { /* ignore */ }
+  };
+
+  const [lastBlastTs, setLastBlastTs] = useState<number>(0);
+  const [now, setNow] = useState<number>(Date.now());
+  const [extraBlasts, setExtraBlasts] = useState(0); // extra blasts from ads/tasks
   const [blasting, setBlasting] = useState(false);
+  const [cracking, setCracking] = useState(false); // box is cracking phase
   const [soundOn, setSoundOn] = useState(true);
   const [result, setResult] = useState<{ reward: Reward } | null>(null);
   const [celebrate, setCelebrate] = useState(false);
-  const [blastedBox, setBlastedBox] = useState<BlastedBox>(null);
+  const [blastedBox, setBlastedBox] = useState<number | null>(null);
+  const [floatingReward, setFloatingReward] = useState<{ reward: Reward; boxIndex: number } | null>(null);
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(15);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
@@ -144,9 +159,33 @@ export function Spin() {
   const shockwavesRef = useRef<Shockwave[]>([]);
   const rafRef = useRef<number | null>(null);
 
-  // ---- Spawn full 3D explosion at (cx, cy) ----
+  // Load persisted cooldown on mount / profile change
+  useEffect(() => {
+    setLastBlastTs(getStoredLastBlast());
+    setExtraBlasts(0);
+  }, [profile?.id]);
+
+  // Tick every second for countdown
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const cooldownRemaining = Math.max(0, (lastBlastTs + COOLDOWN_MS) - now);
+  const freeBoxReady = cooldownRemaining === 0;
+  const blastsLeft = (freeBoxReady ? 1 : 0) + extraBlasts;
+
+  // Format countdown
+  const formatCountdown = (ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${h}${t('hrs')} ${m}${t('mins')} ${s}${t('secs')}`;
+  };
+
+  // ---- Spawn full 3D explosion ----
   const spawnExplosion = useCallback((cx: number, cy: number, boxColor: string) => {
-    // Shockwave rings (2-3 expanding rings)
     const ringCount = 2 + Math.floor(Math.random() * 2);
     for (let i = 0; i < ringCount; i++) {
       shockwavesRef.current.push({
@@ -157,7 +196,6 @@ export function Spin() {
       });
     }
 
-    // HD golden sparklers (small, bright, many)
     const sparkCount = 80 + Math.floor(Math.random() * 40);
     for (let i = 0; i < sparkCount; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -175,7 +213,6 @@ export function Spin() {
       });
     }
 
-    // Light streaks (fast, elongated, few)
     const streakCount = 15 + Math.floor(Math.random() * 10);
     for (let i = 0; i < streakCount; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -193,7 +230,6 @@ export function Spin() {
       });
     }
 
-    // 3D debris fragments (larger, gravity, rotate)
     const debrisCount = 20 + Math.floor(Math.random() * 12);
     for (let i = 0; i < debrisCount; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -212,7 +248,6 @@ export function Spin() {
       });
     }
 
-    // Central glow flash
     particlesRef.current.push({
       x: cx, y: cy, vx: 0, vy: 0,
       color: '#ffffff', size: 60, life: 0, maxLife: 15,
@@ -227,7 +262,6 @@ export function Spin() {
     if (!ctx) { rafRef.current = null; return; }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw shockwaves (behind particles)
     shockwavesRef.current = shockwavesRef.current.filter((sw) => {
       sw.life++;
       const t = sw.life / sw.maxLife;
@@ -243,7 +277,6 @@ export function Spin() {
       ctx.beginPath();
       ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
       ctx.stroke();
-      // Inner glow ring
       ctx.globalAlpha = alpha * 0.3;
       ctx.lineWidth = 8;
       ctx.beginPath();
@@ -253,7 +286,6 @@ export function Spin() {
       return true;
     });
 
-    // Draw particles
     particlesRef.current = particlesRef.current.filter((p) => {
       p.life++;
       p.x += p.vx;
@@ -263,7 +295,6 @@ export function Spin() {
       if (alpha <= 0) return false;
 
       if (p.type === 'glow') {
-        // Central flash — radial gradient, fades fast
         const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
         grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
         grad.addColorStop(0.4, `rgba(251,191,36,${alpha * 0.5})`);
@@ -279,7 +310,6 @@ export function Spin() {
       }
 
       if (p.type === 'streak') {
-        // Light streak — elongated line in direction of travel
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = p.color;
@@ -293,14 +323,12 @@ export function Spin() {
         ctx.lineTo(p.x - Math.cos(p.rot) * tailLen, p.y - Math.sin(p.rot) * tailLen);
         ctx.stroke();
         ctx.restore();
-        // Apply gravity to streaks too
         p.vy += 0.08;
         return true;
       }
 
       if (p.type === 'debris') {
-        // 3D debris — gravity, rotation, perspective scale
-        p.vy += 0.18; // heavier gravity
+        p.vy += 0.18;
         p.vx *= 0.99;
         const depthScale = 1 + p.z * 0.01;
         ctx.save();
@@ -312,7 +340,6 @@ export function Spin() {
         ctx.rotate(p.rot);
         const w = p.size * depthScale;
         const h = p.size * 0.6 * depthScale;
-        // Draw as 3D-looking shard (parallelogram)
         ctx.beginPath();
         ctx.moveTo(-w / 2, -h / 2);
         ctx.lineTo(w / 2, -h / 3);
@@ -320,7 +347,6 @@ export function Spin() {
         ctx.lineTo(-w / 2, h / 3);
         ctx.closePath();
         ctx.fill();
-        // Highlight edge
         ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.3})`;
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -328,7 +354,6 @@ export function Spin() {
         return true;
       }
 
-      // Spark — HD glowing dot with additive blending
       p.vy += 0.06;
       p.vx *= 0.97;
       ctx.save();
@@ -340,7 +365,6 @@ export function Spin() {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
-      // Bright core
       ctx.fillStyle = `rgba(255,255,255,${alpha * 0.8})`;
       ctx.shadowBlur = 0;
       ctx.beginPath();
@@ -374,55 +398,85 @@ export function Spin() {
 
   // ---- CORE: blast a box ----
   const blastBox = async (boxIndex: number, boxEl: HTMLElement) => {
-    if (blasting || blastsLeft <= 0 || !profile) return;
+    if (blasting || cracking || blastsLeft <= 0 || !profile) return;
 
-    setBlastsLeft((prev) => Math.max(0, prev - 1));
+    // Determine if this is a free blast or extra blast
+    const usingFree = freeBoxReady;
+
     setBlasting(true);
-    setBlastedBox({ index: boxIndex });
+    setCracking(true);
+    setBlastedBox(boxIndex);
     setResult(null);
+    setFloatingReward(null);
 
-    if (soundOn) playExplosion();
-    triggerExplosion(boxEl, BOX_CONFIGS[boxIndex].accent);
+    // Phase 1: Cracking — box stays visible, shakes and cracks
+    if (soundOn) playCrack();
 
-    const winIdx = pickWeightedIndex();
-    const reward = REWARDS[winIdx];
+    // After 500ms of cracking, trigger explosion
+    setTimeout(() => {
+      setCracking(false);
+      if (soundOn) playExplosion();
+      triggerExplosion(boxEl, BOX_CONFIGS[boxIndex].accent);
 
-    // Wait for explosion to settle, then show modal
-    setTimeout(async () => {
-      setBlasting(false);
+      const winIdx = pickWeightedIndex();
+      const reward = REWARDS[winIdx];
 
-      if (profile) {
-        const { data: fresh } = await supabase
-          .from('profiles')
-          .select('lumora_coins')
-          .eq('id', profile.id)
-          .maybeSingle();
-        await supabase.from('profiles').update({
-          lumora_coins: (fresh?.lumora_coins ?? profile.lumora_coins) + reward.value,
-        }).eq('id', profile.id);
-        await supabase.from('spin_history').insert({ user_id: profile.id, reward: reward.value, label: reward.label });
-        if (reward.value > 0) {
-          await supabase.from('transactions').insert({
-            user_id: profile.id, type: 'spin', amount: reward.value, status: 'completed', note: `Mystery box blast: ${reward.label}`,
-          });
-        }
-        await refreshProfile();
-      }
+      // Show floating coin reveal immediately as box shatters
+      setFloatingReward({ reward, boxIndex });
 
-      setResult({ reward });
-
-      if (reward.value > 0) {
-        setCelebrate(true);
-        if (soundOn) playFanfare();
-        notify(`${t('boxBlasted')} ${reward.value} ${t('lumoraCoins')}!`, 'success');
+      // Persist cooldown if this was the free blast
+      if (usingFree) {
+        const ts = Date.now();
+        setStoredLastBlast(ts);
+        setLastBlastTs(ts);
       } else {
-        if (soundOn) playLose();
-        notify(reward.comment, 'info');
+        setExtraBlasts((prev) => Math.max(0, prev - 1));
       }
-    }, 1400);
+
+      // After explosion settles, update DB and show modal
+      setTimeout(async () => {
+        setBlasting(false);
+
+        if (profile) {
+          const { data: fresh } = await supabase
+            .from('profiles')
+            .select('lumora_coins, bonus_coins')
+            .eq('id', profile.id)
+            .maybeSingle();
+          await supabase.from('profiles').update({
+            lumora_coins: (fresh?.lumora_coins ?? profile.lumora_coins) + reward.value,
+            bonus_coins: (fresh?.bonus_coins ?? 0) + reward.value,
+          }).eq('id', profile.id);
+          await supabase.from('spin_history').insert({ user_id: profile.id, reward: reward.value, label: reward.label });
+          if (reward.value > 0) {
+            await supabase.from('transactions').insert({
+              user_id: profile.id, type: 'spin', amount: reward.value, status: 'completed', note: `Mystery box blast: ${reward.label}`,
+            });
+          }
+          await refreshProfile();
+        }
+
+        setResult({ reward });
+
+        if (reward.value > 0) {
+          setCelebrate(true);
+          if (soundOn) playFanfare();
+          notify(`${t('boxBlasted')} ${reward.value} ${t('lumoraCoins')}!`, 'success');
+        } else {
+          if (soundOn) playLose();
+          notify(reward.comment, 'info');
+        }
+
+        // Clear floating reward and blasted box after a delay
+        setTimeout(() => {
+          setFloatingReward(null);
+          setBlastedBox(null);
+        }, 2000);
+      }, 1200);
+    }, 500);
   };
 
-  // ---- EXTRA BLAST: Watch ad (15s) -> +1 ----
+  // ---- EXTRA BLAST: Watch ad ----
   const watchAd = () => {
     if (adWatching || !profile) return;
     setAdWatching(true);
@@ -433,14 +487,13 @@ export function Spin() {
     setTimeout(() => {
       clearInterval(countdown);
       setAdWatching(false);
-      setBlastsLeft((prev) => prev + 1);
-      setBlastedBox(null);
+      setExtraBlasts((prev) => prev + 1);
       if (soundOn) playFanfare();
       notify(t('adDoneBlast'), 'success');
     }, 15000);
   };
 
-  // ---- EXTRA BLAST: Complete task -> +1 ----
+  // ---- EXTRA BLAST: Complete task ----
   const openTaskPicker = async () => {
     if (!profile) return;
     const { data } = await supabase
@@ -461,8 +514,7 @@ export function Spin() {
       notes: 'Completed for extra box blast', status: 'approved',
     });
     setShowTaskPicker(false);
-    setBlastsLeft((prev) => prev + 1);
-    setBlastedBox(null);
+    setExtraBlasts((prev) => prev + 1);
     if (soundOn) playFanfare();
     notify(t('extraBlastEarned'), 'success');
   };
@@ -471,6 +523,7 @@ export function Spin() {
 
   const btnLabelTask = lang === 'bn' ? 'টাস্ক করে আরেকটি বক্স ফোটাও' : t('taskForBlastBtn');
   const btnLabelAd = lang === 'bn' ? 'অ্যাড দেখে আরেকটি বক্স ফোটাও' : t('adWatchBlastBtn');
+  const boxSize = 110;
 
   return (
     <div>
@@ -490,14 +543,31 @@ export function Spin() {
         <p className="text-sm text-slate-300 mt-2 px-4 leading-relaxed">
           {t('mysteryBlastHeader')}
         </p>
-        <p className="text-sm text-slate-400 mt-2">
-          {t('freeBlastsLeft')}: <span className="text-amber-300 font-bold text-base">{blastsLeft}</span>
-        </p>
+
+        {/* Cooldown / blast count display */}
+        {freeBoxReady ? (
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
+            <Sparkles size={14} className="text-green-400" />
+            <span className="text-sm text-green-300 font-medium">{t('boxReady')}</span>
+            <span className="text-sm text-amber-300 font-bold">{blastsLeft} {t('freeBlastsLeft')}</span>
+          </div>
+        ) : (
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+            <Clock size={14} className="text-amber-400" />
+            <span className="text-sm text-amber-300 font-medium">{t('nextFreeBoxIn')}</span>
+            <span className="text-sm text-amber-200 font-bold tabular-nums">{formatCountdown(cooldownRemaining)}</span>
+          </div>
+        )}
+
+        {extraBlasts > 0 && (
+          <p className="text-xs text-blue-300 mt-2">
+            {lang === 'bn' ? `অতিরিক্ত ব্লাস্ট: ${extraBlasts}` : `Extra blasts: ${extraBlasts}`}
+          </p>
+        )}
       </Card>
 
-      {/* ===== 3 REALISTIC 3D MYSTERY BOXES ===== */}
+      {/* ===== 3 MYSTERY BOXES ===== */}
       <div className="relative mb-6">
-        {/* Explosion canvas overlay */}
         <canvas
           ref={canvasRef}
           width={800}
@@ -509,11 +579,10 @@ export function Spin() {
         <div className="grid grid-cols-3 gap-3 sm:gap-6" style={{ perspective: '900px', perspectiveOrigin: '50% 30%' }}>
           {[0, 1, 2].map((i) => {
             const cfg = BOX_CONFIGS[i];
-            const isBlasted = blastedBox?.index === i;
+            const isBlasted = blastedBox === i;
             const disabled = blasting || blastsLeft <= 0;
-            const boxSize = 110;
             return (
-              <div key={i} className="flex justify-center items-end" style={{ minHeight: boxSize + 40 }}>
+              <div key={i} className="flex justify-center items-end relative" style={{ minHeight: boxSize + 40 }}>
                 {/* Ground shadow */}
                 <div
                   className="absolute rounded-[50%]"
@@ -523,6 +592,7 @@ export function Spin() {
                     background: 'radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, transparent 70%)',
                     filter: 'blur(6px)',
                     opacity: isBlasted ? 0 : 0.6,
+                    transition: 'opacity 0.3s',
                   }}
                 />
 
@@ -538,115 +608,202 @@ export function Spin() {
                   }}
                 />
 
-                <AnimatePresence mode="wait">
-                  {!isBlasted ? (
-                    <motion.button
-                      key="box"
-                      whileHover={!disabled ? { scale: 1.08, y: -6, rotateY: 8 } : {}}
-                      whileTap={!disabled ? { scale: 0.94 } : {}}
-                      animate={disabled ? {} : {
-                        y: [0, -8, 0],
-                        rotateY: [0, 5, 0, -5, 0],
-                      }}
-                      transition={disabled ? {} : {
-                        y: { duration: 2.5 + i * 0.4, repeat: Infinity, ease: 'easeInOut' },
-                        rotateY: { duration: 4 + i * 0.5, repeat: Infinity, ease: 'easeInOut' },
-                      }}
-                      onClick={(e) => blastBox(i, e.currentTarget as HTMLElement)}
-                      disabled={disabled}
-                      className="relative cursor-pointer"
-                      style={{
-                        width: boxSize, height: boxSize,
-                        transformStyle: 'preserve-3d',
-                        transform: 'rotateX(18deg) rotateY(-15deg)',
-                        border: 'none', background: 'none', padding: 0,
-                      }}
-                      exit={{ scale: 1.3, opacity: 0 }}
-                    >
-                      {/* Front face */}
-                      <div className="absolute" style={{
-                        width: boxSize, height: boxSize,
-                        transform: `translateZ(${boxSize / 2}px)`,
-                        background: cfg.front,
-                        borderRadius: 10,
-                        border: `1.5px solid ${cfg.accent}`,
-                        boxShadow: `inset 0 -12px 24px rgba(0,0,0,0.5), inset 0 6px 12px rgba(255,255,255,0.12), inset 4px 0 8px rgba(0,0,0,0.2), inset -4px 0 8px rgba(0,0,0,0.2)`,
-                      }}>
-                        {/* Lid seam */}
-                        <div className="absolute left-0 right-0" style={{
-                          top: '22%', height: 3,
-                          background: 'linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.6), rgba(0,0,0,0.4))',
-                          boxShadow: '0 1px 0 rgba(255,255,255,0.08)',
-                        }} />
-                        {/* Metallic lock plate */}
-                        <div className="absolute" style={{
-                          top: '14%', left: '50%', transform: 'translateX(-50%)',
-                          width: 18, height: 14, borderRadius: 3,
-                          background: 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(0,0,0,0.3))',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
-                        }} />
-                        {/* Question mark with glow */}
-                        <div className="absolute inset-0 flex items-center justify-center" style={{ top: '8%' }}>
-                          <span style={{
-                            fontSize: '36px', fontWeight: 900,
-                            color: 'rgba(255,255,255,0.92)',
-                            textShadow: `0 0 16px ${cfg.accent}, 0 0 4px ${cfg.accent}, 0 3px 6px rgba(0,0,0,0.7)`,
-                          }}>?</span>
-                        </div>
-                        {/* Corner studs */}
-                        {[[8, 8], [8, boxSize - 12], [boxSize - 16, 8], [boxSize - 16, boxSize - 12]].map(([sx, sy], si) => (
-                          <div key={si} className="absolute rounded-full" style={{
-                            left: sx, top: sy, width: 6, height: 6,
-                            background: `radial-gradient(circle at 30% 30%, ${cfg.stud}, ${cfg.accent})`,
-                            boxShadow: `0 0 6px ${cfg.accent}, inset 0 -1px 2px rgba(0,0,0,0.4)`,
-                          }} />
-                        ))}
-                      </div>
-
-                      {/* Top face (lid) */}
-                      <div className="absolute" style={{
-                        width: boxSize, height: boxSize * 0.3,
-                        top: 0, left: 0,
-                        transform: `rotateX(-90deg) translateZ(${boxSize * 0.15}px) translateY(${boxSize * 0.15}px)`,
-                        transformOrigin: 'top',
-                        background: cfg.top,
-                        borderRadius: '10px 10px 0 0',
-                        border: `1.5px solid ${cfg.accent}`,
-                        boxShadow: `inset 0 4px 8px rgba(255,255,255,0.2), inset 0 -4px 8px rgba(0,0,0,0.3)`,
-                      }} />
-
-                      {/* Right side face */}
-                      <div className="absolute" style={{
-                        width: boxSize * 0.3, height: boxSize,
-                        top: 0, right: 0,
-                        transform: `rotateY(90deg) translateZ(${boxSize * 0.2}px) translateX(${boxSize * 0.2}px)`,
-                        transformOrigin: 'right',
-                        background: cfg.side,
-                        boxShadow: `inset 0 0 12px rgba(0,0,0,0.4)`,
-                      }} />
-
-                      {/* Top bevel highlight */}
-                      <div className="absolute" style={{
-                        width: boxSize - 4, height: 3,
-                        top: 0, left: 2,
-                        transform: `translateZ(${boxSize / 2 + 0.5}px)`,
-                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-                        borderRadius: 2,
-                      }} />
-                    </motion.button>
-                  ) : (
+                {/* Box — stays visible during cracking, then shatters */}
+                <motion.button
+                  whileHover={!disabled && !isBlasted ? { scale: 1.08, y: -6, rotateY: 8 } : {}}
+                  whileTap={!disabled && !isBlasted ? { scale: 0.94 } : {}}
+                  animate={
+                    isBlasted && cracking
+                      ? // Cracking phase: violent shake
+                        { x: [0, -4, 4, -3, 3, -2, 2, 0], rotateZ: [0, 2, -2, 3, -3, 1, -1, 0] }
+                      : isBlasted && !cracking
+                      ? // Explosion phase: scale up and shatter apart
+                        { scale: [1, 1.3, 1.1, 0], opacity: [1, 0.8, 0.4, 0], rotateZ: [0, 15, -10, 25] }
+                      : disabled
+                      ? {}
+                      : { y: [0, -8, 0], rotateY: [0, 5, 0, -5, 0] }
+                  }
+                  transition={
+                    isBlasted && cracking
+                      ? { duration: 0.5, ease: 'easeInOut' }
+                      : isBlasted && !cracking
+                      ? { duration: 1.0, ease: 'easeOut' }
+                      : disabled
+                      ? {}
+                      : {
+                          y: { duration: 2.5 + i * 0.4, repeat: Infinity, ease: 'easeInOut' },
+                          rotateY: { duration: 4 + i * 0.5, repeat: Infinity, ease: 'easeInOut' },
+                        }
+                  }
+                  onClick={(e) => blastBox(i, e.currentTarget as HTMLElement)}
+                  disabled={disabled}
+                  className="relative cursor-pointer"
+                  style={{
+                    width: boxSize, height: boxSize,
+                    transformStyle: 'preserve-3d',
+                    transform: 'rotateX(18deg) rotateY(-15deg)',
+                    border: 'none', background: 'none', padding: 0,
+                  }}
+                >
+                  {/* Cracking visual: glowing fracture lines appear during cracking phase */}
+                  {isBlasted && cracking && (
                     <motion.div
-                      key="blasted"
-                      initial={{ opacity: 0, scale: 0.5 }}
-                      animate={{ opacity: 0.25, scale: 1 }}
-                      className="rounded-2xl border-2 border-dashed"
-                      style={{
-                        width: boxSize, height: boxSize,
-                        borderColor: cfg.accent,
-                        transform: 'rotateX(18deg) rotateY(-15deg)',
-                      }}
-                    />
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ transform: `translateZ(${boxSize / 2 + 1}px)`, borderRadius: 10 }}
+                    >
+                      <svg width={boxSize} height={boxSize} style={{ position: 'absolute', inset: 0 }}>
+                        <motion.path
+                          d="M55 10 L48 35 L60 55 L45 80 L52 100"
+                          stroke={cfg.accent}
+                          strokeWidth="2"
+                          fill="none"
+                          initial={{ pathLength: 0, opacity: 0 }}
+                          animate={{ pathLength: 1, opacity: [0, 1, 0.8] }}
+                          transition={{ duration: 0.4, ease: 'easeOut' }}
+                          style={{ filter: `drop-shadow(0 0 4px ${cfg.accent})` }}
+                        />
+                        <motion.path
+                          d="M20 20 L35 40 L25 60 L40 85"
+                          stroke={cfg.accent}
+                          strokeWidth="1.5"
+                          fill="none"
+                          initial={{ pathLength: 0, opacity: 0 }}
+                          animate={{ pathLength: 1, opacity: [0, 0.7, 0.5] }}
+                          transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
+                          style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }}
+                        />
+                        <motion.path
+                          d="M80 15 L70 40 L85 60 L72 85"
+                          stroke={cfg.accent}
+                          strokeWidth="1.5"
+                          fill="none"
+                          initial={{ pathLength: 0, opacity: 0 }}
+                          animate={{ pathLength: 1, opacity: [0, 0.7, 0.5] }}
+                          transition={{ duration: 0.4, delay: 0.15, ease: 'easeOut' }}
+                          style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }}
+                        />
+                      </svg>
+                    </motion.div>
+                  )}
+
+                  {/* Front face */}
+                  <div className="absolute" style={{
+                    width: boxSize, height: boxSize,
+                    transform: `translateZ(${boxSize / 2}px)`,
+                    background: cfg.front,
+                    borderRadius: 10,
+                    border: `1.5px solid ${cfg.accent}`,
+                    boxShadow: `inset 0 -12px 24px rgba(0,0,0,0.5), inset 0 6px 12px rgba(255,255,255,0.12), inset 4px 0 8px rgba(0,0,0,0.2), inset -4px 0 8px rgba(0,0,0,0.2)`,
+                  }}>
+                    <div className="absolute left-0 right-0" style={{
+                      top: '22%', height: 3,
+                      background: 'linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.6), rgba(0,0,0,0.4))',
+                      boxShadow: '0 1px 0 rgba(255,255,255,0.08)',
+                    }} />
+                    <div className="absolute" style={{
+                      top: '14%', left: '50%', transform: 'translateX(-50%)',
+                      width: 18, height: 14, borderRadius: 3,
+                      background: 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(0,0,0,0.3))',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                    }} />
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ top: '8%' }}>
+                      <span style={{
+                        fontSize: '36px', fontWeight: 900,
+                        color: 'rgba(255,255,255,0.92)',
+                        textShadow: `0 0 16px ${cfg.accent}, 0 0 4px ${cfg.accent}, 0 3px 6px rgba(0,0,0,0.7)`,
+                      }}>?</span>
+                    </div>
+                    {[[8, 8], [8, boxSize - 12], [boxSize - 16, 8], [boxSize - 16, boxSize - 12]].map(([sx, sy], si) => (
+                      <div key={si} className="absolute rounded-full" style={{
+                        left: sx, top: sy, width: 6, height: 6,
+                        background: `radial-gradient(circle at 30% 30%, ${cfg.stud}, ${cfg.accent})`,
+                        boxShadow: `0 0 6px ${cfg.accent}, inset 0 -1px 2px rgba(0,0,0,0.4)`,
+                      }} />
+                    ))}
+                  </div>
+
+                  {/* Top face */}
+                  <div className="absolute" style={{
+                    width: boxSize, height: boxSize * 0.3,
+                    top: 0, left: 0,
+                    transform: `rotateX(-90deg) translateZ(${boxSize * 0.15}px) translateY(${boxSize * 0.15}px)`,
+                    transformOrigin: 'top',
+                    background: cfg.top,
+                    borderRadius: '10px 10px 0 0',
+                    border: `1.5px solid ${cfg.accent}`,
+                    boxShadow: `inset 0 4px 8px rgba(255,255,255,0.2), inset 0 -4px 8px rgba(0,0,0,0.3)`,
+                  }} />
+
+                  {/* Right side face */}
+                  <div className="absolute" style={{
+                    width: boxSize * 0.3, height: boxSize,
+                    top: 0, right: 0,
+                    transform: `rotateY(90deg) translateZ(${boxSize * 0.2}px) translateX(${boxSize * 0.2}px)`,
+                    transformOrigin: 'right',
+                    background: cfg.side,
+                    boxShadow: `inset 0 0 12px rgba(0,0,0,0.4)`,
+                  }} />
+
+                  <div className="absolute" style={{
+                    width: boxSize - 4, height: 3,
+                    top: 0, left: 2,
+                    transform: `translateZ(${boxSize / 2 + 0.5}px)`,
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                    borderRadius: 2,
+                  }} />
+                </motion.button>
+
+                {/* Floating coin reward reveal — animates upward from inside the box */}
+                <AnimatePresence>
+                  {floatingReward && floatingReward.boxIndex === i && (
+                    <motion.div
+                      key="float-reward"
+                      initial={{ opacity: 0, y: 40, scale: 0.3 }}
+                      animate={{ opacity: 1, y: -80, scale: 1 }}
+                      exit={{ opacity: 0, y: -140, scale: 0.8 }}
+                      transition={{ duration: 1.8, ease: 'easeOut' }}
+                      className="absolute pointer-events-none z-50 flex flex-col items-center"
+                      style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+                    >
+                      {/* Coin icon */}
+                      <motion.div
+                        animate={{ rotateY: [0, 360] }}
+                        transition={{ duration: 1, repeat: 2, ease: 'linear' }}
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-2xl font-bold"
+                        style={{
+                          background: `radial-gradient(circle at 35% 35%, ${floatingReward.reward.color}, ${floatingReward.reward.color}88)`,
+                          boxShadow: `0 0 20px ${floatingReward.reward.color}, 0 0 40px ${floatingReward.reward.color}66, inset 0 2px 8px rgba(255,255,255,0.3)`,
+                          border: `2px solid ${floatingReward.reward.color}`,
+                        }}
+                      >
+                        {floatingReward.reward.value > 0 ? floatingReward.reward.emoji : '💨'}
+                      </motion.div>
+                      {/* Amount text */}
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-2xl font-extrabold mt-2 whitespace-nowrap"
+                        style={{
+                          color: floatingReward.reward.value > 0 ? '#fbbf24' : '#94a3b8',
+                          textShadow: `0 0 16px ${floatingReward.reward.color}, 0 0 4px ${floatingReward.reward.color}, 0 2px 4px rgba(0,0,0,0.8)`,
+                        }}
+                      >
+                        {floatingReward.reward.value > 0 ? `+${floatingReward.reward.value}` : '0'} {t('lumoraCoins')}
+                      </motion.p>
+                      {/* Witty comment */}
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.9 }}
+                        transition={{ delay: 0.5 }}
+                        className="text-xs text-slate-200 mt-1 text-center max-w-[180px] leading-tight px-2"
+                      >
+                        {floatingReward.reward.comment}
+                      </motion.p>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>
@@ -655,7 +812,7 @@ export function Spin() {
         </div>
       </div>
 
-      {/* ===== TWO EXTRA-BLAST ACTION CARDS ===== */}
+      {/* ===== EXTRA-BLAST ACTION CARDS (always visible if no free box ready) ===== */}
       {blastsLeft === 0 && !blasting && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -664,7 +821,6 @@ export function Spin() {
         >
           <p className="text-center text-amber-300 font-medium text-sm mb-3">{t('getMoreBlasts')}</p>
           <div className="grid grid-cols-2 gap-3">
-            {/* Task card */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
@@ -682,7 +838,6 @@ export function Spin() {
                 <span className="text-xs text-green-400/60 flex items-center gap-1"><Sparkles size={10} /> +1</span>
               </div>
             </motion.button>
-            {/* Ad card */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
@@ -704,7 +859,7 @@ export function Spin() {
         </motion.div>
       )}
 
-      {/* ===== GLASSMORPHISM RESULT MODAL ===== */}
+      {/* ===== RESULT MODAL ===== */}
       <AnimatePresence>
         {result !== null && (
           <motion.div
@@ -740,12 +895,10 @@ export function Spin() {
                 <X size={20} />
               </button>
 
-              {/* Glass highlight strip */}
               <div className="absolute top-0 left-1/4 right-1/4 h-px" style={{
                 background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
               }} />
 
-              {/* Emoji */}
               <motion.div
                 initial={{ scale: 0, rotate: -30 }}
                 animate={{ scale: 1, rotate: 0 }}
@@ -755,7 +908,6 @@ export function Spin() {
                 {result.reward.emoji}
               </motion.div>
 
-              {/* Reward amount in glowing 3D text */}
               {result.reward.value === 0 ? (
                 <p className="text-3xl font-extrabold text-slate-400">{t('betterLuck')}</p>
               ) : result.reward.value === 500 ? (
@@ -794,7 +946,6 @@ export function Spin() {
                 </>
               )}
 
-              {/* Funny best-friend comment */}
               <p className="text-sm text-slate-200 mt-4 px-2 leading-relaxed">
                 {result.reward.comment}
               </p>
@@ -807,7 +958,7 @@ export function Spin() {
         )}
       </AnimatePresence>
 
-      {/* ===== AD WATCHING OVERLAY ===== */}
+      {/* ===== AD OVERLAY ===== */}
       <AnimatePresence>
         {adWatching && (
           <motion.div
@@ -834,7 +985,7 @@ export function Spin() {
         )}
       </AnimatePresence>
 
-      {/* ===== TASK PICKER MODAL ===== */}
+      {/* ===== TASK PICKER ===== */}
       {showTaskPicker && (
         <div className="fixed inset-0 z-[9999] bg-slate-950/80 flex items-center justify-center p-4" onClick={() => setShowTaskPicker(false)}>
           <motion.div
