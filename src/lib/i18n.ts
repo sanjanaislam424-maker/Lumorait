@@ -282,10 +282,6 @@ export const dict = {
     navSettings: "Settings",
     navLogout: "Log Out",
     navAIAssistant: "AI Assistant",
-    referralTitle: "Invite Your Gang & Grab Free Coins!",
-    referralKycReward: "Friend verifies KYC → you get 500 crisp LM Coins!",
-    referralLifetimeMsg: "Every time your friend deposits, 10% commission goes straight to your pocket — for life!",
-    referralDepositBlast: "Buddy drops a deposit? Boom — 10% lands in your wallet, every single time!",
   },
   bn: {
     appName: 'Lumora IT',
@@ -568,10 +564,6 @@ export const dict = {
     navSettings: 'সেটিংস',
     navLogout: 'লগ আউট',
     navAIAssistant: 'এআই অ্যাসিস্ট্যান্ট',
-    referralTitle: 'দোস্তকে ফাঁসাও, কয়েন কামাও!',
-    referralKycReward: 'বন্ধু অ্যাকাউন্ট খুলে কেওয়াইসি (KYC) ভেরিফাই করলেই পাচ্ছো কড়কড়ে ৫০০ LM Coins!',
-    referralLifetimeMsg: 'বন্ধু যতবার ডিপোজিট মারবে, ১০% কমিশন আজীবন সোজা তোমার পকেটে ঢুকবে! বসে বসে খাওয়ার ধামাকা সুযোগ!',
-    referralDepositBlast: 'বন্ধু ডিপোজিট মারলেই বুম — ১০% সোজা তোমার ওয়ালেটে, প্রতি বার!',
   },
 } as const;
 
