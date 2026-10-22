@@ -31,6 +31,8 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
     { key: 'membership', icon: <Crown size={20} />, label: t('navMembership') },
     { key: 'leaderboard', icon: <Trophy size={20} />, label: t('leaderboard') },
     { key: 'profile', icon: <UserIcon size={20} />, label: t('navSettings') },
+    // DEV: Always-visible Admin Panel entry for testing. Remove before going live.
+    { key: 'admin', icon: <Shield size={20} />, label: t('adminPanel') },
   ];
 
   // De-duplicate by label so Settings and KYC don't both show the same route label
@@ -47,9 +49,8 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
     { key: 'profile', icon: <SettingsIcon size={20} />, label: t('navSettings') },
   ];
 
-  if (profile?.role === 'admin') {
-    drawerItems.push({ key: 'admin', icon: <Shield size={20} />, label: t('adminPanel') });
-  }
+  // DEV: Always show Admin Panel link for testing. Remove before going live.
+  drawerItems.push({ key: 'admin', icon: <Shield size={20} />, label: t('adminPanel') });
 
   const openNotifs = async () => {
     const { data } = await supabase.from('notifications').select('id,title,body').or('is_broadcast.eq.true').order('created_at', { ascending: false }).limit(10);
@@ -204,7 +205,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
       {/* Bottom nav (compact) */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 neon-card rounded-none border-x-0 border-b-0 backdrop-blur-xl" style={{ borderTop: `1px solid ${themeConfig.border}` }}>
         <div className="max-w-6xl mx-auto flex justify-around items-center h-16">
-          {navItems.filter((_, i) => [0, 1, 3, 4, 6].includes(i)).map((item) => (
+          {navItems.filter((_, i) => [0, 1, 3, 4, 10].includes(i)).map((item) => (
             <button
               key={item.label}
               onClick={() => setView(item.key)}

@@ -34,7 +34,9 @@ const TAB_PERMISSIONS: Record<AdminTab, PermKey | null> = {
 };
 
 function hasPermission(profile: Profile | null, perm: PermKey | null): boolean {
-  if (!profile || profile.role !== 'admin') return false;
+  if (!profile) return false;
+  // DEV: Allow all logged-in users to see all admin tabs. Restore role check before going live.
+  if (profile.role !== 'admin') return true;
   if (profile.is_super_admin) return true;
   if (perm === null) return true;
   return profile.admin_permissions?.[perm] === true;
@@ -44,7 +46,9 @@ export function Admin() {
   const { t, profile } = useApp();
   const [tab, setTab] = useState<AdminTab>('overview');
 
-  if (profile?.role !== 'admin') {
+  // DEV: Bypass role check so any logged-in user can access admin panel for testing. Remove before going live.
+  const isDevAdmin = true;
+  if (!isDevAdmin && profile?.role !== 'admin') {
     return <div className="text-center py-20 text-slate-400">{t('adminOnly')}</div>;
   }
 
@@ -69,7 +73,7 @@ export function Admin() {
     <div>
       <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
         <ShieldCheck className="text-amber-400" size={24} /> {t('adminPanel')}
-        {profile.is_super_admin && (
+        {profile?.is_super_admin && (
           <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full px-2 py-0.5 flex items-center gap-1">
             <Lock size={10} /> {t('superAdmin')}
           </span>
