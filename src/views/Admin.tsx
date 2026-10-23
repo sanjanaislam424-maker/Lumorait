@@ -549,6 +549,18 @@ function FinanceTab() {
   };
 
   const act = async (tx: TxRow, status: string) => {
+    if (status === 'rejected' && tx.type === 'withdrawal') {
+      const { data, error } = await supabase.rpc('reject_withdrawal_refund', { p_tx_id: tx.id });
+      if (error) {
+        notify(`Refund failed: ${error.message}`, 'error');
+        return;
+      }
+      const refunded = data?.[0]?.refunded_amount ?? Math.abs(tx.amount);
+      notify(`Withdrawal rejected & ${Number(refunded).toFixed(2)} BDT refunded`, 'success');
+      load();
+      return;
+    }
+
     await supabase.from('transactions').update({ status }).eq('id', tx.id);
     if (status === 'approved') {
       if (tx.type === 'deposit') {
@@ -563,33 +575,6 @@ function FinanceTab() {
         if (tx.deposit_promo_code) {
           const bonus = await applyDepositPromoBonus(tx.user_id, tx.deposit_promo_code);
           if (bonus > 0) notify(`${t('bonusCoinsCredited')} +${bonus}`, 'success');
-        }
-      }
-      // Withdrawals already deducted at submission; no action needed on approval
-    } else if (status === 'rejected') {
-      // Refund: only withdrawals were pre-deducted at submission
-      if (tx.type === 'withdrawal') {
-        const bdtAmount = Math.abs(tx.amount);
-        const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
-        if (prof) {
-          const refundCash = +((prof.cash_balance ?? 0) + bdtAmount).toFixed(2);
-          const refundWithdrawable = +((prof.withdrawable_balance ?? prof.cash_balance ?? 0) + bdtAmount).toFixed(2);
-          const { error: refundErr } = await supabase.from('profiles').update({
-            cash_balance: refundCash,
-            withdrawable_balance: refundWithdrawable,
-          }).eq('id', tx.user_id);
-          if (refundErr) {
-            notify(`Refund failed: ${refundErr.message}`, 'error');
-          } else {
-            await supabase.from('transactions').insert({
-              user_id: tx.user_id,
-              type: 'withdrawal',
-              amount: +bdtAmount.toFixed(2),
-              status: 'completed',
-              note: `Refund: Withdrawal rejected | +${bdtAmount.toFixed(2)} BDT returned`,
-            });
-            notify(`Withdrawal rejected & ${bdtAmount.toFixed(2)} BDT refunded`, 'success');
-          }
         }
       }
     }

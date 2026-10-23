@@ -152,6 +152,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [fetchProfile]);
 
+  // Realtime: auto-refresh profile when the user's row changes (e.g. admin refund)
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel(`profiles:${session.user.id}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
+        () => { fetchProfile(session.user.id); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [session, fetchProfile]);
+
   const refreshProfile = useCallback(async () => {
     if (session) await fetchProfile(session.user.id);
   }, [session, fetchProfile]);
