@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift, Banknote, Crown, Copy, Check } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift, Banknote, Crown, Copy, Check, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -196,10 +196,18 @@ function CoinCalculatorModal({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
+const MIN_DEPOSIT_BDT = 100;
+const MIN_WITHDRAW_BDT = 100;
+
+const DEPOSIT_FUNNY_LOW = 'আরে মামা! কমপক্ষে ১০০ টাকা ডিপোজিট মারো! ১০০ টাকার নিচে তো চা-বিস্কুটের দোকানদারও বাকি দেয় না! ☕💸';
+const WITHDRAW_FUNNY_LOW = 'কমপক্ষে ১০০ টাকা জমতে দাও ওস্তাদ! ১০০ টাকার কম উইথড্র দিলে বিকাশ/নগদের লোকেরাও হাসবে! 🤣';
+const WITHDRAW_FUNNY_HIGH = 'পকেটে নাই চানাচুর, গ্যাং গ্যাং করো ফাইভ স্টার! এত টাকা কই পাইলা? একাউন্টে তো এত ব্যালেন্স নাই মামা! 💸';
+const FUNNY_OK = 'সাবাশ ওস্তাদ! ঝটপট মারো সাবমিট! 🚀';
+
 function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const { t, profile, lang } = useApp();
   const { notify } = useToast();
-  const [bdt, setBdt] = useState(10);
+  const [bdt, setBdt] = useState(100);
   const [method, setMethod] = useState('bKash');
   const [senderPhone, setSenderPhone] = useState('');
   const [trxId, setTrxId] = useState('');
@@ -210,6 +218,8 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
   const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
   const chargePct = isVip ? 0 : 3;
   const coinsAfterCharge = Math.round(bdt * 100 * (1 - chargePct / 100));
+  const depositTooLow = bdt < MIN_DEPOSIT_BDT;
+  const canDeposit = bdt >= MIN_DEPOSIT_BDT;
 
   useEffect(() => {
     if (!open) return;
@@ -228,8 +238,7 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
   };
 
   const submit = async () => {
-    if (!profile) return;
-    if (bdt < 10) { notify(t('minPurchase'), 'error'); return; }
+    if (!profile || !canDeposit) return;
     if (!senderPhone.trim()) { notify(t('enterSenderPhone'), 'error'); return; }
     if (!trxId.trim()) { notify(t('enterTrxId'), 'error'); return; }
 
@@ -299,12 +308,42 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
         {/* Deposit amount */}
         <div>
           <label className="text-xs text-slate-400 block mb-1">{t('depositAmount')}</label>
-          <input type="number" min={10} value={bdt} onChange={(e) => setBdt(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          <input
+            type="number"
+            min={MIN_DEPOSIT_BDT}
+            value={bdt || ''}
+            onChange={(e) => setBdt(+e.target.value)}
+            className={`w-full bg-slate-700 border rounded-xl px-3 py-2.5 text-white text-sm outline-none transition ${
+              depositTooLow ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-pink-500/50'
+            }`}
+          />
           <div className="flex items-center justify-between mt-1">
-            <p className="text-xs text-amber-300">= {(bdt * 100).toLocaleString()} {t('lumoraCoins')}</p>
+            <p className="text-xs text-amber-300">= {Math.max(0, bdt * 100).toLocaleString()} {t('lumoraCoins')}</p>
             {!isVip && <p className="text-[10px] text-slate-500">{t('platformCharge')}: {chargePct}% → {coinsAfterCharge.toLocaleString()} {t('lumoraCoins')}</p>}
           </div>
+          <p className="text-[10px] text-slate-500 mt-0.5">{lang === 'bn' ? `সর্বনিম্ন ডিপোজিট: ৳${MIN_DEPOSIT_BDT}` : `Min deposit: ৳${MIN_DEPOSIT_BDT}`}</p>
         </div>
+
+        {/* Funny warning or OK message */}
+        {depositTooLow ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-start gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
+          >
+            <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300/80 leading-relaxed">{DEPOSIT_FUNNY_LOW}</p>
+          </motion.div>
+        ) : bdt >= MIN_DEPOSIT_BDT ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 rounded-xl p-3 bg-green-500/10 border border-green-500/25"
+          >
+            <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+            <p className="text-xs text-green-300 leading-relaxed">{FUNNY_OK}</p>
+          </motion.div>
+        ) : null}
 
         {/* Sender phone */}
         <div>
@@ -342,8 +381,7 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
           />
         </div>
 
-        <p className="text-xs text-slate-400">{t('minPurchase')}: 10 BDT</p>
-        <Button className="w-full" onClick={submit}>{t('submit')}</Button>
+        {canDeposit && <Button className="w-full" onClick={submit}>{t('submit')}</Button>}
       </div>
     </Modal>
   );
@@ -359,13 +397,27 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
 
   const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
   const chargePct = isVip ? 0 : 3;
-  const coinsNeeded = bdt * 100;
+  const coinsNeeded = Math.max(0, bdt) * 100;
   const coinsAfterCharge = Math.round(coinsNeeded * (1 + chargePct / 100));
 
+  const maxWithdrawableBDT = Math.floor(balance / 100);
+  const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;
+  const withdrawExceeds = coinsAfterCharge > balance;
+  const balanceTooLow = maxWithdrawableBDT < MIN_WITHDRAW_BDT;
+  const canWithdraw = bdt >= MIN_WITHDRAW_BDT && !withdrawExceeds && !balanceTooLow;
+
+  // Determine which warning to show
+  let warningMsg: string | null = null;
+  if (balanceTooLow) {
+    warningMsg = WITHDRAW_FUNNY_LOW;
+  } else if (withdrawTooLow) {
+    warningMsg = WITHDRAW_FUNNY_LOW;
+  } else if (withdrawExceeds) {
+    warningMsg = WITHDRAW_FUNNY_HIGH;
+  }
+
   const submit = async () => {
-    if (!profile) return;
-    if (coinsNeeded < 10000) { notify(`${t('minPurchase')}: 100 BDT`, 'error'); return; }
-    if (coinsAfterCharge > balance) { notify(t('insufficientCoins'), 'error'); return; }
+    if (!profile || !canWithdraw) return;
     if (!receiverNumber.trim()) { notify(t('enterReceiverWallet'), 'error'); return; }
 
     const insertData: Record<string, unknown> = {
@@ -410,16 +462,56 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           </div>
         </div>
 
-        {/* Withdraw amount in BDT */}
+        {/* Withdraw amount in BDT with MAX button */}
         <div>
-          <label className="text-xs text-slate-400 block mb-1">{t('withdrawAmount')}</label>
-          <input type="number" min={100} value={bdt} onChange={(e) => setBdt(+e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-slate-400">{t('withdrawAmount')}</label>
+            <button
+              onClick={() => setBdt(maxWithdrawableBDT)}
+              disabled={balanceTooLow}
+              className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Zap size={12} /> {t('maxButton')}
+            </button>
+          </div>
+          <input
+            type="number"
+            min={MIN_WITHDRAW_BDT}
+            value={bdt || ''}
+            onChange={(e) => setBdt(+e.target.value)}
+            className={`w-full bg-slate-700 border rounded-xl px-3 py-2.5 text-white text-sm outline-none transition ${
+              warningMsg ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-blue-500/50'
+            }`}
+          />
           <div className="flex items-center justify-between mt-1">
             <p className="text-xs text-amber-300">= {coinsNeeded.toLocaleString()} {t('lumoraCoins')}</p>
             {!isVip && <p className="text-[10px] text-slate-500">+{chargePct}% {t('platformCharge')}: {coinsAfterCharge.toLocaleString()}</p>}
           </div>
-          <p className="text-[10px] text-slate-500 mt-0.5">{t('withdrawableCoins')}: {balance.toLocaleString()}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">
+            {t('withdrawableCoins')}: {balance.toLocaleString()} ({lang === 'bn' ? `সর্বোচ্চ ৳${maxWithdrawableBDT}` : `Max ৳${maxWithdrawableBDT}`})
+          </p>
         </div>
+
+        {/* Funny warning or OK message */}
+        {warningMsg ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-start gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
+          >
+            <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300/80 leading-relaxed">{warningMsg}</p>
+          </motion.div>
+        ) : canWithdraw ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 rounded-xl p-3 bg-green-500/10 border border-green-500/25"
+          >
+            <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+            <p className="text-xs text-green-300 leading-relaxed">{FUNNY_OK}</p>
+          </motion.div>
+        ) : null}
 
         {/* Receiver wallet number */}
         <div>
@@ -445,7 +537,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           />
         </div>
 
-        <Button className="w-full" onClick={submit}>{t('submit')}</Button>
+        {canWithdraw && <Button className="w-full" onClick={submit}>{t('submit')}</Button>}
       </div>
     </Modal>
   );
