@@ -403,9 +403,9 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   const chargePct = isVip ? 0 : 3;
 
   // balance is now withdrawable_balance in BDT (not coins)
-  const withdrawableBDT = Math.max(0, balance);
-  const chargeBDT = (Math.max(0, bdt) * chargePct) / 100;
-  const totalDeductBDT = Math.max(0, bdt) + chargeBDT;
+  const withdrawableBDT = Math.round(Math.max(0, balance) * 100) / 100;
+  const chargeBDT = Math.round((Math.max(0, bdt) * chargePct) / 100 * 100) / 100;
+  const totalDeductBDT = Math.round((Math.max(0, bdt) + chargeBDT) * 100) / 100;
   const youReceiveBDT = Math.max(0, bdt);
 
   // MAX: compute net amount after fee so submitting never exceeds balance
@@ -413,8 +413,8 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   // balance = netPayout * (1 + pct/100)
   // netPayout = balance / (1 + pct/100)
   const maxNetBDT = chargePct > 0
-    ? +(withdrawableBDT / (1 + chargePct / 100)).toFixed(2)
-    : +withdrawableBDT.toFixed(2);
+    ? Math.round((withdrawableBDT / (1 + chargePct / 100)) * 100) / 100
+    : withdrawableBDT;
 
   const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;
   const withdrawExceeds = totalDeductBDT > withdrawableBDT;
