@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeftRight, Coins, Banknote, Crown } from 'lucide-react';
+import { ArrowLeftRight, Coins, Banknote, Crown, AlertTriangle, Zap } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
@@ -29,27 +29,36 @@ export function BuyConvert() {
   const isVip = profile.membership_tier === 'vip' || profile.membership_tier === 'pro';
   const chargePct = isVip ? 0 : serviceChargePct;
 
+  const cashBalance = Math.max(0, profile.cash_balance || 0);
+  const withdrawableCoins = Math.max(0, profile.withdrawable_coins || 0);
+
   // Cash to Coins
   const cashInput = Math.max(0, cashAmt);
   const chargeCash = (cashInput * chargePct) / 100;
   const netCash = cashInput - chargeCash;
-  const coinsFromCash = netCash * 100;
+  const coinsFromCash = Math.max(0, Math.round(netCash * 100));
+  const cashExceeds = cashInput > cashBalance;
+  const cashExcess = cashExceeds ? cashInput - cashBalance : 0;
+  const cashCanConvert = cashInput >= 1 && !cashExceeds;
 
   // Coins to Cash
   const coinInput = Math.max(0, coinAmt);
   const chargeCoins = (coinInput * chargePct) / 100;
-  const netCoins = coinInput - chargeCoins;
-  const cashFromCoins = netCoins / 100;
+  const netCoins = Math.max(0, coinInput - chargeCoins);
+  const cashFromCoins = Math.max(0, netCoins / 100);
+  const coinsExceed = coinInput > withdrawableCoins;
+  const coinsExcess = coinsExceed ? coinInput - withdrawableCoins : 0;
+  const coinsCanConvert = coinInput >= 100 && !coinsExceed;
 
   const convertCashToCoins = async () => {
-    if (busy) return;
-    if (cashInput < 1) { notify(t('insufficientCash'), 'error'); return; }
-    if ((profile.cash_balance || 0) < cashInput) { notify(t('insufficientCash'), 'error'); return; }
+    if (busy || !cashCanConvert) return;
     setBusy(true);
     try {
+      const newCashBalance = Math.max(0, cashBalance - cashInput);
+      const newCoins = profile.lumora_coins + coinsFromCash;
       const { error } = await supabase.from('profiles').update({
-        cash_balance: (profile.cash_balance || 0) - cashInput,
-        lumora_coins: profile.lumora_coins + coinsFromCash,
+        cash_balance: newCashBalance,
+        lumora_coins: newCoins,
       }).eq('id', profile.id);
       if (error) throw error;
       await supabase.from('transactions').insert({
@@ -61,6 +70,7 @@ export function BuyConvert() {
       });
       await refreshProfile();
       notify(t('convertSuccess'), 'success');
+      setCashAmt(0);
     } catch {
       notify(t('insufficientCash'), 'error');
     } finally {
@@ -69,15 +79,16 @@ export function BuyConvert() {
   };
 
   const convertCoinsToCash = async () => {
-    if (busy) return;
-    if (coinInput < 100) { notify(t('insufficientCoins'), 'error'); return; }
-    if (profile.withdrawable_coins < coinInput) { notify(t('insufficientCoins'), 'error'); return; }
+    if (busy || !coinsCanConvert) return;
     setBusy(true);
     try {
+      const newWithdrawable = Math.max(0, withdrawableCoins - coinInput);
+      const newTotalCoins = Math.max(0, profile.lumora_coins - coinInput);
+      const newCashBalance = cashBalance + cashFromCoins;
       const { error } = await supabase.from('profiles').update({
-        withdrawable_coins: profile.withdrawable_coins - coinInput,
-        lumora_coins: profile.lumora_coins - coinInput,
-        cash_balance: (profile.cash_balance || 0) + cashFromCoins,
+        withdrawable_coins: newWithdrawable,
+        lumora_coins: newTotalCoins,
+        cash_balance: newCashBalance,
       }).eq('id', profile.id);
       if (error) throw error;
       await supabase.from('transactions').insert({
@@ -89,6 +100,7 @@ export function BuyConvert() {
       });
       await refreshProfile();
       notify(t('convertSuccess'), 'success');
+      setCoinAmt(0);
     } catch {
       notify(t('insufficientCoins'), 'error');
     } finally {
@@ -139,7 +151,7 @@ export function BuyConvert() {
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div className="rounded-xl p-3 bg-green-500/10 border border-green-500/20">
             <p className="text-[10px] text-green-400">{t('cashBalance')}</p>
-            <p className="text-xl font-bold text-white">{(profile.cash_balance || 0).toLocaleString()} BDT</p>
+            <p className="text-xl font-bold text-white">{cashBalance.toLocaleString()} BDT</p>
           </div>
           <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/20">
             <p className="text-[10px] text-amber-400">{t('lumoraCoin')}</p>
@@ -150,42 +162,99 @@ export function BuyConvert() {
         {tab === 'cashToCoins' ? (
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-slate-400 block mb-1">{t('cashAmount')}</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-slate-400">{t('cashAmount')}</label>
+                <button
+                  onClick={() => setCashAmt(cashBalance)}
+                  className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95"
+                >
+                  <Zap size={12} /> {t('maxButton')}
+                </button>
+              </div>
               <input
                 type="number"
                 min={0}
-                value={cashAmt}
+                value={cashAmt || ''}
                 onChange={(e) => setCashAmt(+e.target.value)}
-                className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+                className={`w-full bg-slate-700 border rounded-xl px-3 py-2.5 text-white text-sm outline-none transition ${
+                  cashExceeds ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-amber-500/50'
+                }`}
               />
+              <p className="text-[10px] text-slate-500 mt-1">
+                {t('maxAvailable')}: {cashBalance.toLocaleString()} BDT
+              </p>
             </div>
+
+            {/* Warning for insufficient balance */}
+            {cashExceeds && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
+              >
+                <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                <div className="text-xs">
+                  <p className="text-red-400 font-bold">{t('insufficientBalance')}</p>
+                  <p className="text-red-300/70">{t('excessAmount')}: {cashExcess.toLocaleString()} BDT</p>
+                </div>
+              </motion.div>
+            )}
+
             <div className="space-y-1.5 text-sm">
               <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCash.toFixed(2)} BDT)`} muted />
               <Row label={t('convertedAmount')} value={`${coinsFromCash.toLocaleString()} LM Coins`} highlight />
             </div>
-            <Button className="w-full" disabled={busy} onClick={convertCashToCoins}>
+            <Button className="w-full" disabled={busy || !cashCanConvert} onClick={convertCashToCoins}>
               {busy ? '...' : t('convertCashToCoins')}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-slate-400 block mb-1">{t('coinAmount')}</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-slate-400">{t('coinAmount')}</label>
+                <button
+                  onClick={() => setCoinAmt(withdrawableCoins)}
+                  className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95"
+                >
+                  <Zap size={12} /> {t('maxButton')}
+                </button>
+              </div>
               <input
                 type="number"
                 min={0}
                 step={100}
-                value={coinAmt}
+                value={coinAmt || ''}
                 onChange={(e) => setCoinAmt(+e.target.value)}
-                className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+                className={`w-full bg-slate-700 border rounded-xl px-3 py-2.5 text-white text-sm outline-none transition ${
+                  coinsExceed ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-amber-500/50'
+                }`}
               />
-              <p className="text-[10px] text-slate-500 mt-1">{t('withdrawableCoins')}: {profile.withdrawable_coins.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {t('maxAvailable')}: {withdrawableCoins.toLocaleString()} {t('lumoraCoins')}
+              </p>
             </div>
+
+            {/* Warning for insufficient balance */}
+            {coinsExceed && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
+              >
+                <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                <div className="text-xs">
+                  <p className="text-red-400 font-bold">{t('insufficientBalance')}</p>
+                  <p className="text-red-300/70">{t('excessAmount')}: {coinsExcess.toLocaleString()} {t('lumoraCoins')}</p>
+                </div>
+              </motion.div>
+            )}
+
             <div className="space-y-1.5 text-sm">
               <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCoins.toFixed(0)} coins)`} muted />
               <Row label={t('convertedAmount')} value={`${cashFromCoins.toFixed(2)} BDT`} highlight />
             </div>
-            <Button className="w-full" disabled={busy} onClick={convertCoinsToCash}>
+            <Button className="w-full" disabled={busy || !coinsCanConvert} onClick={convertCoinsToCash}>
               {busy ? '...' : t('convertCoinsToCash')}
             </Button>
           </div>
