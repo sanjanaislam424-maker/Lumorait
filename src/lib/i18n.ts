@@ -390,6 +390,13 @@ export const dict = {
     taskStatusPaused: "Paused",
     taskStatusInProgress: "In Progress",
     taskStatusCompleted: "Completed",
+    categoryIconUrl: "Icon Image URL",
+    promoExpiry: "Expiry Date & Time",
+    promoExpiryNone: "No expiry",
+    tasksHeader: "Earn coins, fill your pocket!",
+    tasksCounter: "tasks ready",
+    categoryEmpty: "No tasks in this category right now",
+    allCategories: "All Categories",
   },
   bn: {
     appName: 'Lumora IT',
@@ -780,6 +787,13 @@ export const dict = {
     taskStatusPaused: 'পজ',
     taskStatusInProgress: 'চলছে',
     taskStatusCompleted: 'কমপ্লিট',
+    categoryIconUrl: 'আইকন ইমেজ লিংক',
+    promoExpiry: 'মেয়াদ শেষের তারিখ ও সময়',
+    promoExpiryNone: 'মেয়াদ নেই',
+    tasksHeader: 'কামকাজ করে পকেট গরম করো ওস্তাদ! 💸🔥',
+    tasksCounter: 'টা কাজ রেডি',
+    categoryEmpty: 'এই ক্যাটাগরিতে এখন কাজ নাই মামা!',
+    allCategories: 'সব ক্যাটাগরি',
   },
 } as const;
 

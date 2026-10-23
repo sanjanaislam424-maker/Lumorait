@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { microcopy } from '@/lib/microcopy';
 
 const ADMIN_NUMBER_KEYS: Record<string, string> = {
   bKash: 'admin_bkash_number',
@@ -594,12 +595,13 @@ function RedeemCodeBox({ onRedeemed }: { onRedeemed: () => void }) {
     try {
       const trimmed = code.trim().toUpperCase();
       const { data: promo, error } = await supabase.from('promo_codes').select('*').eq('code', trimmed).maybeSingle();
-      if (error || !promo) { notify(t('redeemInvalid'), 'error'); return; }
-      if (!promo.is_active) { notify(t('redeemInactive'), 'error'); return; }
-      if (promo.uses_count >= promo.max_uses) { notify(t('redeemLimit'), 'error'); return; }
+      if (error || !promo) { notify(microcopy.promoInvalid(), 'error'); return; }
+      if (!promo.is_active) { notify(microcopy.promoInactive(), 'error'); return; }
+      if (promo.expires_at && new Date() > new Date(promo.expires_at)) { notify(microcopy.promoExpired(), 'error'); return; }
+      if (promo.uses_count >= promo.max_uses) { notify(microcopy.promoLimit(), 'error'); return; }
 
       const { data: existing } = await supabase.from('promo_redemptions').select('id').eq('promo_code_id', promo.id).eq('user_id', profile.id).maybeSingle();
-      if (existing) { notify(t('redeemUsed'), 'error'); return; }
+      if (existing) { notify(microcopy.promoUsed(), 'error'); return; }
 
       await supabase.from('promo_redemptions').insert({ promo_code_id: promo.id, user_id: profile.id, coins_awarded: promo.coin_value });
       await supabase.from('promo_codes').update({ uses_count: promo.uses_count + 1 }).eq('id', promo.id);
@@ -614,11 +616,11 @@ function RedeemCodeBox({ onRedeemed }: { onRedeemed: () => void }) {
       }
       await supabase.from('transactions').insert({ user_id: profile.id, type: 'promo', amount: promo.coin_value, status: 'completed', note: `Promo code: ${trimmed}` });
 
-      notify(`${t('redeemSuccess')} +${promo.coin_value} ${t('lumoraCoins')}!`, 'success');
+      notify(`${microcopy.promoSuccess()} +${promo.coin_value} ${t('lumoraCoins')}!`, 'success');
       setCode('');
       onRedeemed();
     } catch {
-      notify(t('redeemInvalid'), 'error');
+      notify(microcopy.promoInvalid(), 'error');
     } finally {
       setBusy(false);
     }

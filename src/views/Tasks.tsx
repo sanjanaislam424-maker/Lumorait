@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare } from 'lucide-react';
+import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow, SubmissionRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { TaskTimerOverlay } from '@/components/TaskTimerOverlay';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
+import { microcopy } from '@/lib/microcopy';
 
 const platformIcons: Record<string, React.ReactNode> = {
   facebook: <Facebook size={16} className="text-blue-400" />,
@@ -18,10 +19,12 @@ const platformIcons: Record<string, React.ReactNode> = {
 };
 
 export function Tasks() {
-  const { t, profile, refreshProfile } = useApp();
+  const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [tab, setTab] = useState<'browse' | 'mine' | 'create'>('browse');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [proofTask, setProofTask] = useState<TaskRow | null>(null);
   const [chatTask, setChatTask] = useState<TaskRow | null>(null);
@@ -33,10 +36,18 @@ export function Tasks() {
     setTasks(data as TaskRow[] || []);
   };
 
-  useEffect(() => { loadTasks(); }, []);
+  const loadCategories = async () => {
+    const { data } = await supabase.from('task_categories').select('*').eq('is_active', true).order('sort_order', { ascending: true });
+    setCategories(data || []);
+  };
+
+  useEffect(() => { loadTasks(); loadCategories(); }, []);
 
   const myCreated = tasks.filter((tk) => tk.creator_id === profile?.id);
   const browseable = tasks.filter((tk) => tk.creator_id !== profile?.id && tk.status === 'open' && tk.filled < tk.slots);
+
+  const categoryCounts = (catName: string) => browseable.filter((tk) => tk.platform === catName).length;
+  const filteredTasks = activeCategory ? browseable.filter((tk) => tk.platform === activeCategory) : browseable;
 
   const acceptTask = async (task: TaskRow) => {
     if (!profile) return;
@@ -80,12 +91,55 @@ export function Tasks() {
       {tab === 'create' && <CreateTaskForm onDone={() => { setTab('mine'); loadTasks(); }} />}
 
       {tab === 'browse' && (
-        <div className="space-y-3">
-          {browseable.length === 0 ? <EmptyState message={t('noTasks')} icon={<Plus size={32} />} /> : browseable.map((task) => (
-            <TaskCard key={task.id} task={task} onAccept={() => acceptTask(task)} onChat={() => setChatTask(task)} />
-          ))}
+        <div className="space-y-4">
+          <div className="text-center py-2">
+            <p className="text-sm font-semibold text-amber-300">{microcopy.tasksHeader()}</p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <button
+              onClick={() => setActiveCategory(null)}
+              className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition ${activeCategory === null ? 'bg-amber-500/20 border-amber-500/50' : 'bg-slate-800/50 border-white/10'}`}
+            >
+              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                <LayoutGrid size={24} className="text-amber-400" />
+              </div>
+              <p className="text-xs text-white font-medium">{t('allCategories')}</p>
+              <p className="text-[10px] text-slate-400">{browseable.length} {t('tasksCounter')}</p>
+            </button>
+            {categories.map((cat) => {
+              const count = categoryCounts(cat.name);
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(activeCategory === cat.name ? null : cat.name)}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition ${activeCategory === cat.name ? 'bg-amber-500/20 border-amber-500/50' : 'bg-slate-800/50 border-white/10'}`}
+                >
+                  {cat.icon_url ? (
+                    <img src={cat.icon_url} alt={cat.label} className="w-12 h-12 rounded-xl object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center">
+                      {platformIcons[cat.icon] || platformIcons.other}
+                    </div>
+                  )}
+                  <p className="text-xs text-white font-medium text-center truncate w-full">{cat.label}</p>
+                  <p className="text-[10px] text-slate-400">{microcopy.tasksCounter(count)}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="space-y-3">
+            {filteredTasks.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-400">{microcopy.categoryEmpty()}</p>
+              </div>
+            ) : filteredTasks.map((task) => (
+              <TaskCard key={task.id} task={task} onAccept={() => acceptTask(task)} onChat={() => setChatTask(task)} />
+            ))}
+          </div>
         </div>
-      )}
+      )}}
 
       {tab === 'mine' && (
         <div className="space-y-3">

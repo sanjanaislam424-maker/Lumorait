@@ -784,7 +784,7 @@ function PromoCodesTab() {
   const { t, profile } = useApp();
   const { notify } = useToast();
   const [codes, setCodes] = useState<any[]>([]);
-  const [form, setForm] = useState({ code: '', coin_value: 100, max_uses: 1 });
+  const [form, setForm] = useState({ code: '', coin_value: 100, max_uses: 1, expires_at: '' });
 
   const load = async () => {
     const { data } = await supabase.from('promo_codes').select('*').order('created_at', { ascending: false }).limit(50);
@@ -797,13 +797,14 @@ function PromoCodesTab() {
     const code = form.code.trim().toUpperCase();
     const { error } = await supabase.from('promo_codes').insert({
       code, coin_value: form.coin_value, max_uses: form.max_uses, is_active: true, created_by: profile.id,
+      expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
     });
     if (error) {
       notify(error.message.includes('duplicate') ? 'Code already exists' : error.message, 'error');
       return;
     }
     notify(t('saved'), 'success');
-    setForm({ code: '', coin_value: 100, max_uses: 1 });
+    setForm({ code: '', coin_value: 100, max_uses: 1, expires_at: '' });
     load();
   };
 
@@ -840,6 +841,10 @@ function PromoCodesTab() {
               <input type="number" min={1} value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('promoExpiry')}</label>
+            <input type="datetime-local" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
           <Button className="w-full" onClick={create}>{t('createPromo')}</Button>
         </div>
       </Card>
@@ -851,6 +856,7 @@ function PromoCodesTab() {
               <p className="text-sm text-white font-mono font-bold">{c.code}</p>
               <p className="text-xs text-slate-500">
                 {c.coin_value} {t('lumoraCoins')} • {c.uses_count}/{c.max_uses} {t('promoUses')}
+                {c.expires_at && ` • ${new Date(c.expires_at).toLocaleString()}`}
                 {!c.is_active && ' • INACTIVE'}
               </p>
             </div>
@@ -873,7 +879,7 @@ function TaskManagementTab() {
   const [categories, setCategories] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
-  const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other' });
+  const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other', icon_url: '' });
   const [editTask, setEditTask] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', reward_coins: 25, slots: 1, status: 'open' });
 
@@ -896,12 +902,13 @@ function TaskManagementTab() {
       name: newCat.name.trim().toLowerCase().replace(/\s+/g, '_'),
       label: newCat.label.trim(),
       icon: newCat.icon,
+      icon_url: newCat.icon_url.trim() || null,
       sort_order: categories.length + 1,
       created_by: profile.id,
     });
     if (error) { notify(error.message, 'error'); return; }
     notify(t('saved'), 'success');
-    setNewCat({ name: '', label: '', icon: 'other' });
+    setNewCat({ name: '', label: '', icon: 'other', icon_url: '' });
     load();
   };
 
@@ -1015,9 +1022,14 @@ function TaskManagementTab() {
         <div className="space-y-2 mb-4">
           {categories.length === 0 ? <EmptyState message={t('noCategories')} /> : categories.map((cat) => (
             <div key={cat.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium">{cat.label}</p>
-                <p className="text-xs text-slate-500">{cat.name} {!cat.is_active && ' • INACTIVE'}</p>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {cat.icon_url ? (
+                  <img src={cat.icon_url} alt={cat.label} className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                ) : null}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{cat.label}</p>
+                  <p className="text-xs text-slate-500 truncate">{cat.name} {!cat.is_active && ' • INACTIVE'}</p>
+                </div>
               </div>
               <div className="flex gap-1">
                 <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleCategory(cat)}>
@@ -1043,6 +1055,10 @@ function TaskManagementTab() {
               <option value="tiktok">TikTok</option>
               <option value="other">Other</option>
             </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('categoryIconUrl')}</label>
+            <input value={newCat.icon_url} onChange={(e) => setNewCat({ ...newCat, icon_url: e.target.value })} placeholder="https://example.com/icon.png" className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
           <Button className="w-full" onClick={addCategory}>
             <span className="flex items-center justify-center gap-1.5"><Plus size={14} /> {t('addCategory')}</span>
