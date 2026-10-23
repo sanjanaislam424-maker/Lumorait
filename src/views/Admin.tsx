@@ -556,7 +556,7 @@ function FinanceTab() {
         const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
           await supabase.from('profiles').update({
-            cash_balance: +((prof.cash_balance || 0) + bdtAmount).toFixed(2),
+            cash_balance: +((prof.cash_balance ?? 0) + bdtAmount).toFixed(2),
             withdrawable_balance: +((prof.withdrawable_balance ?? prof.cash_balance ?? 0) + bdtAmount).toFixed(2),
           }).eq('id', tx.user_id);
         }
@@ -572,10 +572,24 @@ function FinanceTab() {
         const bdtAmount = Math.abs(tx.amount);
         const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
-          await supabase.from('profiles').update({
-            cash_balance: +((prof.cash_balance || 0) + bdtAmount).toFixed(2),
-            withdrawable_balance: +((prof.withdrawable_balance ?? prof.cash_balance ?? 0) + bdtAmount).toFixed(2),
+          const refundCash = +((prof.cash_balance ?? 0) + bdtAmount).toFixed(2);
+          const refundWithdrawable = +((prof.withdrawable_balance ?? prof.cash_balance ?? 0) + bdtAmount).toFixed(2);
+          const { error: refundErr } = await supabase.from('profiles').update({
+            cash_balance: refundCash,
+            withdrawable_balance: refundWithdrawable,
           }).eq('id', tx.user_id);
+          if (refundErr) {
+            notify(`Refund failed: ${refundErr.message}`, 'error');
+          } else {
+            await supabase.from('transactions').insert({
+              user_id: tx.user_id,
+              type: 'withdrawal',
+              amount: +bdtAmount.toFixed(2),
+              status: 'completed',
+              note: `Refund: Withdrawal rejected | +${bdtAmount.toFixed(2)} BDT returned`,
+            });
+            notify(`Withdrawal rejected & ${bdtAmount.toFixed(2)} BDT refunded`, 'success');
+          }
         }
       }
     }
