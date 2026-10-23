@@ -402,27 +402,23 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
   const chargePct = isVip ? 0 : 3;
 
-  // balance is now withdrawable_balance in BDT (not coins)
-  // Inclusive fee model: fee = gross * pct%, payout = gross - fee, gross = payout / (1 - pct%)
+  // balance is withdrawable_balance in BDT — the gross amount the user can withdraw
   const withdrawableBDT = Math.round(Math.max(0, balance) * 100) / 100;
-  const youReceiveBDT = Math.round(Math.max(0, bdt) * 100) / 100;
 
-  // gross = the total deducted from balance; fee is a direct percentage of gross
-  const grossBDT = chargePct > 0
-    ? Math.round((youReceiveBDT / (1 - chargePct / 100)) * 100) / 100
-    : youReceiveBDT;
-  const chargeBDT = Math.round((grossBDT - youReceiveBDT) * 100) / 100;
+  // The input (bdt) IS the gross amount deducted from balance
+  // fee = gross * pct%, net payout = gross - fee
+  const grossBDT = Math.round(Math.max(0, bdt) * 100) / 100;
+  const chargeBDT = Math.round((grossBDT * chargePct) / 100 * 100) / 100;
+  const youReceiveBDT = Math.round((grossBDT - chargeBDT) * 100) / 100;
   const totalDeductBDT = grossBDT;
 
-  // MAX: payout = balance * (1 - pct%), fee = balance * pct%, total = balance
-  const maxNetBDT = chargePct > 0
-    ? Math.round((withdrawableBDT * (1 - chargePct / 100)) * 100) / 100
-    : withdrawableBDT;
+  // MAX: fill the full withdrawable balance as the gross amount
+  const maxGrossBDT = withdrawableBDT;
 
-  const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;
-  const withdrawExceeds = totalDeductBDT > withdrawableBDT;
+  const withdrawTooLow = grossBDT < MIN_WITHDRAW_BDT;
+  const withdrawExceeds = grossBDT > withdrawableBDT;
   const balanceTooLow = withdrawableBDT < MIN_WITHDRAW_BDT;
-  const canWithdraw = bdt >= MIN_WITHDRAW_BDT && !withdrawExceeds && !balanceTooLow;
+  const canWithdraw = grossBDT >= MIN_WITHDRAW_BDT && !withdrawExceeds && !balanceTooLow;
 
   let warningMsg: string | null = null;
   if (balanceTooLow) {
@@ -444,7 +440,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
       status: 'pending',
       method,
       receiver_number: receiverNumber.trim(),
-      note: `${bdt} BDT via ${method} | Receiver: ${receiverNumber.trim()} | Charge: ${chargeBDT.toFixed(2)} BDT`,
+      note: `${youReceiveBDT} BDT via ${method} | Receiver: ${receiverNumber.trim()} | Charge: ${chargeBDT.toFixed(2)} BDT | Gross: ${grossBDT.toFixed(2)} BDT`,
     };
     if (promoCode.trim()) {
       insertData.withdraw_promo_code = promoCode.trim().toUpperCase();
@@ -492,7 +488,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs text-slate-400">{t('withdrawAmount')}</label>
             <button
-              onClick={() => setBdt(maxNetBDT)}
+              onClick={() => setBdt(maxGrossBDT)}
               disabled={balanceTooLow}
               className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -509,11 +505,14 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
               warningMsg ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-blue-500/50'
             }`}
           />
+          <p className="text-[10px] text-slate-500 mt-1">
+            {lang === 'bn' ? 'উপলব্ধ ব্যালেন্স' : 'Available'}: ৳{fmtBDT(withdrawableBDT)}
+          </p>
           {/* Live fee breakdown */}
           <div className="mt-2 rounded-xl bg-slate-800/60 border border-white/5 p-3 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">{lang === 'bn' ? 'মোট ব্যালেন্স' : 'Total Balance'}</span>
-              <span className="text-slate-300 font-medium">৳{fmtBDT(withdrawableBDT)}</span>
+              <span className="text-slate-400">{lang === 'bn' ? 'মোট কাটবে' : 'Total to Deduct'}</span>
+              <span className="text-slate-300 font-medium">৳{fmtBDT(grossBDT)}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400">{t('platformCharge')} ({chargePct}%)</span>
