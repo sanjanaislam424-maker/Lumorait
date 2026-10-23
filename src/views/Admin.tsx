@@ -329,7 +329,7 @@ function UsersTab() {
       withdrawable_coins: u.withdrawable_coins || 0,
       bonus_coins: u.bonus_coins || 0,
       cash_balance: u.cash_balance || 0,
-      withdrawable_balance: u.withdrawable_balance || 0,
+      withdrawable_balance: u.withdrawable_balance ?? u.cash_balance ?? 0,
     });
   };
 
@@ -557,7 +557,7 @@ function FinanceTab() {
         if (prof) {
           await supabase.from('profiles').update({
             cash_balance: +((prof.cash_balance || 0) + bdtAmount).toFixed(2),
-            withdrawable_balance: +((prof.withdrawable_balance || 0) + bdtAmount).toFixed(2),
+            withdrawable_balance: +((prof.withdrawable_balance ?? prof.cash_balance ?? 0) + bdtAmount).toFixed(2),
           }).eq('id', tx.user_id);
         }
         if (tx.deposit_promo_code) {
@@ -574,7 +574,7 @@ function FinanceTab() {
         if (prof) {
           await supabase.from('profiles').update({
             cash_balance: +((prof.cash_balance || 0) + bdtAmount).toFixed(2),
-            withdrawable_balance: +((prof.withdrawable_balance || 0) + bdtAmount).toFixed(2),
+            withdrawable_balance: +((prof.withdrawable_balance ?? prof.cash_balance ?? 0) + bdtAmount).toFixed(2),
           }).eq('id', tx.user_id);
         }
       }

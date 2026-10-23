@@ -123,7 +123,7 @@ export function BuyConvert() {
     setBusy(true);
     try {
       const newCashBalance = Math.max(0, cashBalance - cashInput);
-      const newWithdrawableBalance = Math.max(0, (profile.withdrawable_balance || 0) - cashInput);
+      const newWithdrawableBalance = Math.max(0, (profile.withdrawable_balance ?? profile.cash_balance ?? 0) - cashInput);
       const newCoins = profile.lumora_coins + coinsFromCash;
       const { error } = await supabase.from('profiles').update({
         cash_balance: newCashBalance,
@@ -155,7 +155,7 @@ export function BuyConvert() {
       const newWithdrawable = Math.max(0, withdrawableCoins - coinInput);
       const newTotalCoins = Math.max(0, profile.lumora_coins - coinInput);
       const newCashBalance = cashBalance + cashFromCoins;
-      const newWithdrawableBalance = (profile.withdrawable_balance || 0) + cashFromCoins;
+      const newWithdrawableBalance = (profile.withdrawable_balance ?? profile.cash_balance ?? 0) + cashFromCoins;
       const { error } = await supabase.from('profiles').update({
         withdrawable_coins: newWithdrawable,
         lumora_coins: newTotalCoins,

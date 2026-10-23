@@ -145,7 +145,7 @@ export function Wallet() {
       </div>
 
       <DepositModal open={depOpen} onClose={() => setDepOpen(false)} onDone={() => { load(); refreshProfile(); }} />
-      <WithdrawModal open={wdOpen} onClose={() => setWdOpen(false)} onDone={() => { load(); refreshProfile(); }} balance={profile.withdrawable_balance || 0} />
+      <WithdrawModal open={wdOpen} onClose={() => setWdOpen(false)} onDone={() => { load(); refreshProfile(); }} balance={profile.withdrawable_balance ?? profile.cash_balance ?? 0} />
       <CoinCalculatorModal open={calcOpen} onClose={() => setCalcOpen(false)} />
     </div>
   );
@@ -450,8 +450,10 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
     if (error) { notify(error.message, 'error'); return; }
 
     // Instantly deduct the exact amount from cash_balance and withdrawable_balance
-    const newCash = Math.max(0, (profile.cash_balance || 0) - totalDeductBDT);
-    const newWithdrawable = Math.max(0, (profile.withdrawable_balance || 0) - totalDeductBDT);
+    const effCash = profile.cash_balance ?? 0;
+    const effWithdrawable = profile.withdrawable_balance ?? effCash;
+    const newCash = Math.max(0, effCash - totalDeductBDT);
+    const newWithdrawable = Math.max(0, effWithdrawable - totalDeductBDT);
     await supabase.from('profiles').update({
       cash_balance: +newCash.toFixed(2),
       withdrawable_balance: +newWithdrawable.toFixed(2),
