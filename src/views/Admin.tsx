@@ -302,7 +302,7 @@ function UsersTab() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [search, setSearch] = useState('');
   const [editUser, setEditUser] = useState<Profile | null>(null);
-  const [editBalances, setEditBalances] = useState({ lumora_coins: 0, withdrawable_coins: 0, bonus_coins: 0, cash_balance: 0 });
+  const [editBalances, setEditBalances] = useState({ lumora_coins: 0, withdrawable_coins: 0, bonus_coins: 0, cash_balance: 0, withdrawable_balance: 0 });
 
   const load = async () => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(50);
@@ -329,6 +329,7 @@ function UsersTab() {
       withdrawable_coins: u.withdrawable_coins || 0,
       bonus_coins: u.bonus_coins || 0,
       cash_balance: u.cash_balance || 0,
+      withdrawable_balance: u.withdrawable_balance || 0,
     });
   };
 
@@ -339,6 +340,7 @@ function UsersTab() {
       withdrawable_coins: editBalances.withdrawable_coins,
       bonus_coins: editBalances.bonus_coins,
       cash_balance: editBalances.cash_balance,
+      withdrawable_balance: editBalances.withdrawable_balance,
     };
     await supabase.from('profiles').update(updates).eq('id', editUser.id);
     const delta = editBalances.lumora_coins - editUser.lumora_coins;
@@ -385,6 +387,10 @@ function UsersTab() {
           <div>
             <label className="text-xs text-slate-400 block mb-1">{t('adjustCash')}</label>
             <input type="number" value={editBalances.cash_balance} onChange={(e) => setEditBalances({ ...editBalances, cash_balance: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Withdrawable Balance (BDT)</label>
+            <input type="number" value={editBalances.withdrawable_balance} onChange={(e) => setEditBalances({ ...editBalances, withdrawable_balance: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
           <div>
             <label className="text-xs text-slate-400 block mb-1">{t('lumoraCoins')} (Total)</label>
@@ -547,21 +553,24 @@ function FinanceTab() {
     if (status === 'approved') {
       if (tx.type === 'deposit') {
         const bdtAmount = Math.abs(tx.amount) / 100;
-        const { data: prof } = await supabase.from('profiles').select('cash_balance').eq('id', tx.user_id).maybeSingle();
+        const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
-          await supabase.from('profiles').update({ cash_balance: (prof.cash_balance || 0) + bdtAmount }).eq('id', tx.user_id);
+          await supabase.from('profiles').update({
+            cash_balance: (prof.cash_balance || 0) + bdtAmount,
+            withdrawable_balance: (prof.withdrawable_balance || 0) + bdtAmount,
+          }).eq('id', tx.user_id);
         }
         if (tx.deposit_promo_code) {
           const bonus = await applyDepositPromoBonus(tx.user_id, tx.deposit_promo_code);
           if (bonus > 0) notify(`${t('bonusCoinsCredited')} +${bonus}`, 'success');
         }
       } else if (tx.type === 'withdrawal') {
-        const { data: prof } = await supabase.from('profiles').select('lumora_coins, withdrawable_coins').eq('id', tx.user_id).maybeSingle();
+        const bdtAmount = Math.abs(tx.amount) / 100;
+        const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
-          const coinAmt = Math.abs(tx.amount);
           await supabase.from('profiles').update({
-            lumora_coins: Math.max(0, prof.lumora_coins - coinAmt),
-            withdrawable_coins: Math.max(0, (prof.withdrawable_coins || 0) - coinAmt),
+            cash_balance: Math.max(0, (prof.cash_balance || 0) - bdtAmount),
+            withdrawable_balance: Math.max(0, (prof.withdrawable_balance || 0) - bdtAmount),
           }).eq('id', tx.user_id);
         }
       }

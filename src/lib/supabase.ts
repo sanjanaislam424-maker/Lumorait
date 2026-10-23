@@ -30,6 +30,7 @@ export type Profile = {
   referral_step2_paid: boolean;
   referral_activated_at: string | null;
   cash_balance: number;
+  withdrawable_balance: number;
   membership_tier: string;
   membership_expires: string | null;
   box_blasts_used_today: number;

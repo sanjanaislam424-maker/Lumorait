@@ -141,7 +141,7 @@ export function Wallet() {
       </div>
 
       <DepositModal open={depOpen} onClose={() => setDepOpen(false)} onDone={() => { load(); refreshProfile(); }} />
-      <WithdrawModal open={wdOpen} onClose={() => setWdOpen(false)} onDone={() => { load(); refreshProfile(); }} balance={profile.withdrawable_coins || 0} />
+      <WithdrawModal open={wdOpen} onClose={() => setWdOpen(false)} onDone={() => { load(); refreshProfile(); }} balance={profile.withdrawable_balance || 0} />
       <CoinCalculatorModal open={calcOpen} onClose={() => setCalcOpen(false)} />
     </div>
   );
@@ -397,16 +397,17 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
 
   const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
   const chargePct = isVip ? 0 : 3;
-  const coinsNeeded = Math.max(0, bdt) * 100;
-  const coinsAfterCharge = Math.round(coinsNeeded * (1 + chargePct / 100));
 
-  const maxWithdrawableBDT = Math.floor(balance / 100);
+  // balance is now withdrawable_balance in BDT (not coins)
+  const withdrawableBDT = Math.max(0, balance);
+  const chargeBDT = (Math.max(0, bdt) * chargePct) / 100;
+  const totalDeductBDT = Math.max(0, bdt) + chargeBDT;
+
   const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;
-  const withdrawExceeds = coinsAfterCharge > balance;
-  const balanceTooLow = maxWithdrawableBDT < MIN_WITHDRAW_BDT;
+  const withdrawExceeds = totalDeductBDT > withdrawableBDT;
+  const balanceTooLow = withdrawableBDT < MIN_WITHDRAW_BDT;
   const canWithdraw = bdt >= MIN_WITHDRAW_BDT && !withdrawExceeds && !balanceTooLow;
 
-  // Determine which warning to show
   let warningMsg: string | null = null;
   if (balanceTooLow) {
     warningMsg = WITHDRAW_FUNNY_LOW;
@@ -423,11 +424,11 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
     const insertData: Record<string, unknown> = {
       user_id: profile.id,
       type: 'withdrawal',
-      amount: -coinsAfterCharge,
+      amount: -(Math.round(totalDeductBDT * 100)),
       status: 'pending',
       method,
       receiver_number: receiverNumber.trim(),
-      note: `${bdt} BDT via ${method} | Receiver: ${receiverNumber.trim()}`,
+      note: `${bdt} BDT via ${method} | Receiver: ${receiverNumber.trim()} | Charge: ${chargeBDT.toFixed(2)} BDT`,
     };
     if (promoCode.trim()) {
       insertData.withdraw_promo_code = promoCode.trim().toUpperCase();
@@ -467,7 +468,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs text-slate-400">{t('withdrawAmount')}</label>
             <button
-              onClick={() => setBdt(maxWithdrawableBDT)}
+              onClick={() => setBdt(withdrawableBDT)}
               disabled={balanceTooLow}
               className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -484,11 +485,11 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
             }`}
           />
           <div className="flex items-center justify-between mt-1">
-            <p className="text-xs text-amber-300">= {coinsNeeded.toLocaleString()} {t('lumoraCoins')}</p>
-            {!isVip && <p className="text-[10px] text-slate-500">+{chargePct}% {t('platformCharge')}: {coinsAfterCharge.toLocaleString()}</p>}
+            <p className="text-xs text-amber-300">৳ {bdt.toLocaleString()}</p>
+            {!isVip && <p className="text-[10px] text-slate-500">+{chargePct}% {t('platformCharge')}: ৳{chargeBDT.toFixed(2)}</p>}
           </div>
           <p className="text-[10px] text-slate-500 mt-0.5">
-            {t('withdrawableCoins')}: {balance.toLocaleString()} ({lang === 'bn' ? `সর্বোচ্চ ৳${maxWithdrawableBDT}` : `Max ৳${maxWithdrawableBDT}`})
+            {lang === 'bn' ? `উইথড্রয়গ্য ব্যালেন্স` : `Withdrawable balance`}: ৳{withdrawableBDT.toLocaleString()}
           </p>
         </div>
 
