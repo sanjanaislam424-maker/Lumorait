@@ -595,7 +595,7 @@ function RedeemCodeBox({ onRedeemed }: { onRedeemed: () => void }) {
       const trimmed = code.trim().toUpperCase();
       const { data: promo, error } = await supabase.from('promo_codes').select('*').eq('code', trimmed).maybeSingle();
       if (error || !promo) { notify(t('redeemInvalid'), 'error'); return; }
-      if (!promo.is_active) { notify(t('redeemInvalid'), 'error'); return; }
+      if (!promo.is_active) { notify(t('redeemInactive'), 'error'); return; }
       if (promo.uses_count >= promo.max_uses) { notify(t('redeemLimit'), 'error'); return; }
 
       const { data: existing } = await supabase.from('promo_redemptions').select('id').eq('promo_code_id', promo.id).eq('user_id', profile.id).maybeSingle();
