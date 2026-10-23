@@ -552,25 +552,29 @@ function FinanceTab() {
     await supabase.from('transactions').update({ status }).eq('id', tx.id);
     if (status === 'approved') {
       if (tx.type === 'deposit') {
-        const bdtAmount = Math.abs(tx.amount) / 100;
+        const bdtAmount = Math.abs(tx.amount);
         const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
           await supabase.from('profiles').update({
-            cash_balance: (prof.cash_balance || 0) + bdtAmount,
-            withdrawable_balance: (prof.withdrawable_balance || 0) + bdtAmount,
+            cash_balance: +((prof.cash_balance || 0) + bdtAmount).toFixed(2),
+            withdrawable_balance: +((prof.withdrawable_balance || 0) + bdtAmount).toFixed(2),
           }).eq('id', tx.user_id);
         }
         if (tx.deposit_promo_code) {
           const bonus = await applyDepositPromoBonus(tx.user_id, tx.deposit_promo_code);
           if (bonus > 0) notify(`${t('bonusCoinsCredited')} +${bonus}`, 'success');
         }
-      } else if (tx.type === 'withdrawal') {
-        const bdtAmount = Math.abs(tx.amount) / 100;
+      }
+      // Withdrawals already deducted at submission; no action needed on approval
+    } else if (status === 'rejected') {
+      // Refund: only withdrawals were pre-deducted at submission
+      if (tx.type === 'withdrawal') {
+        const bdtAmount = Math.abs(tx.amount);
         const { data: prof } = await supabase.from('profiles').select('cash_balance, withdrawable_balance').eq('id', tx.user_id).maybeSingle();
         if (prof) {
           await supabase.from('profiles').update({
-            cash_balance: Math.max(0, (prof.cash_balance || 0) - bdtAmount),
-            withdrawable_balance: Math.max(0, (prof.withdrawable_balance || 0) - bdtAmount),
+            cash_balance: +((prof.cash_balance || 0) + bdtAmount).toFixed(2),
+            withdrawable_balance: +((prof.withdrawable_balance || 0) + bdtAmount).toFixed(2),
           }).eq('id', tx.user_id);
         }
       }
@@ -593,7 +597,7 @@ function FinanceTab() {
               <p className="text-xs text-slate-500">{tx.note}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-sm font-bold text-amber-300">{Math.abs(tx.amount) >= 100 ? `${(Math.abs(tx.amount) / 100).toFixed(0)} BDT` : Math.abs(tx.amount)}</span>
+              <span className="text-sm font-bold text-amber-300">{Math.abs(tx.amount) >= 100 ? `${Math.abs(tx.amount).toFixed(2)} BDT` : Math.abs(tx.amount)}</span>
               <Button className="text-xs px-2 py-1" onClick={() => act(tx, 'approved')}><Check size={14} /></Button>
               <Button variant="danger" className="text-xs px-2 py-1" onClick={() => act(tx, 'rejected')}><X size={14} /></Button>
             </div>

@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeftRight, Coins, Banknote, Crown, AlertTriangle, Zap, Lock, CheckCircle2 } from 'lucide-react';
+
+function fmtBDT(n: number): string {
+  return (Math.max(0, n)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
@@ -80,7 +84,7 @@ export function BuyConvert() {
 
   // MAX for cash-to-coins: full balance (fee is deducted from input, not added)
   // So max input = cashBalance itself
-  const maxCashInput = cashBalance;
+  const maxCashInput = +cashBalance.toFixed(2);
 
   // Pick new funny message each time warning appears
   useEffect(() => {
@@ -258,7 +262,7 @@ export function BuyConvert() {
         {/* Cash balance (shown in both tabs for reference) */}
         <div className="rounded-xl p-3 bg-green-500/10 border border-green-500/20 mb-4">
           <p className="text-[10px] text-green-400">{t('cashBalance')}</p>
-          <p className="text-xl font-bold text-white">{cashBalance.toLocaleString()} BDT</p>
+          <p className="text-xl font-bold text-white">{fmtBDT(cashBalance)} BDT</p>
         </div>
 
         {tab === 'cashToCoins' ? (
@@ -276,6 +280,7 @@ export function BuyConvert() {
               <input
                 type="number"
                 min={0}
+                step="0.01"
                 value={cashAmt || ''}
                 onChange={(e) => setCashAmt(+e.target.value)}
                 className={`w-full bg-slate-700 border rounded-xl px-3 py-2.5 text-white text-sm outline-none transition ${
@@ -283,14 +288,14 @@ export function BuyConvert() {
                 }`}
               />
               <p className="text-[10px] text-slate-500 mt-1">
-                {t('maxAvailable')}: {cashBalance.toLocaleString()} BDT
+                {t('maxAvailable')}: {fmtBDT(cashBalance)} BDT
               </p>
 
               {/* Live fee breakdown for cash-to-coins */}
               <div className="mt-2 rounded-xl bg-slate-800/60 border border-white/5 p-3 space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">{lang === 'bn' ? 'মোট টাকা' : 'Total Cash'}</span>
-                  <span className="text-slate-300 font-medium">৳{cashInput.toLocaleString()}</span>
+                  <span className="text-slate-300 font-medium">৳{fmtBDT(cashInput)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">{t('platformCharge')} ({chargePct}%)</span>
@@ -331,7 +336,7 @@ export function BuyConvert() {
             ) : null}
 
             <div className="space-y-1.5 text-sm">
-              <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCash.toFixed(2)} BDT)`} muted />
+              <Row label={t('platformCharge')} value={`${chargePct}% (${fmtBDT(chargeCash)} BDT)`} muted />
               <Row label={t('convertedAmount')} value={`${coinsFromCash.toLocaleString()} LM Coins`} highlight />
             </div>
             <Button className="w-full" disabled={busy || !cashCanConvert} onClick={convertCashToCoins}>
@@ -376,7 +381,7 @@ export function BuyConvert() {
                 </div>
                 <div className="border-t border-white/5 pt-1.5 flex items-center justify-between text-xs">
                   <span className="text-amber-300 font-semibold">{lang === 'bn' ? 'তুমি পাবে' : 'You Receive'}</span>
-                  <span className="text-amber-300 font-bold text-sm">৳{cashFromCoins.toFixed(2)}</span>
+                  <span className="text-amber-300 font-bold text-sm">৳{fmtBDT(cashFromCoins)}</span>
                 </div>
               </div>
             </div>
@@ -410,7 +415,7 @@ export function BuyConvert() {
 
             <div className="space-y-1.5 text-sm">
               <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCoins.toFixed(0)} coins)`} muted />
-              <Row label={t('convertedAmount')} value={`${cashFromCoins.toFixed(2)} BDT`} highlight />
+              <Row label={t('convertedAmount')} value={`${fmtBDT(cashFromCoins)} BDT`} highlight />
             </div>
             <Button className="w-full" disabled={busy || !coinsCanConvert} onClick={convertCoinsToCash}>
               {busy ? '...' : t('convertCoinsToCash')}

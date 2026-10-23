@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowDownToLine, ArrowUpFromLine, History, Coins, Ticket, Calculator, Wallet as WalletIcon, Gift, Banknote, Crown, Copy, Check, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
+
+function fmtBDT(n: number): string {
+  return (Math.max(0, n)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -51,7 +55,7 @@ export function Wallet() {
           <div>
             <p className="text-green-100 text-sm flex items-center gap-1.5"><Banknote size={14} /> {t('cashBalance')}</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-4xl font-bold text-white">{(profile.cash_balance || 0).toLocaleString()}</span>
+              <span className="text-4xl font-bold text-white">{fmtBDT(profile.cash_balance || 0)}</span>
               <span className="text-lg text-green-200">BDT</span>
             </div>
             <p className="text-green-100 text-xs mt-2">{lang === 'bn' ? 'মোবাইল ব্যাংকিং বা কয়েন কনভার্ট থেকে' : 'From mobile banking or coin conversion'}</p>
@@ -73,7 +77,7 @@ export function Wallet() {
               <Coins size={28} className="text-white" />
               <span className="text-4xl font-bold text-white">{profile.lumora_coins.toLocaleString()}</span>
             </div>
-            <p className="text-amber-100 text-xs mt-2">≈ {(profile.lumora_coins / 100).toFixed(2)} BDT</p>
+            <p className="text-amber-100 text-xs mt-2">≈ {fmtBDT(profile.lumora_coins / 100)} BDT</p>
           </div>
           <Calculator size={24} className="text-white/70" />
         </div>
@@ -132,7 +136,7 @@ export function Wallet() {
             </div>
             <div className="text-right">
               <span className={`text-sm font-bold ${tx.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {tx.amount >= 0 ? '+' : ''}{tx.amount}
+                {tx.amount >= 0 ? '+' : ''}{(tx.type === 'deposit' || tx.type === 'withdrawal') ? `${Math.abs(tx.amount).toFixed(2)} BDT` : tx.amount}
               </span>
               <p className={`text-[10px] ${tx.status === 'completed' || tx.status === 'approved' ? 'text-green-400' : tx.status === 'rejected' ? 'text-red-400' : 'text-amber-400'}`}>{tx.status}</p>
             </div>
@@ -245,7 +249,7 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
     const insertData: Record<string, unknown> = {
       user_id: profile.id,
       type: 'deposit',
-      amount: bdt * 100,
+      amount: bdt,
       status: 'pending',
       method,
       sender_number: senderPhone.trim(),
@@ -409,8 +413,8 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   // balance = netPayout * (1 + pct/100)
   // netPayout = balance / (1 + pct/100)
   const maxNetBDT = chargePct > 0
-    ? Math.floor(withdrawableBDT / (1 + chargePct / 100))
-    : Math.floor(withdrawableBDT);
+    ? +(withdrawableBDT / (1 + chargePct / 100)).toFixed(2)
+    : +withdrawableBDT.toFixed(2);
 
   const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;
   const withdrawExceeds = totalDeductBDT > withdrawableBDT;
@@ -433,7 +437,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
     const insertData: Record<string, unknown> = {
       user_id: profile.id,
       type: 'withdrawal',
-      amount: -(Math.round(totalDeductBDT * 100)),
+      amount: -+totalDeductBDT.toFixed(2),
       status: 'pending',
       method,
       receiver_number: receiverNumber.trim(),
@@ -445,6 +449,14 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
 
     const { error } = await supabase.from('transactions').insert(insertData);
     if (error) { notify(error.message, 'error'); return; }
+
+    // Instantly deduct the exact amount from cash_balance and withdrawable_balance
+    const newCash = Math.max(0, (profile.cash_balance || 0) - totalDeductBDT);
+    const newWithdrawable = Math.max(0, (profile.withdrawable_balance || 0) - totalDeductBDT);
+    await supabase.from('profiles').update({
+      cash_balance: +newCash.toFixed(2),
+      withdrawable_balance: +newWithdrawable.toFixed(2),
+    }).eq('id', profile.id);
 
     notify(t('withdrawPending'), 'info');
     setReceiverNumber('');
@@ -497,7 +509,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           <div className="mt-2 rounded-xl bg-slate-800/60 border border-white/5 p-3 space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400">{lang === 'bn' ? 'মোট ব্যালেন্স' : 'Total Balance'}</span>
-              <span className="text-slate-300 font-medium">৳{withdrawableBDT.toLocaleString()}</span>
+              <span className="text-slate-300 font-medium">৳{fmtBDT(withdrawableBDT)}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400">{t('platformCharge')} ({chargePct}%)</span>
@@ -505,7 +517,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
             </div>
             <div className="border-t border-white/5 pt-1.5 flex items-center justify-between text-xs">
               <span className="text-amber-300 font-semibold">{lang === 'bn' ? 'তুমি পাবে' : 'You Receive'}</span>
-              <span className="text-amber-300 font-bold text-sm">৳{youReceiveBDT.toLocaleString()}</span>
+              <span className="text-amber-300 font-bold text-sm">৳{fmtBDT(youReceiveBDT)}</span>
             </div>
           </div>
         </div>
