@@ -499,6 +499,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           <input
             type="number"
             min={MIN_WITHDRAW_BDT}
+            step="0.01"
             value={bdt || ''}
             onChange={(e) => setBdt(+e.target.value)}
             className={`w-full bg-slate-700 border rounded-xl px-3 py-2.5 text-white text-sm outline-none transition ${
