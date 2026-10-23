@@ -1,10 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeftRight, Coins, Banknote, Crown, AlertTriangle, Zap } from 'lucide-react';
+import { ArrowLeftRight, Coins, Banknote, Crown, AlertTriangle, Zap, Lock, CheckCircle2 } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+
+const FUNNY_WARNINGS = [
+  'পকেটে নাই চানাচুর, গ্যাং গ্যাং করো ফাইভ স্টার! এত ব্যালেন্স কই পাইলা ভাই? 😂',
+  'ভাইরে ভাই! একাউন্টে তো এত টাহা/কয়েন নাই! আগে টাস্ক কমপ্লিট করো, তারপর ফ্লেক্স করো! 💸',
+  'এত টাকা চাইলে গগলে সার্চ দাও "কিভাবে বড়লোক হই" 😜 পকেটে তো নাই!',
+  'ভাই, এয়ার ব্যালেন্স দিয়া কনভার্ট হয় না! আগে রিয়েল কয়েন/টাকা লাগবে! 🤣',
+  'তুমি কি মাইক্রোসফটের মালিক? এত ব্যালেন্স কই থাকে? 😆 আগে টাস্ক মারো!',
+];
+
+const FUNNY_OK = [
+  'সাবাশ ওস্তাদ! ঝটপট মারো কনভার্ট! 🚀',
+  'এই তো ভাই! সঠিক এমাউন্ট, এখন কনভার্ট মারো দিদি! 💪',
+  'পারফেক্ট! ব্যালেন্স আছে, ফিলিং আছে, শুধু কনভার্ট বাটনে চাপ দাও! 🔥',
+  'হ্যাঁ ভাই, এটা তো হইবো! গো গো গো! ⚡',
+];
+
+function pickRandom(arr: string[], seed: number): string {
+  return arr[seed % arr.length];
+}
 
 export function BuyConvert() {
   const { t, profile, lang, refreshProfile } = useApp();
@@ -14,6 +33,9 @@ export function BuyConvert() {
   const [coinAmt, setCoinAmt] = useState(10000);
   const [serviceChargePct, setServiceChargePct] = useState(3);
   const [busy, setBusy] = useState(false);
+  const [warningSeed, setWarningSeed] = useState(0);
+  const [okSeed, setOkSeed] = useState(0);
+  const wasExceeds = useRef({ cash: false, coins: false });
 
   useEffect(() => {
     (async () => {
@@ -31,6 +53,7 @@ export function BuyConvert() {
 
   const cashBalance = Math.max(0, profile.cash_balance || 0);
   const withdrawableCoins = Math.max(0, profile.withdrawable_coins || 0);
+  const bonusCoins = Math.max(0, profile.bonus_coins || 0);
 
   // Cash to Coins
   const cashInput = Math.max(0, cashAmt);
@@ -49,6 +72,38 @@ export function BuyConvert() {
   const coinsExceed = coinInput > withdrawableCoins;
   const coinsExcess = coinsExceed ? coinInput - withdrawableCoins : 0;
   const coinsCanConvert = coinInput >= 100 && !coinsExceed;
+
+  // Pick new funny message each time warning appears
+  useEffect(() => {
+    if (cashExceeds && !wasExceeds.current.cash) {
+      setWarningSeed((s) => s + 1);
+      wasExceeds.current.cash = true;
+    } else if (!cashExceeds) {
+      wasExceeds.current.cash = false;
+    }
+  }, [cashExceeds]);
+
+  useEffect(() => {
+    if (coinsExceed && !wasExceeds.current.coins) {
+      setWarningSeed((s) => s + 1);
+      wasExceeds.current.coins = true;
+    } else if (!coinsExceed) {
+      wasExceeds.current.coins = false;
+    }
+  }, [coinsExceed]);
+
+  // Pick encouraging message when amount becomes valid
+  useEffect(() => {
+    if (tab === 'cashToCoins' && cashCanConvert && cashInput >= 1) {
+      setOkSeed((s) => s + 1);
+    }
+  }, [tab, cashCanConvert, cashInput]);
+
+  useEffect(() => {
+    if (tab === 'coinsToCash' && coinsCanConvert && coinInput >= 100) {
+      setOkSeed((s) => s + 1);
+    }
+  }, [tab, coinsCanConvert, coinInput]);
 
   const convertCashToCoins = async () => {
     if (busy || !cashCanConvert) return;
@@ -108,6 +163,9 @@ export function BuyConvert() {
     }
   };
 
+  const funnyWarning = pickRandom(FUNNY_WARNINGS, warningSeed);
+  const funnyOk = pickRandom(FUNNY_OK, okSeed);
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-6">
@@ -142,21 +200,52 @@ export function BuyConvert() {
         </div>
       )}
 
+      {/* Dual coin balance cards */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <motion.div
+          whileTap={{ scale: 0.97 }}
+          className="rounded-2xl p-4 bg-gradient-to-br from-cyan-500/15 to-blue-500/10 border border-cyan-500/25 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-500/5 rounded-full -mr-8 -mt-8" />
+          <div className="flex items-center gap-1.5 mb-1">
+            <Coins size={14} className="text-cyan-400" />
+            <p className="text-[10px] text-cyan-400 font-semibold">
+              {lang === 'bn' ? 'উইথড্রযোগ্য কয়েন' : 'Withdrawable Coins'}
+            </p>
+          </div>
+          <p className="text-2xl font-bold text-white">{withdrawableCoins.toLocaleString()}</p>
+          <p className="text-[10px] text-cyan-300/60 mt-1">
+            {lang === 'bn' ? 'ক্যাশে কনভার্ট করা যায়' : 'Convertible to cash'}
+          </p>
+        </motion.div>
+
+        <motion.div
+          whileTap={{ scale: 0.97 }}
+          className="rounded-2xl p-4 bg-gradient-to-br from-purple-500/15 to-pink-500/10 border border-purple-500/25 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full -mr-8 -mt-8" />
+          <div className="flex items-center gap-1.5 mb-1">
+            <Lock size={14} className="text-purple-400" />
+            <p className="text-[10px] text-purple-400 font-semibold">
+              {lang === 'bn' ? 'বোনাস কয়েন' : 'Bonus Coins'}
+            </p>
+          </div>
+          <p className="text-2xl font-bold text-white">{bonusCoins.toLocaleString()}</p>
+          <p className="text-[10px] text-purple-300/60 mt-1">
+            {lang === 'bn' ? 'টাস্কেই খরচ হয়, ক্যাশে নয়' : 'Spend on tasks only'}
+          </p>
+        </motion.div>
+      </div>
+
       <Card className="mb-4">
         <p className="text-sm text-slate-400 mb-4">
           {tab === 'cashToCoins' ? t('cashToCoinsDesc') : t('coinsToCashDesc')}
         </p>
 
-        {/* Balance info */}
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="rounded-xl p-3 bg-green-500/10 border border-green-500/20">
-            <p className="text-[10px] text-green-400">{t('cashBalance')}</p>
-            <p className="text-xl font-bold text-white">{cashBalance.toLocaleString()} BDT</p>
-          </div>
-          <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/20">
-            <p className="text-[10px] text-amber-400">{t('lumoraCoin')}</p>
-            <p className="text-xl font-bold text-white">{profile.lumora_coins.toLocaleString()}</p>
-          </div>
+        {/* Cash balance (shown in both tabs for reference) */}
+        <div className="rounded-xl p-3 bg-green-500/10 border border-green-500/20 mb-4">
+          <p className="text-[10px] text-green-400">{t('cashBalance')}</p>
+          <p className="text-xl font-bold text-white">{cashBalance.toLocaleString()} BDT</p>
         </div>
 
         {tab === 'cashToCoins' ? (
@@ -185,20 +274,32 @@ export function BuyConvert() {
               </p>
             </div>
 
-            {/* Warning for insufficient balance */}
-            {cashExceeds && (
+            {/* Funny warning for insufficient balance */}
+            {cashExceeds ? (
               <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
+                key={`warn-cash-${warningSeed}`}
+                initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className="flex items-start gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
               >
-                <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <p className="text-red-400 font-bold">{t('insufficientBalance')}</p>
-                  <p className="text-red-300/70">{t('excessAmount')}: {cashExcess.toLocaleString()} BDT</p>
+                  <p className="text-red-400 font-bold mb-0.5">{t('insufficientBalance')}</p>
+                  <p className="text-red-300/80 leading-relaxed">{funnyWarning}</p>
+                  <p className="text-red-400/50 mt-1">{t('excessAmount')}: {cashExcess.toLocaleString()} BDT</p>
                 </div>
               </motion.div>
-            )}
+            ) : cashInput >= 1 ? (
+              <motion.div
+                key={`ok-cash-${okSeed}`}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 rounded-xl p-3 bg-green-500/10 border border-green-500/25"
+              >
+                <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+                <p className="text-xs text-green-300 leading-relaxed">{funnyOk}</p>
+              </motion.div>
+            ) : null}
 
             <div className="space-y-1.5 text-sm">
               <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCash.toFixed(2)} BDT)`} muted />
@@ -235,20 +336,32 @@ export function BuyConvert() {
               </p>
             </div>
 
-            {/* Warning for insufficient balance */}
-            {coinsExceed && (
+            {/* Funny warning for insufficient balance */}
+            {coinsExceed ? (
               <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
+                key={`warn-coins-${warningSeed}`}
+                initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className="flex items-start gap-2 rounded-xl p-3 bg-red-500/10 border border-red-500/30"
               >
-                <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <p className="text-red-400 font-bold">{t('insufficientBalance')}</p>
-                  <p className="text-red-300/70">{t('excessAmount')}: {coinsExcess.toLocaleString()} {t('lumoraCoins')}</p>
+                  <p className="text-red-400 font-bold mb-0.5">{t('insufficientBalance')}</p>
+                  <p className="text-red-300/80 leading-relaxed">{funnyWarning}</p>
+                  <p className="text-red-400/50 mt-1">{t('excessAmount')}: {coinsExcess.toLocaleString()} {t('lumoraCoins')}</p>
                 </div>
               </motion.div>
-            )}
+            ) : coinInput >= 100 ? (
+              <motion.div
+                key={`ok-coins-${okSeed}`}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 rounded-xl p-3 bg-green-500/10 border border-green-500/25"
+              >
+                <CheckCircle2 size={16} className="text-green-400 shrink-0" />
+                <p className="text-xs text-green-300 leading-relaxed">{funnyOk}</p>
+              </motion.div>
+            ) : null}
 
             <div className="space-y-1.5 text-sm">
               <Row label={t('platformCharge')} value={`${chargePct}% (${chargeCoins.toFixed(0)} coins)`} muted />
