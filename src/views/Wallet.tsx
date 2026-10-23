@@ -403,17 +403,20 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   const chargePct = isVip ? 0 : 3;
 
   // balance is now withdrawable_balance in BDT (not coins)
+  // Inclusive fee model: fee = gross * pct%, payout = gross - fee, gross = payout / (1 - pct%)
   const withdrawableBDT = Math.round(Math.max(0, balance) * 100) / 100;
-  const chargeBDT = Math.round((Math.max(0, bdt) * chargePct) / 100 * 100) / 100;
-  const totalDeductBDT = Math.round((Math.max(0, bdt) + chargeBDT) * 100) / 100;
-  const youReceiveBDT = Math.max(0, bdt);
+  const youReceiveBDT = Math.round(Math.max(0, bdt) * 100) / 100;
 
-  // MAX: compute net amount after fee so submitting never exceeds balance
-  // balance = netPayout + fee, fee = netPayout * pct/100
-  // balance = netPayout * (1 + pct/100)
-  // netPayout = balance / (1 + pct/100)
+  // gross = the total deducted from balance; fee is a direct percentage of gross
+  const grossBDT = chargePct > 0
+    ? Math.round((youReceiveBDT / (1 - chargePct / 100)) * 100) / 100
+    : youReceiveBDT;
+  const chargeBDT = Math.round((grossBDT - youReceiveBDT) * 100) / 100;
+  const totalDeductBDT = grossBDT;
+
+  // MAX: payout = balance * (1 - pct%), fee = balance * pct%, total = balance
   const maxNetBDT = chargePct > 0
-    ? Math.round((withdrawableBDT / (1 + chargePct / 100)) * 100) / 100
+    ? Math.round((withdrawableBDT * (1 - chargePct / 100)) * 100) / 100
     : withdrawableBDT;
 
   const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;

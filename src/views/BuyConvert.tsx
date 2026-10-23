@@ -77,9 +77,9 @@ export function BuyConvert() {
   const coinsExcess = coinsExceed ? coinInput - withdrawableCoins : 0;
   const coinsCanConvert = coinInput >= 100 && !coinsExceed;
 
-  // MAX for coins-to-cash: net coins after fee = withdrawableCoins / (1 + pct/100)
+  // MAX for coins-to-cash: inclusive fee, payout = coins * (1 - pct%)
   const maxNetCoins = chargePct > 0
-    ? Math.floor(withdrawableCoins / (1 + chargePct / 100))
+    ? Math.floor(withdrawableCoins * (1 - chargePct / 100))
     : withdrawableCoins;
 
   // MAX for cash-to-coins: full balance (fee is deducted from input, not added)
