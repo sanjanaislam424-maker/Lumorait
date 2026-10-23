@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 
-type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals';
+type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals' | 'tasks';
 
 const PERM_KEYS = [
   'manage_deposits',
@@ -31,6 +31,7 @@ const TAB_PERMISSIONS: Record<AdminTab, PermKey | null> = {
   broadcast: null,
   promo: 'manage_promo_codes',
   appeals: 'verify_kyc',
+  tasks: 'moderate_tasks',
 };
 
 function hasPermission(profile: Profile | null, perm: PermKey | null): boolean {
@@ -63,6 +64,7 @@ export function Admin() {
     { key: 'broadcast', icon: <Bell size={16} />, label: t('broadcast') },
     { key: 'promo', icon: <Ticket size={16} />, label: t('promoManager') },
     { key: 'appeals', icon: <FileWarning size={16} />, label: t('kycAppeals') },
+    { key: 'tasks', icon: <ListChecks size={16} />, label: t('taskManagement') },
   ];
 
   const visibleTabs = tabs.filter((tb) => hasPermission(profile, TAB_PERMISSIONS[tb.key]));
@@ -98,6 +100,7 @@ export function Admin() {
       {activeTab === 'broadcast' && <BroadcastTab />}
       {activeTab === 'promo' && <PromoCodesTab />}
       {activeTab === 'appeals' && <AppealsTab />}
+      {activeTab === 'tasks' && <TaskManagementTab />}
     </div>
   );
 }
@@ -860,6 +863,265 @@ function PromoCodesTab() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function TaskManagementTab() {
+  const { t, profile } = useApp();
+  const { notify } = useToast();
+  const [categories, setCategories] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
+  const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other' });
+  const [editTask, setEditTask] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', reward_coins: 25, slots: 1, status: 'open' });
+
+  const load = async () => {
+    const [catRes, taskRes, settingsRes] = await Promise.all([
+      supabase.from('task_categories').select('*').order('sort_order', { ascending: true }),
+      supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('app_settings').select('min_task_reward, max_task_reward').eq('id', 1).maybeSingle(),
+    ]);
+    setCategories(catRes.data || []);
+    setTasks(taskRes.data || []);
+    if (settingsRes.data) setLimits(settingsRes.data);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const addCategory = async () => {
+    if (!newCat.name.trim() || !newCat.label.trim() || !profile) return;
+    const { error } = await supabase.from('task_categories').insert({
+      name: newCat.name.trim().toLowerCase().replace(/\s+/g, '_'),
+      label: newCat.label.trim(),
+      icon: newCat.icon,
+      sort_order: categories.length + 1,
+      created_by: profile.id,
+    });
+    if (error) { notify(error.message, 'error'); return; }
+    notify(t('saved'), 'success');
+    setNewCat({ name: '', label: '', icon: 'other' });
+    load();
+  };
+
+  const toggleCategory = async (cat: any) => {
+    await supabase.from('task_categories').update({ is_active: !cat.is_active }).eq('id', cat.id);
+    load();
+  };
+
+  const deleteCategory = async (id: string) => {
+    await supabase.from('task_categories').delete().eq('id', id);
+    notify(t('saved'), 'success');
+    load();
+  };
+
+  const saveLimits = async () => {
+    await supabase.from('app_settings').update({
+      min_task_reward: limits.min_task_reward,
+      max_task_reward: limits.max_task_reward,
+    }).eq('id', 1);
+    notify(t('saved'), 'success');
+  };
+
+  const pauseTask = async (task: any) => {
+    await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+    notify(t('taskPaused'), 'info');
+    load();
+  };
+
+  const resumeTask = async (task: any) => {
+    await supabase.from('tasks').update({ status: 'open' }).eq('id', task.id);
+    notify(t('taskResumed'), 'success');
+    load();
+  };
+
+  const deleteTask = async (id: string) => {
+    await supabase.from('tasks').delete().eq('id', id);
+    notify(t('taskDeleted'), 'info');
+    load();
+  };
+
+  const openEdit = (task: any) => {
+    setEditTask(task);
+    setEditForm({ title: task.title, description: task.description || '', reward_coins: task.reward_coins, slots: task.slots, status: task.status });
+  };
+
+  const saveEdit = async () => {
+    if (!editTask) return;
+    const reward = editForm.reward_coins;
+    if (reward < limits.min_task_reward) { notify(t('rewardTooLow'), 'error'); return; }
+    if (reward > limits.max_task_reward) { notify(t('rewardTooHigh'), 'error'); return; }
+    await supabase.from('tasks').update({
+      title: editForm.title,
+      description: editForm.description,
+      reward_coins: reward,
+      slots: editForm.slots,
+      status: editForm.status,
+    }).eq('id', editTask.id);
+    notify(t('taskUpdated'), 'success');
+    setEditTask(null);
+    load();
+  };
+
+  const statusLabel = (status: string) => {
+    switch (status) {
+      case 'open': return t('taskStatusOpen');
+      case 'paused': return t('taskStatusPaused');
+      case 'in_progress': return t('taskStatusInProgress');
+      case 'completed': return t('taskStatusCompleted');
+      default: return status;
+    }
+  };
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'open': return 'text-green-400';
+      case 'paused': return 'text-amber-400';
+      case 'in_progress': return 'text-blue-400';
+      case 'completed': return 'text-slate-400';
+      default: return 'text-slate-400';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Task Reward Limits */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Settings size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">{t('taskRewardLimits')}</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">{t('taskRewardLimitsDesc')}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('minRewardLimit')}</label>
+            <input type="number" min={1} value={limits.min_task_reward} onChange={(e) => setLimits({ ...limits, min_task_reward: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('maxRewardLimit')}</label>
+            <input type="number" min={1} value={limits.max_task_reward} onChange={(e) => setLimits({ ...limits, max_task_reward: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+        </div>
+        <Button className="w-full mt-3" onClick={saveLimits}>{t('save')}</Button>
+      </Card>
+
+      {/* Task Categories */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <ListChecks size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">{t('taskCategories')}</h3>
+        </div>
+        <div className="space-y-2 mb-4">
+          {categories.length === 0 ? <EmptyState message={t('noCategories')} /> : categories.map((cat) => (
+            <div key={cat.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium">{cat.label}</p>
+                <p className="text-xs text-slate-500">{cat.name} {!cat.is_active && ' • INACTIVE'}</p>
+              </div>
+              <div className="flex gap-1">
+                <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleCategory(cat)}>
+                  {cat.is_active ? <Pause size={14} /> : <Play size={14} />}
+                </Button>
+                <Button variant="danger" className="text-xs px-2 py-1" onClick={() => deleteCategory(cat.id)}>
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-2 pt-3 border-t border-white/10">
+          <p className="text-xs text-amber-400 font-semibold">{t('addCategory')}</p>
+          <div className="grid grid-cols-3 gap-2">
+            <input value={newCat.name} onChange={(e) => setNewCat({ ...newCat, name: e.target.value })} placeholder={t('categoryName')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+            <input value={newCat.label} onChange={(e) => setNewCat({ ...newCat, label: e.target.value })} placeholder={t('categoryLabel')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+            <select value={newCat.icon} onChange={(e) => setNewCat({ ...newCat, icon: e.target.value })} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
+              <option value="facebook">Facebook</option>
+              <option value="instagram">Instagram</option>
+              <option value="youtube">YouTube</option>
+              <option value="app_review">App Review</option>
+              <option value="tiktok">TikTok</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <Button className="w-full" onClick={addCategory}>
+            <span className="flex items-center justify-center gap-1.5"><Plus size={14} /> {t('addCategory')}</span>
+          </Button>
+        </div>
+      </Card>
+
+      {/* All Tasks - Lifecycle Control */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <ListChecks size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">{t('allTasks')}</h3>
+        </div>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {tasks.length === 0 ? <EmptyState message={t('noTasks')} /> : tasks.map((task) => (
+            <div key={task.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium truncate">{task.title}</p>
+                <p className="text-xs text-slate-500">
+                  {task.reward_coins} {t('lumoraCoins')} • {task.filled}/{task.slots} {t('slots')} •
+                  <span className={`ml-1 ${statusColor(task.status)}`}>{statusLabel(task.status)}</span>
+                </p>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => openEdit(task)}>
+                  <Edit2 size={14} />
+                </Button>
+                {task.status === 'open' ? (
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => pauseTask(task)}>
+                    <Pause size={14} />
+                  </Button>
+                ) : task.status === 'paused' ? (
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => resumeTask(task)}>
+                    <Play size={14} />
+                  </Button>
+                ) : null}
+                <Button variant="danger" className="text-xs px-2 py-1" onClick={() => deleteTask(task.id)}>
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Edit Task Modal */}
+      <Modal open={!!editTask} onClose={() => setEditTask(null)} title={t('editTask')}>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('title')}</label>
+            <input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('description')}</label>
+            <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} rows={3} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">{t('reward')} ({t('lumoraCoins')})</label>
+              <input type="number" min={limits.min_task_reward} max={limits.max_task_reward} value={editForm.reward_coins} onChange={(e) => setEditForm({ ...editForm, reward_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+              <p className="text-[10px] text-slate-500 mt-0.5">{limits.min_task_reward} – {limits.max_task_reward}</p>
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">{t('slots')}</label>
+              <input type="number" min={1} value={editForm.slots} onChange={(e) => setEditForm({ ...editForm, slots: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('settings')}</label>
+            <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
+              <option value="open">{t('taskStatusOpen')}</option>
+              <option value="paused">{t('taskStatusPaused')}</option>
+              <option value="in_progress">{t('taskStatusInProgress')}</option>
+              <option value="completed">{t('taskStatusCompleted')}</option>
+            </select>
+          </div>
+          <Button className="w-full" onClick={saveEdit}>{t('save')}</Button>
+        </div>
+      </Modal>
     </div>
   );
 }

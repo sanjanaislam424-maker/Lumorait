@@ -153,6 +153,20 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const { notify } = useToast();
   const [form, setForm] = useState({ platform: 'facebook', title: '', description: '', target_url: '', reward: 25, slots: 1 });
   const [busy, setBusy] = useState(false);
+  const [categories, setCategories] = useState<{ name: string; label: string }[]>([]);
+  const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
+
+  useEffect(() => {
+    (async () => {
+      const [catRes, settingsRes] = await Promise.all([
+        supabase.from('task_categories').select('name, label').eq('is_active', true).order('sort_order', { ascending: true }),
+        supabase.from('app_settings').select('min_task_reward, max_task_reward').eq('id', 1).maybeSingle(),
+      ]);
+      if (catRes.data && catRes.data.length > 0) setCategories(catRes.data);
+      else setCategories([{ name: 'facebook', label: 'Facebook' }, { name: 'instagram', label: 'Instagram' }, { name: 'youtube', label: 'YouTube' }, { name: 'app_review', label: 'App Review' }, { name: 'tiktok', label: 'TikTok' }, { name: 'other', label: 'Other' }]);
+      if (settingsRes.data) setLimits(settingsRes.data);
+    })();
+  }, []);
 
   const isAdmin = profile?.role === 'admin';
   const cost = isAdmin ? 0 : form.reward;
@@ -160,6 +174,8 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+    if (form.reward < limits.min_task_reward) { notify(t('rewardTooLow'), 'error'); return; }
+    if (form.reward > limits.max_task_reward) { notify(t('rewardTooHigh'), 'error'); return; }
     if (!isAdmin && profile.lumora_coins < cost) { notify(t('notEnoughCoins'), 'error'); return; }
     setBusy(true);
     try {
@@ -184,7 +200,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         <div>
           <label className="text-xs text-slate-400 block mb-1">{t('platform')}</label>
           <select value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
-            {['facebook', 'instagram', 'youtube', 'app_review', 'tiktok', 'other'].map((p) => <option key={p} value={p}>{p}</option>)}
+            {categories.map((cat) => <option key={cat.name} value={cat.name}>{cat.label}</option>)}
           </select>
         </div>
         <Input label={t('title')} value={form.title} onChange={(v) => setForm({ ...form, title: v })} required />
@@ -192,8 +208,8 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         <Input label={t('targetUrl')} value={form.target_url} onChange={(v) => setForm({ ...form, target_url: v })} />
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-slate-400 block mb-1">{t('reward')}</label>
-            <input type="number" min={1} value={form.reward} onChange={(e) => setForm({ ...form, reward: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+            <label className="text-xs text-slate-400 block mb-1">{t('reward')} ({limits.min_task_reward}–{limits.max_task_reward})</label>
+            <input type="number" min={limits.min_task_reward} max={limits.max_task_reward} value={form.reward} onChange={(e) => setForm({ ...form, reward: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
           <div>
             <label className="text-xs text-slate-400 block mb-1">{t('slots')}</label>
