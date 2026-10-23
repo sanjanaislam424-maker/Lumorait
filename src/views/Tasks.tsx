@@ -139,7 +139,7 @@ export function Tasks() {
             ))}
           </div>
         </div>
-      )}}
+      )}
 
       {tab === 'mine' && (
         <div className="space-y-3">
