@@ -402,6 +402,15 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   const withdrawableBDT = Math.max(0, balance);
   const chargeBDT = (Math.max(0, bdt) * chargePct) / 100;
   const totalDeductBDT = Math.max(0, bdt) + chargeBDT;
+  const youReceiveBDT = Math.max(0, bdt);
+
+  // MAX: compute net amount after fee so submitting never exceeds balance
+  // balance = netPayout + fee, fee = netPayout * pct/100
+  // balance = netPayout * (1 + pct/100)
+  // netPayout = balance / (1 + pct/100)
+  const maxNetBDT = chargePct > 0
+    ? Math.floor(withdrawableBDT / (1 + chargePct / 100))
+    : Math.floor(withdrawableBDT);
 
   const withdrawTooLow = bdt < MIN_WITHDRAW_BDT;
   const withdrawExceeds = totalDeductBDT > withdrawableBDT;
@@ -468,7 +477,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs text-slate-400">{t('withdrawAmount')}</label>
             <button
-              onClick={() => setBdt(withdrawableBDT)}
+              onClick={() => setBdt(maxNetBDT)}
               disabled={balanceTooLow}
               className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -484,13 +493,21 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
               warningMsg ? 'border-red-500/60 focus:border-red-500' : 'border-white/10 focus:border-blue-500/50'
             }`}
           />
-          <div className="flex items-center justify-between mt-1">
-            <p className="text-xs text-amber-300">৳ {bdt.toLocaleString()}</p>
-            {!isVip && <p className="text-[10px] text-slate-500">+{chargePct}% {t('platformCharge')}: ৳{chargeBDT.toFixed(2)}</p>}
+          {/* Live fee breakdown */}
+          <div className="mt-2 rounded-xl bg-slate-800/60 border border-white/5 p-3 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">{lang === 'bn' ? 'মোট ব্যালেন্স' : 'Total Balance'}</span>
+              <span className="text-slate-300 font-medium">৳{withdrawableBDT.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">{t('platformCharge')} ({chargePct}%)</span>
+              <span className="text-red-400 font-medium">-৳{chargeBDT.toFixed(2)}</span>
+            </div>
+            <div className="border-t border-white/5 pt-1.5 flex items-center justify-between text-xs">
+              <span className="text-amber-300 font-semibold">{lang === 'bn' ? 'তুমি পাবে' : 'You Receive'}</span>
+              <span className="text-amber-300 font-bold text-sm">৳{youReceiveBDT.toLocaleString()}</span>
+            </div>
           </div>
-          <p className="text-[10px] text-slate-500 mt-0.5">
-            {lang === 'bn' ? `উইথড্রয়গ্য ব্যালেন্স` : `Withdrawable balance`}: ৳{withdrawableBDT.toLocaleString()}
-          </p>
         </div>
 
         {/* Funny warning or OK message */}

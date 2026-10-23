@@ -73,6 +73,15 @@ export function BuyConvert() {
   const coinsExcess = coinsExceed ? coinInput - withdrawableCoins : 0;
   const coinsCanConvert = coinInput >= 100 && !coinsExceed;
 
+  // MAX for coins-to-cash: net coins after fee = withdrawableCoins / (1 + pct/100)
+  const maxNetCoins = chargePct > 0
+    ? Math.floor(withdrawableCoins / (1 + chargePct / 100))
+    : withdrawableCoins;
+
+  // MAX for cash-to-coins: full balance (fee is deducted from input, not added)
+  // So max input = cashBalance itself
+  const maxCashInput = cashBalance;
+
   // Pick new funny message each time warning appears
   useEffect(() => {
     if (cashExceeds && !wasExceeds.current.cash) {
@@ -258,7 +267,7 @@ export function BuyConvert() {
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-slate-400">{t('cashAmount')}</label>
                 <button
-                  onClick={() => setCashAmt(cashBalance)}
+                  onClick={() => setCashAmt(maxCashInput)}
                   className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95"
                 >
                   <Zap size={12} /> {t('maxButton')}
@@ -276,6 +285,22 @@ export function BuyConvert() {
               <p className="text-[10px] text-slate-500 mt-1">
                 {t('maxAvailable')}: {cashBalance.toLocaleString()} BDT
               </p>
+
+              {/* Live fee breakdown for cash-to-coins */}
+              <div className="mt-2 rounded-xl bg-slate-800/60 border border-white/5 p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">{lang === 'bn' ? 'মোট টাকা' : 'Total Cash'}</span>
+                  <span className="text-slate-300 font-medium">৳{cashInput.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">{t('platformCharge')} ({chargePct}%)</span>
+                  <span className="text-red-400 font-medium">-৳{chargeCash.toFixed(2)}</span>
+                </div>
+                <div className="border-t border-white/5 pt-1.5 flex items-center justify-between text-xs">
+                  <span className="text-amber-300 font-semibold">{lang === 'bn' ? 'তুমি পাবে' : 'You Get'}</span>
+                  <span className="text-amber-300 font-bold text-sm">{coinsFromCash.toLocaleString()} {t('lumoraCoins')}</span>
+                </div>
+              </div>
             </div>
 
             {/* Funny warning for insufficient balance */}
@@ -319,7 +344,7 @@ export function BuyConvert() {
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-slate-400">{t('coinAmount')}</label>
                 <button
-                  onClick={() => setCoinAmt(withdrawableCoins)}
+                  onClick={() => setCoinAmt(maxNetCoins)}
                   className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95"
                 >
                   <Zap size={12} /> {t('maxButton')}
@@ -338,6 +363,22 @@ export function BuyConvert() {
               <p className="text-[10px] text-slate-500 mt-1">
                 {t('maxAvailable')}: {withdrawableCoins.toLocaleString()} {t('lumoraCoins')}
               </p>
+
+              {/* Live fee breakdown for coins-to-cash */}
+              <div className="mt-2 rounded-xl bg-slate-800/60 border border-white/5 p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">{lang === 'bn' ? 'মোট কয়েন' : 'Total Coins'}</span>
+                  <span className="text-slate-300 font-medium">{coinInput.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">{t('platformCharge')} ({chargePct}%)</span>
+                  <span className="text-red-400 font-medium">-{chargeCoins.toFixed(0)} {t('lumoraCoins')}</span>
+                </div>
+                <div className="border-t border-white/5 pt-1.5 flex items-center justify-between text-xs">
+                  <span className="text-amber-300 font-semibold">{lang === 'bn' ? 'তুমি পাবে' : 'You Receive'}</span>
+                  <span className="text-amber-300 font-bold text-sm">৳{cashFromCoins.toFixed(2)}</span>
+                </div>
+              </div>
             </div>
 
             {/* Funny warning for insufficient balance */}
