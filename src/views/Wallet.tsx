@@ -402,8 +402,12 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
   const isVip = profile?.membership_tier === 'vip' || profile?.membership_tier === 'pro';
   const chargePct = isVip ? 0 : 3;
 
-  // balance is withdrawable_balance in BDT — the gross amount the user can withdraw
-  const withdrawableBDT = Math.round(Math.max(0, balance) * 100) / 100;
+  // Robust numeric balance parsing — never trust a single source
+  const currentCash = Number(profile?.cash_balance ?? 0) || 0;
+  const currentWithdrawable = Number(profile?.withdrawable_balance ?? currentCash) || 0;
+  const propBalance = Number(balance) || 0;
+  const maxAvailable = Math.max(currentCash, currentWithdrawable, propBalance);
+  const withdrawableBDT = Math.round(Math.max(0, maxAvailable) * 100) / 100;
 
   // The input (bdt) IS the gross amount deducted from balance
   // fee = gross * pct%, net payout = gross - fee
@@ -491,7 +495,7 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
             <label className="text-xs text-slate-400">{t('withdrawAmount')}</label>
             <button
               onClick={() => setBdt(maxGrossBDT)}
-              disabled={balanceTooLow}
+              disabled={maxGrossBDT < MIN_WITHDRAW_BDT}
               className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 hover:bg-amber-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Zap size={12} /> {t('maxButton')}
