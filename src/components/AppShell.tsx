@@ -89,10 +89,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
             >
               <Menu size={22} />
             </button>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-              style={{ background: `linear-gradient(135deg, ${themeConfig.primary}, ${themeConfig.secondary})`, boxShadow: `0 0 12px ${themeConfig.glow}` }}>
-              <Logo size={32} rounded="rounded-lg" />
-            </div>
+            <Logo size={32} rounded="rounded-lg" />
             <span className="font-bold neon-glow-text hidden sm:block" style={{ color: themeConfig.text }}>Lumora IT</span>
           </div>
           <div className="flex items-center gap-1">

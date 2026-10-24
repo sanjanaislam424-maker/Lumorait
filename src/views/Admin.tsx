@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { Logo } from '@/components/Logo';
+import { uploadBrandingImage } from '@/lib/upload';
 
 type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals' | 'tasks';
 
@@ -75,6 +77,7 @@ export function Admin() {
     <div>
       <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
         <ShieldCheck className="text-amber-400" size={24} /> {t('adminPanel')}
+        <Logo size={28} rounded="rounded-lg" />
         {profile?.is_super_admin && (
           <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full px-2 py-0.5 flex items-center gap-1">
             <Lock size={10} /> {t('superAdmin')}
@@ -674,9 +677,11 @@ function DisputesTab() {
 }
 
 function SettingsTab() {
-  const { t } = useApp();
+  const { t, refreshLogo } = useApp();
   const { notify } = useToast();
   const [s, setS] = useState<any>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -684,6 +689,27 @@ function SettingsTab() {
       setS(data);
     })();
   }, []);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const { url, error } = await uploadBrandingImage(file, 'logo');
+      if (error || !url) { notify(error || 'Upload failed', 'error'); return; }
+      await supabase.from('app_settings').update({ app_logo_url: url }).eq('id', 1);
+      setS((prev: any) => ({ ...prev, app_logo_url: url }));
+      await refreshLogo();
+      notify(t('saved'), 'success');
+    } finally { setLogoUploading(false); }
+  };
+
+  const removeLogo = async () => {
+    await supabase.from('app_settings').update({ app_logo_url: null }).eq('id', 1);
+    setS((prev: any) => ({ ...prev, app_logo_url: null }));
+    await refreshLogo();
+    notify(t('saved'), 'success');
+  };
 
   const save = async () => {
     await supabase.from('app_settings').update({
@@ -708,6 +734,37 @@ function SettingsTab() {
   ];
 
   return (
+    <div className="space-y-4">
+    {/* Global App Logo & Branding */}
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <ImageIcon size={18} className="text-amber-400" />
+        <h3 className="font-semibold text-white">{t('logoBranding')}</h3>
+      </div>
+      <p className="text-xs text-slate-400 mb-3">{t('logoBrandingDesc')}</p>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="shrink-0">
+          {s.app_logo_url ? (
+            <img src={s.app_logo_url} alt="App Logo" className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold bg-gradient-to-br from-amber-500 to-orange-600 text-slate-900">L</div>
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-xs text-slate-400 mb-2">{s.app_logo_url ? t('currentLogo') : t('noLogoUploaded')}</p>
+          <div className="flex gap-2">
+            <input ref={logoFileRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+            <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => logoFileRef.current?.click()} disabled={logoUploading}>
+              {logoUploading ? <><ImageIcon size={14} /> {t('uploading')}</> : <><Upload size={14} /> {t('uploadLogo')}</>}
+            </Button>
+            {s.app_logo_url && (
+              <Button variant="danger" className="text-xs px-3 py-2" onClick={removeLogo}><Trash2 size={14} /></Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+
     <Card>
       <div className="space-y-3">
         {fields.map((f) => (
@@ -746,6 +803,7 @@ function SettingsTab() {
         <Button className="w-full" onClick={save}>{t('save')}</Button>
       </div>
     </Card>
+    </div>
   );
 }
 
@@ -880,6 +938,8 @@ function TaskManagementTab() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
   const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other', icon_url: '' });
+  const [iconUploading, setIconUploading] = useState(false);
+  const iconFileRef = useRef<HTMLInputElement>(null);
   const [editTask, setEditTask] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', reward_coins: 25, slots: 1, status: 'open' });
 
@@ -895,6 +955,18 @@ function TaskManagementTab() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIconUploading(true);
+    try {
+      const { url, error } = await uploadBrandingImage(file, 'category-icons');
+      if (error || !url) { notify(error || 'Upload failed', 'error'); return; }
+      setNewCat((prev) => ({ ...prev, icon_url: url }));
+      notify(t('saved'), 'success');
+    } finally { setIconUploading(false); }
+  };
 
   const addCategory = async () => {
     if (!newCat.name.trim() || !newCat.label.trim() || !profile) return;
@@ -1057,7 +1129,27 @@ function TaskManagementTab() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 block mb-1">{t('categoryIconUrl')}</label>
+            <label className="text-xs text-slate-400 block mb-1">{t('fileOrUrl')}</label>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                ref={iconFileRef}
+                type="file"
+                accept="image/*"
+                onChange={handleIconUpload}
+                className="hidden"
+              />
+              <Button
+                variant="ghost"
+                className="text-xs px-3 py-2 flex items-center gap-1.5 shrink-0"
+                onClick={() => iconFileRef.current?.click()}
+                disabled={iconUploading}
+              >
+                {iconUploading ? <><ImageIcon size={14} /> {t('uploading')}</> : <><Upload size={14} /> {t('uploadIcon')}</>}
+              </Button>
+              {newCat.icon_url && (
+                <img src={newCat.icon_url} alt="icon preview" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+              )}
+            </div>
             <input value={newCat.icon_url} onChange={(e) => setNewCat({ ...newCat, icon_url: e.target.value })} placeholder="https://example.com/icon.png" className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
           <Button className="w-full" onClick={addCategory}>
