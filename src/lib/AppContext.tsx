@@ -81,6 +81,8 @@ type AppState = {
   lang: Lang;
   theme: Theme;
   themeConfig: ThemeConfig;
+  logoUrl: string | null;
+  refreshLogo: () => Promise<void>;
   setLang: (l: Lang) => void;
   setTheme: (th: Theme) => void;
   refreshProfile: () => Promise<void>;
@@ -96,6 +98,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lang, setLangState] = useState<Lang>('bn');
   const [theme, setThemeState] = useState<Theme>(() => resolveTheme(localStorage.getItem('lumora_theme')));
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -110,6 +113,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setLang = (l: Lang) => setLangState(l);
   const setTheme = (th: Theme) => setThemeState(th);
+
+  const fetchLogo = useCallback(async () => {
+    const { data } = await supabase.from('app_settings').select('app_logo_url').eq('id', 1).maybeSingle();
+    setLogoUrl(data?.app_logo_url ?? null);
+  }, []);
+
+  useEffect(() => { fetchLogo(); }, [fetchLogo]);
 
   const fetchProfile = useCallback(async (uid: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
@@ -179,7 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeConfig: themes[theme] ?? themes.cyber, setLang, setTheme, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeConfig: themes[theme] ?? themes.cyber, logoUrl, refreshLogo: fetchLogo, setLang, setTheme, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );

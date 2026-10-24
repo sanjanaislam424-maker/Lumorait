@@ -38,7 +38,13 @@ const TASKS_HEADER = 'কামকাজ করে পকেট গরম কর
 
 const TASKS_COUNTER = (n: number) => `${n} টা কাজ রেডি, ধইরা কোপ দাও! 🚀`;
 
-const CATEGORY_EMPTY = 'এই ক্যাটাগরিতে এখন কাজ নাই মামা! চা-বিস্কুট খাইয়া একটু পরে আবার নক দাও! ☕😜';
+const CATEGORY_EMPTY = [
+  'এই ক্যাটাগরিতে এখন কাজ নাই মামা! চা-বিস্কুট খাইয়া একটু পরে আবার নক দাও! ☕😜',
+  'আরে ওস্তাদ, এই ক্যাটাগরিতে কাজ এখন ফাঁকা! একটু ঘুরে আইসো তো! 🚶\u200d♂️',
+  'কাজ নাই ক্যাটাগরিতে, তাইলে কি আকাশের তারা গুনবে? একটু পরে আবার চেক করো! ⭐',
+  'মামা, এই ক্যাটাগরি এখন শূন্য! একটু চা খাইয়া এসো, ততক্ষণে কাজ আসবো! 🫖',
+  'এই রে ভাই! কাজ তো এখনো আসে নাই! একটু পরে আবার হাজির হইও! 🕐',
+];
 
 function randomPick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -53,5 +59,5 @@ export const microcopy = {
   promoInactive: () => randomPick(PROMO_INACTIVE),
   tasksHeader: () => TASKS_HEADER,
   tasksCounter: (n: number) => TASKS_COUNTER(n),
-  categoryEmpty: () => CATEGORY_EMPTY,
+  categoryEmpty: () => randomPick(CATEGORY_EMPTY),
 };

@@ -4,6 +4,7 @@ import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket, Key
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useToast } from '@/components/Toast';
+import { Logo } from '@/components/Logo';
 
 export function AuthScreen() {
   const { t, lang, setLang } = useApp();
@@ -218,6 +219,9 @@ export function AuthScreen() {
                 transition={{ delay: 0.4 }}
                 className="text-center mb-5"
               >
+                <div className="flex justify-center mb-3">
+                  <Logo size={56} rounded="rounded-2xl" />
+                </div>
                 <h1
                   className="text-3xl font-bold"
                   style={{

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useApp, Theme } from '@/lib/AppContext';
 import { Modal, Button, NeonParticles } from './ui';
+import { Logo } from './Logo';
 import { supabase } from '@/lib/supabase';
 
 export type View =
@@ -90,7 +91,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
             </button>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
               style={{ background: `linear-gradient(135deg, ${themeConfig.primary}, ${themeConfig.secondary})`, boxShadow: `0 0 12px ${themeConfig.glow}` }}>
-              L
+              <Logo size={32} rounded="rounded-lg" />
             </div>
             <span className="font-bold neon-glow-text hidden sm:block" style={{ color: themeConfig.text }}>Lumora IT</span>
           </div>
@@ -132,10 +133,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
             >
               <div className="flex items-center justify-between p-4" style={{ borderBottom: `1px solid ${themeConfig.border}` }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold"
-                    style={{ background: `linear-gradient(135deg, ${themeConfig.primary}, ${themeConfig.secondary})`, boxShadow: `0 0 14px ${themeConfig.glow}` }}>
-                    L
-                  </div>
+                  <Logo size={36} rounded="rounded-xl" />
                   <div>
                     <p className="font-bold text-sm" style={{ color: themeConfig.text }}>Lumora IT</p>
                     <p className="text-[10px]" style={{ color: themeConfig.muted }}>{profile?.phone || profile?.full_name || ''}</p>
