@@ -62,6 +62,9 @@ export type TaskRow = {
   promotion_tier?: string | null;
   promotion_started_at?: string | null;
   promotion_locked_until?: string | null;
+  promotion_daily_rate?: number | null;
+  promotion_end_at?: string | null;
+  promotion_last_charged_at?: string | null;
 };
 
 export type SubmissionRow = {

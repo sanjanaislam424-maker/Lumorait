@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, TrendingUp } from 'lucide-react';
+import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, Calendar, TrendingUp } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -46,6 +46,10 @@ function isPromotionActive(task: TaskRow | null | undefined): boolean {
 function isLongTermTier(tier: { duration_days: number } | null | undefined): boolean {
   if (!tier) return false;
   return tier.duration_days === 0 || tier.duration_days > 7;
+}
+
+function tierDailyRate(tier: { daily_rate?: number; daily_rate_after_lock?: number }, ut: 'free' | 'pro' | 'vip'): number {
+  return tier.daily_rate ?? 0;
 }
 
 function isBoostLocked(task: TaskRow | null | undefined): boolean {
@@ -479,8 +483,9 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
   const { t, profile, refreshProfile } = useApp();
   const { notify } = useToast();
   const [form, setForm] = useState({ title: '', description: '', target_url: '', reward_coins: 10, slots: 1 });
-  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number }[]>([]);
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number }[]>([]);
   const [selectedTier, setSelectedTier] = useState<number>(-1);
+  const [promoEndDate, setPromoEndDate] = useState<string>('');
   const [promoBusy, setPromoBusy] = useState(false);
 
   useEffect(() => {
@@ -493,6 +498,7 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
         slots: task.slots,
       });
       setSelectedTier(-1);
+      setPromoEndDate('');
     }
   }, [task]);
 
@@ -506,7 +512,10 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
   }, []);
 
   const ut = userTier(profile);
+  const selectedTierObj = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
+  const longTerm = isLongTermTier(selectedTierObj);
   const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
+  const promoDailyRate = selectedTier >= 0 ? tierDailyRate(promotionTiers[selectedTier] || {}, ut) : 0;
   const currentlyPromoted = isPromotionActive(task);
 
   const handleSave = () => {
@@ -523,7 +532,7 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
 
   const applyPromotion = async () => {
     if (!task || !profile || selectedTier < 0) return;
-    if (profile.lumora_coins < promoCost) {
+    if (!longTerm && profile.lumora_coins < promoCost) {
       notify(microcopy.notEnoughPromoCoins(), 'error');
       return;
     }
@@ -531,24 +540,33 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
     try {
       const tier = promotionTiers[selectedTier];
       const now = new Date();
-      const longTerm = isLongTermTier(tier);
-      const expiry = tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString();
-      const lockedUntil = longTerm ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
-      const newWeight = (task.promotion_weight || 0) + promoCost;
+      const lt = isLongTermTier(tier);
+      const expiry = lt
+        ? (promoEndDate ? new Date(promoEndDate).toISOString() : null)
+        : (tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString());
+      const lockedUntil = lt ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
+      const dailyRate = lt ? tierDailyRate(tier, ut) : 0;
+      const upfrontCost = lt ? 0 : promoCost;
+      const newWeight = (task.promotion_weight || 0) + (lt ? dailyRate : promoCost);
       await supabase.from('tasks').update({
         is_promoted: true,
-        promotion_coins: (task.promotion_coins || 0) + promoCost,
+        promotion_coins: (task.promotion_coins || 0) + upfrontCost,
         promotion_expires_at: expiry,
         promotion_weight: newWeight,
         promotion_tier: ut,
         promotion_started_at: now.toISOString(),
         promotion_locked_until: lockedUntil,
+        promotion_daily_rate: dailyRate || null,
+        promotion_end_at: expiry,
+        promotion_last_charged_at: lt ? now.toISOString() : null,
       }).eq('id', task.id);
-      await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - promoCost }).eq('id', profile.id);
-      await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -promoCost, status: 'completed', note: `Boosted: ${task.title}` });
-      await refreshProfile();
+      if (!lt && upfrontCost > 0) {
+        await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - upfrontCost }).eq('id', profile.id);
+        await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -upfrontCost, status: 'completed', note: `Boosted: ${task.title}` });
+        await refreshProfile();
+      }
       notify(microcopy.promotionSuccess(), 'success');
-      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + promoCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut, promotion_started_at: now.toISOString(), promotion_locked_until: lockedUntil });
+      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + upfrontCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut, promotion_started_at: now.toISOString(), promotion_locked_until: lockedUntil, promotion_daily_rate: dailyRate || null, promotion_end_at: expiry });
     } finally { setPromoBusy(false); }
   };
 
@@ -643,9 +661,22 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
                 );
               })}
             </div>
+            {selectedTier >= 0 && longTerm && (
+              <div className="mb-2">
+                <label className="text-[10px] text-slate-400 block mb-1">{t('boostEndDate')}</label>
+                <p className="text-[9px] text-slate-500 mb-1">{t('boostEndDateHint')}</p>
+                <input type="datetime-local" value={promoEndDate} onChange={(e) => setPromoEndDate(e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+              </div>
+            )}
+            {selectedTier >= 0 && longTerm && (
+              <div className="flex items-center gap-1.5 mb-2 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-lg px-2.5 py-1.5">
+                <Calendar size={11} className="text-fuchsia-400 shrink-0" />
+                <p className="text-[10px] text-fuchsia-300 font-medium">{t('fixedDailyBudget')}: {promoDailyRate} {t('lumoraCoins')} {t('perDay')}</p>
+              </div>
+            )}
             {selectedTier >= 0 && (
               <Button className="w-full text-sm flex items-center justify-center gap-1.5" disabled={promoBusy} onClick={applyPromotion}>
-                <Zap size={14} /> {t('promoteBtn')} (+{promoCost})
+                <Zap size={14} /> {t('promoteBtn')} {longTerm ? `(${promoDailyRate}${t('perDay')})` : `(+${promoCost})`}
               </Button>
             )}
           </div>
@@ -667,8 +698,9 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<{ name: string; label: string }[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
-  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number }[]>([]);
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number }[]>([]);
   const [selectedTier, setSelectedTier] = useState<number>(-1);
+  const [promoEndDate, setPromoEndDate] = useState<string>('');
 
   useEffect(() => {
     (async () => {
@@ -690,8 +722,12 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const isAdmin = profile?.role === 'admin';
   const ut = userTier(profile);
   const taskCost = isAdmin ? 0 : form.reward;
+  const selectedTierObj = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
+  const longTerm = isLongTermTier(selectedTierObj);
   const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
-  const totalCost = taskCost + promoCost;
+  const promoDailyRate = selectedTier >= 0 ? tierDailyRate(promotionTiers[selectedTier] || {}, ut) : 0;
+  const promoUpfront = longTerm ? 0 : promoCost;
+  const totalCost = taskCost + promoUpfront;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -707,11 +743,13 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
       const tier = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
       const isPromoted = !!tier;
       const now = new Date();
-      const longTerm = isLongTermTier(tier);
-      const promotionExpiry = tier
-        ? (tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString())
-        : null;
-      const lockedUntil = (isPromoted && longTerm) ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
+      const lt = isLongTermTier(tier);
+      const dailyRate = lt ? tierDailyRate(tier!, ut) : 0;
+      const upfrontPromo = lt ? 0 : promoCost;
+      const promotionExpiry = lt
+        ? (promoEndDate ? new Date(promoEndDate).toISOString() : null)
+        : (tier ? (tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString()) : null);
+      const lockedUntil = (isPromoted && lt) ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
 
       await supabase.from('tasks').insert({
         creator_id: profile.id,
@@ -724,15 +762,18 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         is_admin_task: isAdmin,
         slots: form.slots,
         is_promoted: isPromoted,
-        promotion_coins: promoCost,
+        promotion_coins: upfrontPromo,
         promotion_expires_at: promotionExpiry,
         daily_slot_limit: form.daily_slot_limit ? +form.daily_slot_limit : null,
-        promotion_weight: isPromoted ? promoCost : 0,
+        promotion_weight: isPromoted ? (lt ? dailyRate : promoCost) : 0,
         promotion_tier: isPromoted ? ut : null,
         promotion_started_at: isPromoted ? now.toISOString() : null,
         promotion_locked_until: lockedUntil,
+        promotion_daily_rate: lt ? dailyRate || null : null,
+        promotion_end_at: lt ? promotionExpiry : null,
+        promotion_last_charged_at: lt ? now.toISOString() : null,
       });
-      if (!isAdmin) {
+      if (!isAdmin && totalCost > 0) {
         await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - totalCost }).eq('id', profile.id);
         await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -totalCost, status: 'completed', note: `Created: ${form.title}${isPromoted ? ` + ${t('promoteTask')}` : ''}` });
         await refreshProfile();
@@ -808,6 +849,19 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
                 );
               })}
             </div>
+            {selectedTier >= 0 && longTerm && (
+              <div className="mb-2">
+                <label className="text-[10px] text-slate-400 block mb-1">{t('boostEndDate')}</label>
+                <p className="text-[9px] text-slate-500 mb-1">{t('boostEndDateHint')}</p>
+                <input type="datetime-local" value={promoEndDate} onChange={(e) => setPromoEndDate(e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+              </div>
+            )}
+            {selectedTier >= 0 && longTerm && (
+              <div className="flex items-center gap-1.5 mb-2 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-lg px-2.5 py-1.5">
+                <Calendar size={11} className="text-fuchsia-400 shrink-0" />
+                <p className="text-[10px] text-fuchsia-300 font-medium">{t('fixedDailyBudget')}: {promoDailyRate} {t('lumoraCoins')} {t('perDay')}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -815,7 +869,8 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         <div className="flex items-center justify-between">
           <span className="text-sm text-slate-400">
             {t('cost')}: <CoinBadge amount={totalCost} />
-            {promoCost > 0 && <span className="text-[10px] text-fuchsia-400 ml-1">(+{promoCost} boost)</span>}
+            {promoUpfront > 0 && <span className="text-[10px] text-fuchsia-400 ml-1">(+{promoUpfront} boost)</span>}
+            {selectedTier >= 0 && longTerm && <span className="text-[10px] text-fuchsia-400 ml-1">({promoDailyRate}{t('perDay')})</span>}
           </span>
           <Button type="submit" disabled={busy}>{busy ? '...' : t('submit')}</Button>
         </div>
