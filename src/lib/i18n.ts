@@ -437,6 +437,10 @@ export const dict = {
     promoteBtn: "Promote Now",
     extendPromotion: "Extend / Apply Promotion",
     extendPromotionHint: "Boost this task so it stays pinned at the top of its category.",
+    cancelBoost: "Cancel Boost",
+    boostLockedMsg: "Minimum 8-day boost required — cannot stop before 8 full days.",
+    boostLockPassed: "8-day lock passed — boost cancelled.",
+    longTermBoostLock: "Long-term boost locks for a strict minimum of 8 days.",
   },
   bn: {
     appName: 'Lumora IT',
@@ -874,6 +878,10 @@ export const dict = {
     promoteBtn: 'এখনই প্রমোট করো',
     extendPromotion: 'প্রমোশন বাড়াও / লাগাও',
     extendPromotionHint: 'কাজটা ক্যাটাগরির সবার উপরে পিন করে রাখতে বুস্ট দাও।',
+    cancelBoost: 'বুস্ট বাতিল করো',
+    boostLockedMsg: 'ন্যূনতম ৮ দিন বুস্ট চালু রাখতে হবে, এর আগে বন্ধ করা যাবে না',
+    boostLockPassed: '৮ দিনের লক শেষ — বুস্ট বাতিল হয়েছে।',
+    longTermBoostLock: 'দীর্ঘমেয়াদী বুস্ট কমপক্ষে ৮ দিন লক থাকবে।',
   },
 } as const;
 

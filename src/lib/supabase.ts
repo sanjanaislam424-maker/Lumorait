@@ -60,6 +60,8 @@ export type TaskRow = {
   daily_slot_limit?: number | null;
   promotion_weight?: number;
   promotion_tier?: string | null;
+  promotion_started_at?: string | null;
+  promotion_locked_until?: string | null;
 };
 
 export type SubmissionRow = {

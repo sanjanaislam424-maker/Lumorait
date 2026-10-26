@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, TrendingUp } from 'lucide-react';
+import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, TrendingUp } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -41,6 +41,16 @@ function isPromotionActive(task: TaskRow | null | undefined): boolean {
   if (!task || !task.is_promoted) return false;
   if (!task.promotion_expires_at) return true;
   return new Date(task.promotion_expires_at).getTime() > Date.now();
+}
+
+function isLongTermTier(tier: { duration_days: number } | null | undefined): boolean {
+  if (!tier) return false;
+  return tier.duration_days === 0 || tier.duration_days > 7;
+}
+
+function isBoostLocked(task: TaskRow | null | undefined): boolean {
+  if (!task || !task.promotion_locked_until) return false;
+  return new Date(task.promotion_locked_until).getTime() > Date.now();
 }
 
 function userTier(profile: Profile | null): 'free' | 'pro' | 'vip' {
@@ -520,7 +530,10 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
     setPromoBusy(true);
     try {
       const tier = promotionTiers[selectedTier];
-      const expiry = tier.duration_days === 0 ? null : new Date(Date.now() + tier.duration_days * 86400000).toISOString();
+      const now = new Date();
+      const longTerm = isLongTermTier(tier);
+      const expiry = tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString();
+      const lockedUntil = longTerm ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
       const newWeight = (task.promotion_weight || 0) + promoCost;
       await supabase.from('tasks').update({
         is_promoted: true,
@@ -528,12 +541,32 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
         promotion_expires_at: expiry,
         promotion_weight: newWeight,
         promotion_tier: ut,
+        promotion_started_at: now.toISOString(),
+        promotion_locked_until: lockedUntil,
       }).eq('id', task.id);
       await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - promoCost }).eq('id', profile.id);
       await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -promoCost, status: 'completed', note: `Boosted: ${task.title}` });
       await refreshProfile();
       notify(microcopy.promotionSuccess(), 'success');
-      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + promoCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut });
+      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + promoCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut, promotion_started_at: now.toISOString(), promotion_locked_until: lockedUntil });
+    } finally { setPromoBusy(false); }
+  };
+
+  const cancelBoost = async () => {
+    if (!task) return;
+    if (isBoostLocked(task)) {
+      notify(t('boostLockedMsg'), 'error');
+      return;
+    }
+    setPromoBusy(true);
+    try {
+      await supabase.from('tasks').update({
+        is_promoted: false,
+        promotion_expires_at: null,
+        promotion_locked_until: null,
+      }).eq('id', task.id);
+      notify(t('boostLockPassed'), 'success');
+      onSave({ ...task, is_promoted: false, promotion_expires_at: null, promotion_locked_until: null });
     } finally { setPromoBusy(false); }
   };
 
@@ -577,10 +610,22 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
                 {task?.promotion_expires_at && ` • ${new Date(task.promotion_expires_at).toLocaleDateString()}`}
               </p>
             )}
+            {currentlyPromoted && isBoostLocked(task) && (
+              <div className="flex items-center gap-1.5 mb-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
+                <Lock size={11} className="text-amber-400 shrink-0" />
+                <p className="text-[10px] text-amber-300 font-medium">{t('boostLockedMsg')}</p>
+              </div>
+            )}
+            {currentlyPromoted && (
+              <Button variant="ghost" className="w-full text-xs mb-2 flex items-center justify-center gap-1.5" disabled={promoBusy || isBoostLocked(task)} onClick={cancelBoost}>
+                <ZapOff size={13} /> {t('cancelBoost')}
+              </Button>
+            )}
             <p className="text-[10px] text-slate-500 mb-2">{t('yourTier')}: <span className={`font-bold ${ut === 'vip' ? 'text-amber-300' : ut === 'pro' ? 'text-cyan-300' : 'text-slate-300'}`}>{tierLabel(t, ut)}</span></p>
             <div className="grid grid-cols-2 gap-2 mb-2">
               {promotionTiers.map((tier, i) => {
                 const cost = tierCost(tier, ut);
+                const longTerm = isLongTermTier(tier);
                 return (
                   <button
                     key={i}
@@ -588,8 +633,12 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
                     onClick={() => setSelectedTier(i)}
                     className={`p-3 rounded-xl border text-left transition ${selectedTier === i ? 'bg-fuchsia-500/15 border-fuchsia-500/50' : 'bg-slate-800/50 border-white/10'}`}
                   >
-                    <p className="text-xs text-white font-medium">{tier.label}</p>
+                    <p className="text-xs text-white font-medium flex items-center gap-1">
+                      {longTerm && <Lock size={9} className="text-amber-400" />}
+                      {tier.label}
+                    </p>
                     <p className="text-[10px] text-fuchsia-300 mt-0.5">+{cost} {t('lumoraCoins')}</p>
+                    {longTerm && <p className="text-[9px] text-amber-400/80 mt-0.5">{t('longTermBoostLock')}</p>}
                   </button>
                 );
               })}
@@ -657,9 +706,12 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
     try {
       const tier = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
       const isPromoted = !!tier;
+      const now = new Date();
+      const longTerm = isLongTermTier(tier);
       const promotionExpiry = tier
-        ? (tier.duration_days === 0 ? null : new Date(Date.now() + tier.duration_days * 86400000).toISOString())
+        ? (tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString())
         : null;
+      const lockedUntil = (isPromoted && longTerm) ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
 
       await supabase.from('tasks').insert({
         creator_id: profile.id,
@@ -677,6 +729,8 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         daily_slot_limit: form.daily_slot_limit ? +form.daily_slot_limit : null,
         promotion_weight: isPromoted ? promoCost : 0,
         promotion_tier: isPromoted ? ut : null,
+        promotion_started_at: isPromoted ? now.toISOString() : null,
+        promotion_locked_until: lockedUntil,
       });
       if (!isAdmin) {
         await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - totalCost }).eq('id', profile.id);
@@ -736,6 +790,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
               </button>
               {promotionTiers.map((tier, i) => {
                 const cost = tierCost(tier, ut);
+                const longTerm = isLongTermTier(tier);
                 return (
                   <button
                     key={i}
@@ -743,8 +798,12 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
                     onClick={() => setSelectedTier(i)}
                     className={`p-3 rounded-xl border text-left transition ${selectedTier === i ? 'bg-fuchsia-500/15 border-fuchsia-500/50' : 'bg-slate-800/50 border-white/10'}`}
                   >
-                    <p className="text-xs text-white font-medium">{tier.label}</p>
+                    <p className="text-xs text-white font-medium flex items-center gap-1">
+                      {longTerm && <Lock size={9} className="text-amber-400" />}
+                      {tier.label}
+                    </p>
                     <p className="text-[10px] text-fuchsia-300 mt-0.5">+{cost} {t('lumoraCoins')}</p>
+                    {longTerm && <p className="text-[9px] text-amber-400/80 mt-0.5">{t('longTermBoostLock')}</p>}
                   </button>
                 );
               })}
