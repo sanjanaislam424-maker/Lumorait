@@ -405,6 +405,13 @@ export const dict = {
     noLogoUploaded: "No logo uploaded yet — showing default",
     uploading: "Uploading...",
     fileOrUrl: "Upload from device OR paste image URL",
+    howToComplete: "How to Complete Tasks",
+    videoTutorialUrl: "Video Tutorial URL (YouTube embed link)",
+    videoTutorialHint: "Paste a YouTube video URL — it shows at the top of this category's task page.",
+    editTaskInline: "Edit Task",
+    yourTasksFirst: "Your tasks",
+    otherTasks: "Other tasks",
+    loadingTasks: "Loading tasks...",
   },
   bn: {
     appName: 'Lumora IT',
@@ -810,6 +817,13 @@ export const dict = {
     noLogoUploaded: 'কোনো লোগো আপলোড করা নাই — ডিফল্ট দেখাচ্ছে',
     uploading: 'আপলোড হচ্ছে...',
     fileOrUrl: 'ডিভাইস থেকে আপলোড অথবা ইমেজ লিংক দাও',
+    howToComplete: 'কাজ কীভাবে করবে',
+    videoTutorialUrl: 'ভিডিও টিউটোরিয়াল লিংক (YouTube embed)',
+    videoTutorialHint: 'YouTube ভিডিও লিংক দাও — এই ক্যাটাগরির উপরে দেখাবে।',
+    editTaskInline: 'কাজ এডিট করুন',
+    yourTasksFirst: 'তোমার কাজ',
+    otherTasks: 'অন্য কাজ',
+    loadingTasks: 'কাজ আনতেছি...',
   },
 } as const;
 

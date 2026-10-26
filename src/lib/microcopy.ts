@@ -46,6 +46,36 @@ const CATEGORY_EMPTY = [
   'এই রে ভাই! কাজ তো এখনো আসে নাই! একটু পরে আবার হাজির হইও! 🕐',
 ];
 
+const LOADING_TASKS = [
+  'কাজ আনতেছি মামা, একটু ধৈর্য ধরো! চা বানাইতে পারো এই ফাঁকে! 🍵',
+  'লোড হইতেছে ওস্তাদ! তাড়াহুড়া করলে কাজ পালাইবো! 🏃',
+  'একটু সযত্নে কাজ সাজাইতেছি, চোখ বন্ধ করে তিন গুনো! 🧘',
+];
+
+const ERROR_GENERIC = [
+  'আরে মামা, এইবার একটু ঝামেলা হইছে! একটু পরে আবার ট্রাই করো! 🔧',
+  'কিছু একটা গোলমাল হইছে ওস্তাদ! রিফ্রেশ দিয়া আবার দেখো! 🔄',
+  'নেট একটু মন্দ মামা! চা খাইয়া এসো, ততক্ষণে ঠিক হইয়া যাবে! 📶',
+];
+
+const TASK_EDIT_SUCCESS = [
+  'কাজ এডিট হইয়া গেছে মামা! এখন সব ঠিকঠাক, চালিয়ে দাও! ✅🔥',
+  'এডিট কামাল ওস্তাদ! কাজটা এবার ঝকঝকে! ✨',
+  'হুশিয়ার! কাজ আপডেট হইছে, এবার রেডি হও! 🎯',
+];
+
+const YOUR_TASKS_FIRST = [
+  'তোমার কাজ সবার উপরে, মামা! প্রাইওরিটি তো তোমারই! 👑',
+  'নিজের কাজ আগে, তারপর বাকি! এহেন আইন! ⚖️',
+  'তোমার পোস্ট করা কাজ একদম টপে — রাজার মতো বসো! 🫅',
+];
+
+const VIDEO_TUTORIAL_HEADER = [
+  'কাজ কীভাবে করবে? ভিডিও দেখে নাও, তারপর হাত পাতো! 🎬',
+  'একবার দেখে নাও মামা, তারপর কাজে নামো — ভুল হবে না! 👀',
+  'ভিডিও টিউটোরিয়াল চালাও, তারপর কাজ ধরো — একদম ঝটপট! ⚡',
+];
+
 function randomPick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -60,4 +90,9 @@ export const microcopy = {
   tasksHeader: () => TASKS_HEADER,
   tasksCounter: (n: number) => TASKS_COUNTER(n),
   categoryEmpty: () => randomPick(CATEGORY_EMPTY),
+  loadingTasks: () => randomPick(LOADING_TASKS),
+  errorGeneric: () => randomPick(ERROR_GENERIC),
+  taskEditSuccess: () => randomPick(TASK_EDIT_SUCCESS),
+  yourTasksFirst: () => randomPick(YOUR_TASKS_FIRST),
+  videoTutorialHeader: () => randomPick(VIDEO_TUTORIAL_HEADER),
 };
