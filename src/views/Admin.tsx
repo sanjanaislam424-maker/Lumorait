@@ -682,8 +682,8 @@ function SettingsTab() {
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileRef = useRef<HTMLInputElement>(null);
-  const [promoTiers, setPromoTiers] = useState<{ duration_days: number; coin_cost: number; label: string }[]>([]);
-  const [newTier, setNewTier] = useState({ duration_days: 1, coin_cost: 50, label: '' });
+  const [promoTiers, setPromoTiers] = useState<{ duration_days: number; label: string; free_cost: number; pro_cost: number; vip_cost: number }[]>([]);
+  const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25 });
 
   useEffect(() => {
     (async () => {
@@ -781,32 +781,57 @@ function SettingsTab() {
         {promoTiers.length === 0 ? (
           <EmptyState message={t('promotionTiers')} />
         ) : promoTiers.map((tier, i) => (
-          <div key={i} className="bg-slate-800/50 border border-fuchsia-500/20 rounded-xl p-3 flex items-center justify-between">
-            <div className="flex-1 min-w-0">
+          <div key={i} className="bg-slate-800/50 border border-fuchsia-500/20 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-white font-medium flex items-center gap-1.5">
                 <Zap size={12} className="text-fuchsia-400" /> {tier.label}
+                <span className="text-[10px] text-slate-500">{tier.duration_days === 0 ? t('unlimitedDuration') : `${tier.duration_days} ${t('day')}`}</span>
               </p>
-              <p className="text-xs text-slate-500">
-                {tier.duration_days === 0 ? t('unlimitedDuration') : `${tier.duration_days} ${t('day')}`} • {tier.coin_cost} {t('lumoraCoins')}
-              </p>
+              <Button variant="danger" className="text-xs px-2 py-1" onClick={() => {
+                setPromoTiers(promoTiers.filter((_, idx) => idx !== i));
+              }}><Trash2 size={14} /></Button>
             </div>
-            <Button variant="danger" className="text-xs px-2 py-1" onClick={() => {
-              setPromoTiers(promoTiers.filter((_, idx) => idx !== i));
-            }}><Trash2 size={14} /></Button>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-500 block">{t('tierFree')}</label>
+                <input type="number" min={0} value={tier.free_cost} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, free_cost: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] text-cyan-400 block">{t('tierPro')}</label>
+                <input type="number" min={0} value={tier.pro_cost} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, pro_cost: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] text-amber-400 block">{t('tierVip')}</label>
+                <input type="number" min={0} value={tier.vip_cost} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, vip_cost: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
+              </div>
+            </div>
           </div>
         ))}
       </div>
       <div className="space-y-2 pt-3 border-t border-white/10">
         <p className="text-xs text-fuchsia-400 font-semibold">{t('addTier')}</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <input value={newTier.label} onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} placeholder={t('tierLabel')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           <input type="number" min={0} value={newTier.duration_days} onChange={(e) => setNewTier({ ...newTier, duration_days: +e.target.value })} placeholder={t('tierDurationDays')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          <input type="number" min={1} value={newTier.coin_cost} onChange={(e) => setNewTier({ ...newTier, coin_cost: +e.target.value })} placeholder={t('tierCoinCost')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="text-[10px] text-slate-500 block mb-0.5">{t('freeCost')}</label>
+            <input type="number" min={0} value={newTier.free_cost} onChange={(e) => setNewTier({ ...newTier, free_cost: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-[10px] text-cyan-400 block mb-0.5">{t('proCost')}</label>
+            <input type="number" min={0} value={newTier.pro_cost} onChange={(e) => setNewTier({ ...newTier, pro_cost: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-[10px] text-amber-400 block mb-0.5">{t('vipCost')}</label>
+            <input type="number" min={0} value={newTier.vip_cost} onChange={(e) => setNewTier({ ...newTier, vip_cost: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
         </div>
         <Button variant="ghost" className="w-full text-sm flex items-center justify-center gap-1.5" onClick={() => {
           if (!newTier.label.trim()) { notify(t('tierLabel'), 'error'); return; }
           setPromoTiers([...promoTiers, { ...newTier, label: newTier.label.trim() }]);
-          setNewTier({ duration_days: 1, coin_cost: 50, label: '' });
+          setNewTier({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25 });
         }}>
           <Plus size={14} /> {t('addTier')}
         </Button>

@@ -43,6 +43,32 @@ function isPromotionActive(task: TaskRow): boolean {
   return new Date(task.promotion_expires_at).getTime() > Date.now();
 }
 
+function userTier(profile: Profile | null): 'free' | 'pro' | 'vip' {
+  const tier = profile?.membership_tier || 'free';
+  if (tier === 'vip') return 'vip';
+  if (tier === 'pro') return 'pro';
+  return 'free';
+}
+
+function tierCost(tier: { free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number }, ut: 'free' | 'pro' | 'vip'): number {
+  if (ut === 'vip' && tier.vip_cost != null) return tier.vip_cost;
+  if (ut === 'pro' && tier.pro_cost != null) return tier.pro_cost;
+  if (tier.free_cost != null) return tier.free_cost;
+  return tier.coin_cost || 0;
+}
+
+function tierBadgeClass(tier: string | null | undefined): string {
+  if (tier === 'vip') return 'bg-gradient-to-r from-amber-500/30 to-yellow-500/20 text-amber-200 border-amber-500/30';
+  if (tier === 'pro') return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+  return 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30';
+}
+
+function tierLabel(t: (k: any) => string, tier: string | null | undefined): string {
+  if (tier === 'vip') return t('tierVip');
+  if (tier === 'pro') return t('tierPro');
+  return t('tierFree');
+}
+
 export function Tasks() {
   const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
@@ -398,8 +424,8 @@ function TaskCard({ task, onAccept, onChat, isOwner, isPromoted, onEdit }: { tas
             </span>
           )}
           {isPromoted && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-bold">
-              <Zap size={10} /> {t('boosted')}
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${tierBadgeClass(task.promotion_tier)}`}>
+              <Zap size={10} /> {t('boosted')} {tierLabel(t, task.promotion_tier)}
             </span>
           )}
           {isOwner && (
@@ -440,8 +466,12 @@ function TaskCard({ task, onAccept, onChat, isOwner, isPromoted, onEdit }: { tas
 }
 
 function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClose: () => void; onSave: (task: TaskRow) => void }) {
-  const { t } = useApp();
+  const { t, profile, refreshProfile } = useApp();
+  const { notify } = useToast();
   const [form, setForm] = useState({ title: '', description: '', target_url: '', reward_coins: 10, slots: 1 });
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number }[]>([]);
+  const [selectedTier, setSelectedTier] = useState<number>(-1);
+  const [promoBusy, setPromoBusy] = useState(false);
 
   useEffect(() => {
     if (task) {
@@ -452,8 +482,22 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
         reward_coins: task.reward_coins,
         slots: task.slots,
       });
+      setSelectedTier(-1);
     }
   }, [task]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('app_settings').select('promotion_tiers').eq('id', 1).maybeSingle();
+      if (data?.promotion_tiers && Array.isArray(data.promotion_tiers)) {
+        setPromotionTiers(data.promotion_tiers);
+      }
+    })();
+  }, []);
+
+  const ut = userTier(profile);
+  const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
+  const currentlyPromoted = isPromotionActive(task);
 
   const handleSave = () => {
     if (!task) return;
@@ -465,6 +509,32 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
       reward_coins: form.reward_coins,
       slots: form.slots,
     });
+  };
+
+  const applyPromotion = async () => {
+    if (!task || !profile || selectedTier < 0) return;
+    if (profile.lumora_coins < promoCost) {
+      notify(microcopy.notEnoughPromoCoins(), 'error');
+      return;
+    }
+    setPromoBusy(true);
+    try {
+      const tier = promotionTiers[selectedTier];
+      const expiry = tier.duration_days === 0 ? null : new Date(Date.now() + tier.duration_days * 86400000).toISOString();
+      const newWeight = (task.promotion_weight || 0) + promoCost;
+      await supabase.from('tasks').update({
+        is_promoted: true,
+        promotion_coins: (task.promotion_coins || 0) + promoCost,
+        promotion_expires_at: expiry,
+        promotion_weight: newWeight,
+        promotion_tier: ut,
+      }).eq('id', task.id);
+      await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - promoCost }).eq('id', profile.id);
+      await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -promoCost, status: 'completed', note: `Boosted: ${task.title}` });
+      await refreshProfile();
+      notify(microcopy.promotionSuccess(), 'success');
+      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + promoCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut });
+    } finally { setPromoBusy(false); }
   };
 
   return (
@@ -492,6 +562,46 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
             <input type="number" min={1} value={form.slots} onChange={(e) => setForm({ ...form, slots: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
         </div>
+
+        {/* In-line Promotion / Boost */}
+        {promotionTiers.length > 0 && (
+          <div className="pt-3 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap size={16} className="text-fuchsia-400" />
+              <p className="text-sm font-semibold text-fuchsia-300">{t('extendPromotion')}</p>
+            </div>
+            <p className="text-xs text-slate-400 mb-1">{t('extendPromotionHint')}</p>
+            {currentlyPromoted && (
+              <p className="text-[10px] text-fuchsia-300 mb-2 flex items-center gap-1">
+                <Zap size={10} /> {t('boosted')} {tierLabel(t, task?.promotion_tier)}
+                {task?.promotion_expires_at && ` • ${new Date(task.promotion_expires_at).toLocaleDateString()}`}
+              </p>
+            )}
+            <p className="text-[10px] text-slate-500 mb-2">{t('yourTier')}: <span className={`font-bold ${ut === 'vip' ? 'text-amber-300' : ut === 'pro' ? 'text-cyan-300' : 'text-slate-300'}`}>{tierLabel(t, ut)}</span></p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {promotionTiers.map((tier, i) => {
+                const cost = tierCost(tier, ut);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSelectedTier(i)}
+                    className={`p-3 rounded-xl border text-left transition ${selectedTier === i ? 'bg-fuchsia-500/15 border-fuchsia-500/50' : 'bg-slate-800/50 border-white/10'}`}
+                  >
+                    <p className="text-xs text-white font-medium">{tier.label}</p>
+                    <p className="text-[10px] text-fuchsia-300 mt-0.5">+{cost} {t('lumoraCoins')}</p>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedTier >= 0 && (
+              <Button className="w-full text-sm flex items-center justify-center gap-1.5" disabled={promoBusy} onClick={applyPromotion}>
+                <Zap size={14} /> {t('promoteBtn')} (+{promoCost})
+              </Button>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button variant="ghost" className="flex-1" onClick={onClose}>{t('cancel')}</Button>
           <Button className="flex-1" onClick={handleSave}>{t('save')}</Button>
@@ -508,7 +618,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<{ name: string; label: string }[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
-  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; coin_cost: number; label: string }[]>([]);
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number }[]>([]);
   const [selectedTier, setSelectedTier] = useState<number>(-1);
 
   useEffect(() => {
@@ -529,8 +639,9 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   }, []);
 
   const isAdmin = profile?.role === 'admin';
+  const ut = userTier(profile);
   const taskCost = isAdmin ? 0 : form.reward;
-  const promoCost = selectedTier >= 0 ? promotionTiers[selectedTier]?.coin_cost || 0 : 0;
+  const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
   const totalCost = taskCost + promoCost;
 
   const submit = async (e: React.FormEvent) => {
@@ -565,6 +676,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         promotion_expires_at: promotionExpiry,
         daily_slot_limit: form.daily_slot_limit ? +form.daily_slot_limit : null,
         promotion_weight: isPromoted ? promoCost : 0,
+        promotion_tier: isPromoted ? ut : null,
       });
       if (!isAdmin) {
         await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - totalCost }).eq('id', profile.id);
@@ -611,7 +723,8 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
               <Zap size={16} className="text-fuchsia-400" />
               <p className="text-sm font-semibold text-fuchsia-300">{t('promoteTask')}</p>
             </div>
-            <p className="text-xs text-slate-400 mb-2">{t('promoteTaskDesc')}</p>
+            <p className="text-xs text-slate-400 mb-1">{t('promoteTaskDesc')}</p>
+            <p className="text-[10px] text-slate-500 mb-2">{t('yourTier')}: <span className={`font-bold ${ut === 'vip' ? 'text-amber-300' : ut === 'pro' ? 'text-cyan-300' : 'text-slate-300'}`}>{tierLabel(t, ut)}</span></p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -621,17 +734,20 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
                 <p className="text-xs text-white font-medium">{t('noPromotion')}</p>
                 <p className="text-[10px] text-slate-400 mt-0.5">+0 {t('lumoraCoins')}</p>
               </button>
-              {promotionTiers.map((tier, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSelectedTier(i)}
-                  className={`p-3 rounded-xl border text-left transition ${selectedTier === i ? 'bg-fuchsia-500/15 border-fuchsia-500/50' : 'bg-slate-800/50 border-white/10'}`}
-                >
-                  <p className="text-xs text-white font-medium">{tier.label}</p>
-                  <p className="text-[10px] text-fuchsia-300 mt-0.5">+{tier.coin_cost} {t('lumoraCoins')}</p>
-                </button>
-              ))}
+              {promotionTiers.map((tier, i) => {
+                const cost = tierCost(tier, ut);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSelectedTier(i)}
+                    className={`p-3 rounded-xl border text-left transition ${selectedTier === i ? 'bg-fuchsia-500/15 border-fuchsia-500/50' : 'bg-slate-800/50 border-white/10'}`}
+                  >
+                    <p className="text-xs text-white font-medium">{tier.label}</p>
+                    <p className="text-[10px] text-fuchsia-300 mt-0.5">+{cost} {t('lumoraCoins')}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
