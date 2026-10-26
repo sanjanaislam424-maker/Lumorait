@@ -450,6 +450,10 @@ export const dict = {
     fixedDailyBudget: "Fixed daily budget",
     perDay: "/day",
     boostAutoEnds: "Auto-stops at selected end date.",
+    phase1Label: "Phase 1: first 8 days",
+    phase2Label: "Phase 2: day 9+",
+    phase1AdminHint: "Phase 1 rate (first 8 days) is automatically the 1-day tier cost — no separate field needed.",
+    phase2AdminHint: "Rate charged per day from day 9 onward (after the 8-day lock). Users can cancel after this point.",
   },
   bn: {
     appName: 'Lumora IT',
@@ -900,6 +904,10 @@ export const dict = {
     fixedDailyBudget: 'ফিক্সড ডেইলি বাজেট',
     perDay: '/দিন',
     boostAutoEnds: 'নির্বাচিত শেষ তারিখে অটো-স্টপ।',
+    phase1Label: 'ফেজ ১: প্রথম ৮ দিন',
+    phase2Label: 'ফেজ ২: ৯ম দিন+',
+    phase1AdminHint: 'ফেজ ১ রেট (প্রথম ৮ দিন) স্বয়ংক্রিয়ভাবে ১-দিন টিয়ারের খরচ — আলাদা কোনো ফিল্ড লাগে না।',
+    phase2AdminHint: '৮ দিন লক শেষে ৯ম দিন থেকে প্রতিদিন এই রেট কাটবে। এরপর ইউজার ম্যানুয়ালি বাতিল করতে পারবে।',
   },
 } as const;
 

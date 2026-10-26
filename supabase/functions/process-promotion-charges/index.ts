@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
     // Fetch all active long-term promotions (those with a daily rate)
     const { data: tasks, error } = await supabase
       .from("tasks")
-      .select("id, creator_id, title, promotion_daily_rate, promotion_end_at, promotion_last_charged_at, promotion_started_at, promotion_locked_until, promotion_coins, promotion_weight")
+      .select("id, creator_id, title, promotion_daily_rate, promotion_end_at, promotion_last_charged_at, promotion_started_at, promotion_locked_until, promotion_coins, promotion_weight, promotion_tier")
       .eq("is_promoted", true)
       .not("promotion_daily_rate", "is", null);
 
@@ -36,13 +36,27 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Pre-fetch app_settings once for Phase 2 rate lookups
+    const { data: settings } = await supabase
+      .from("app_settings")
+      .select("promotion_tiers")
+      .eq("id", 1)
+      .maybeSingle();
+    const tiers = settings?.promotion_tiers as Array<{
+      duration_days?: number;
+      daily_rate_after_lock?: number;
+    }> | null;
+    // Find the long-term tier's daily_rate_after_lock
+    const longTermTier = tiers?.find((t) => t.duration_days === 0 || t.duration_days > 7);
+    const globalAfterLockRate = longTermTier?.daily_rate_after_lock ?? null;
+
     let charged = 0;
     let stopped = 0;
     const results: { taskId: string; action: string }[] = [];
 
     for (const task of tasks ?? []) {
       const taskId = task.id;
-      const dailyRate = task.promotion_daily_rate ?? 0;
+      const phase1Rate = task.promotion_daily_rate ?? 0;
 
       // Check if promotion_end_at has passed -> auto-stop
       if (task.promotion_end_at && new Date(task.promotion_end_at).getTime() <= now.getTime()) {
@@ -62,27 +76,11 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Determine rate: use daily_rate_after_lock if 8-day lock has passed
+      // Phase 1 (first 8 days): charge the stored promotion_daily_rate (= 1-day tier cost)
+      // Phase 2 (day 9+): charge the admin-configured daily_rate_after_lock
       const startedAt = task.promotion_started_at ? new Date(task.promotion_started_at) : null;
       const lockPassed = startedAt && (now.getTime() - startedAt.getTime()) >= 8 * DAY_MS;
-
-      // Fetch the tier's daily_rate_after_lock from app_settings if lock passed
-      let chargeRate = dailyRate;
-      if (lockPassed) {
-        const { data: settings } = await supabase
-          .from("app_settings")
-          .select("promotion_tiers")
-          .eq("id", 1)
-          .maybeSingle();
-        const tiers = settings?.promotion_tiers as Array<{ daily_rate?: number; daily_rate_after_lock?: number }> | null;
-        if (tiers && Array.isArray(tiers)) {
-          // Find the matching tier by daily_rate (the one used for this promotion)
-          const matchTier = tiers.find((t) => t.daily_rate === dailyRate);
-          if (matchTier?.daily_rate_after_lock != null) {
-            chargeRate = matchTier.daily_rate_after_lock;
-          }
-        }
-      }
+      const chargeRate = lockPassed ? (globalAfterLockRate ?? phase1Rate) : phase1Rate;
 
       // Deduct coins from the task creator's balance
       const { data: profile } = await supabase
@@ -111,7 +109,7 @@ Deno.serve(async (req: Request) => {
       }).eq("id", taskId);
 
       charged += 1;
-      results.push({ taskId, action: `charged_${chargeRate}` });
+      results.push({ taskId, action: `charged_${chargeRate}${lockPassed ? "_phase2" : "_phase1"}` });
     }
 
     return new Response(JSON.stringify({ processed: tasks?.length ?? 0, charged, stopped, results }), {

@@ -48,8 +48,10 @@ function isLongTermTier(tier: { duration_days: number } | null | undefined): boo
   return tier.duration_days === 0 || tier.duration_days > 7;
 }
 
-function tierDailyRate(tier: { daily_rate?: number; daily_rate_after_lock?: number }, ut: 'free' | 'pro' | 'vip'): number {
-  return tier.daily_rate ?? 0;
+function oneDayTierCost(tiers: { duration_days?: number; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number }[], ut: 'free' | 'pro' | 'vip'): number {
+  const oneDay = tiers.find((t) => t.duration_days === 1);
+  if (oneDay) return tierCost(oneDay, ut);
+  return 0;
 }
 
 function isBoostLocked(task: TaskRow | null | undefined): boolean {
@@ -515,7 +517,8 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
   const selectedTierObj = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
   const longTerm = isLongTermTier(selectedTierObj);
   const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
-  const promoDailyRate = selectedTier >= 0 ? tierDailyRate(promotionTiers[selectedTier] || {}, ut) : 0;
+  const phase1Rate = oneDayTierCost(promotionTiers, ut);
+  const phase2Rate = selectedTier >= 0 ? (promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : 0;
   const currentlyPromoted = isPromotionActive(task);
 
   const handleSave = () => {
@@ -545,9 +548,9 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
         ? (promoEndDate ? new Date(promoEndDate).toISOString() : null)
         : (tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString());
       const lockedUntil = lt ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
-      const dailyRate = lt ? tierDailyRate(tier, ut) : 0;
+      const phase1 = lt ? phase1Rate : 0;
       const upfrontCost = lt ? 0 : promoCost;
-      const newWeight = (task.promotion_weight || 0) + (lt ? dailyRate : promoCost);
+      const newWeight = (task.promotion_weight || 0) + (lt ? phase1 : promoCost);
       await supabase.from('tasks').update({
         is_promoted: true,
         promotion_coins: (task.promotion_coins || 0) + upfrontCost,
@@ -556,7 +559,7 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
         promotion_tier: ut,
         promotion_started_at: now.toISOString(),
         promotion_locked_until: lockedUntil,
-        promotion_daily_rate: dailyRate || null,
+        promotion_daily_rate: phase1 || null,
         promotion_end_at: expiry,
         promotion_last_charged_at: lt ? now.toISOString() : null,
       }).eq('id', task.id);
@@ -566,7 +569,7 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
         await refreshProfile();
       }
       notify(microcopy.promotionSuccess(), 'success');
-      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + upfrontCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut, promotion_started_at: now.toISOString(), promotion_locked_until: lockedUntil, promotion_daily_rate: dailyRate || null, promotion_end_at: expiry });
+      onSave({ ...task, is_promoted: true, promotion_coins: (task.promotion_coins || 0) + upfrontCost, promotion_expires_at: expiry, promotion_weight: newWeight, promotion_tier: ut, promotion_started_at: now.toISOString(), promotion_locked_until: lockedUntil, promotion_daily_rate: phase1 || null, promotion_end_at: expiry });
     } finally { setPromoBusy(false); }
   };
 
@@ -671,12 +674,12 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
             {selectedTier >= 0 && longTerm && (
               <div className="flex items-center gap-1.5 mb-2 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-lg px-2.5 py-1.5">
                 <Calendar size={11} className="text-fuchsia-400 shrink-0" />
-                <p className="text-[10px] text-fuchsia-300 font-medium">{t('fixedDailyBudget')}: {promoDailyRate} {t('lumoraCoins')} {t('perDay')}</p>
+                <p className="text-[10px] text-fuchsia-300 font-medium">{t('fixedDailyBudget')}: {phase1Rate} {t('lumoraCoins')} {t('perDay')} ({t('phase1Label')}) → {phase2Rate} {t('lumoraCoins')} {t('perDay')} ({t('phase2Label')})</p>
               </div>
             )}
             {selectedTier >= 0 && (
               <Button className="w-full text-sm flex items-center justify-center gap-1.5" disabled={promoBusy} onClick={applyPromotion}>
-                <Zap size={14} /> {t('promoteBtn')} {longTerm ? `(${promoDailyRate}${t('perDay')})` : `(+${promoCost})`}
+                <Zap size={14} /> {t('promoteBtn')} {longTerm ? `(${phase1Rate}${t('perDay')} → ${phase2Rate}${t('perDay')})` : `(+${promoCost})`}
               </Button>
             )}
           </div>
@@ -725,7 +728,8 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const selectedTierObj = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
   const longTerm = isLongTermTier(selectedTierObj);
   const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
-  const promoDailyRate = selectedTier >= 0 ? tierDailyRate(promotionTiers[selectedTier] || {}, ut) : 0;
+  const phase1Rate = oneDayTierCost(promotionTiers, ut);
+  const phase2Rate = selectedTier >= 0 ? (promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : 0;
   const promoUpfront = longTerm ? 0 : promoCost;
   const totalCost = taskCost + promoUpfront;
 
@@ -744,7 +748,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
       const isPromoted = !!tier;
       const now = new Date();
       const lt = isLongTermTier(tier);
-      const dailyRate = lt ? tierDailyRate(tier!, ut) : 0;
+      const phase1 = lt ? phase1Rate : 0;
       const upfrontPromo = lt ? 0 : promoCost;
       const promotionExpiry = lt
         ? (promoEndDate ? new Date(promoEndDate).toISOString() : null)
@@ -765,11 +769,11 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         promotion_coins: upfrontPromo,
         promotion_expires_at: promotionExpiry,
         daily_slot_limit: form.daily_slot_limit ? +form.daily_slot_limit : null,
-        promotion_weight: isPromoted ? (lt ? dailyRate : promoCost) : 0,
+        promotion_weight: isPromoted ? (lt ? phase1 : promoCost) : 0,
         promotion_tier: isPromoted ? ut : null,
         promotion_started_at: isPromoted ? now.toISOString() : null,
         promotion_locked_until: lockedUntil,
-        promotion_daily_rate: lt ? dailyRate || null : null,
+        promotion_daily_rate: lt ? phase1 || null : null,
         promotion_end_at: lt ? promotionExpiry : null,
         promotion_last_charged_at: lt ? now.toISOString() : null,
       });
@@ -859,7 +863,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
             {selectedTier >= 0 && longTerm && (
               <div className="flex items-center gap-1.5 mb-2 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-lg px-2.5 py-1.5">
                 <Calendar size={11} className="text-fuchsia-400 shrink-0" />
-                <p className="text-[10px] text-fuchsia-300 font-medium">{t('fixedDailyBudget')}: {promoDailyRate} {t('lumoraCoins')} {t('perDay')}</p>
+                <p className="text-[10px] text-fuchsia-300 font-medium">{t('fixedDailyBudget')}: {phase1Rate} {t('lumoraCoins')} {t('perDay')} ({t('phase1Label')}) → {phase2Rate} {t('lumoraCoins')} {t('perDay')} ({t('phase2Label')})</p>
               </div>
             )}
           </div>
@@ -870,7 +874,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
           <span className="text-sm text-slate-400">
             {t('cost')}: <CoinBadge amount={totalCost} />
             {promoUpfront > 0 && <span className="text-[10px] text-fuchsia-400 ml-1">(+{promoUpfront} boost)</span>}
-            {selectedTier >= 0 && longTerm && <span className="text-[10px] text-fuchsia-400 ml-1">({promoDailyRate}{t('perDay')})</span>}
+            {selectedTier >= 0 && longTerm && <span className="text-[10px] text-fuchsia-400 ml-1">({phase1Rate}{t('perDay')} → {phase2Rate}{t('perDay')})</span>}
           </span>
           <Button type="submit" disabled={busy}>{busy ? '...' : t('submit')}</Button>
         </div>

@@ -682,8 +682,8 @@ function SettingsTab() {
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileRef = useRef<HTMLInputElement>(null);
-  const [promoTiers, setPromoTiers] = useState<{ duration_days: number; label: string; free_cost: number; pro_cost: number; vip_cost: number; daily_rate?: number; daily_rate_after_lock?: number }[]>([]);
-  const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate: 0, daily_rate_after_lock: 0 });
+  const [promoTiers, setPromoTiers] = useState<{ duration_days: number; label: string; free_cost: number; pro_cost: number; vip_cost: number; daily_rate_after_lock?: number }[]>([]);
+  const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate_after_lock: 0 });
 
   useEffect(() => {
     (async () => {
@@ -806,15 +806,11 @@ function SettingsTab() {
               </div>
             </div>
             {(tier.duration_days === 0 || tier.duration_days > 7) && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <label className="text-[10px] text-fuchsia-400 block">{t('dailyRate')} {t('perDay')}</label>
-                  <input type="number" min={0} value={tier.daily_rate ?? 0} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, daily_rate: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-fuchsia-400 block">{t('dailyRateAfterLock')} {t('perDay')}</label>
-                  <input type="number" min={0} value={tier.daily_rate_after_lock ?? 0} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, daily_rate_after_lock: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
-                </div>
+              <div className="mt-2">
+                <label className="text-[10px] text-fuchsia-400 block">{t('dailyRateAfterLock')} {t('perDay')}</label>
+                <p className="text-[9px] text-slate-500 mb-1">{t('phase2AdminHint')}</p>
+                <input type="number" min={0} value={tier.daily_rate_after_lock ?? 0} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, daily_rate_after_lock: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
+                <p className="text-[9px] text-amber-400/70 mt-1">{t('phase1AdminHint')}</p>
               </div>
             )}
           </div>
@@ -841,21 +837,17 @@ function SettingsTab() {
           </div>
         </div>
         {(newTier.duration_days === 0 || newTier.duration_days > 7) && (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-fuchsia-400 block mb-0.5">{t('dailyRate')} {t('perDay')}</label>
-              <input type="number" min={0} value={newTier.daily_rate} onChange={(e) => setNewTier({ ...newTier, daily_rate: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-            </div>
-            <div>
-              <label className="text-[10px] text-fuchsia-400 block mb-0.5">{t('dailyRateAfterLock')} {t('perDay')}</label>
-              <input type="number" min={0} value={newTier.daily_rate_after_lock} onChange={(e) => setNewTier({ ...newTier, daily_rate_after_lock: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-            </div>
+          <div>
+            <label className="text-[10px] text-fuchsia-400 block mb-0.5">{t('dailyRateAfterLock')} {t('perDay')}</label>
+            <p className="text-[9px] text-slate-500 mb-1">{t('phase2AdminHint')}</p>
+            <input type="number" min={0} value={newTier.daily_rate_after_lock} onChange={(e) => setNewTier({ ...newTier, daily_rate_after_lock: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+            <p className="text-[9px] text-amber-400/70 mt-1">{t('phase1AdminHint')}</p>
           </div>
         )}
         <Button variant="ghost" className="w-full text-sm flex items-center justify-center gap-1.5" onClick={() => {
           if (!newTier.label.trim()) { notify(t('tierLabel'), 'error'); return; }
           setPromoTiers([...promoTiers, { ...newTier, label: newTier.label.trim() }]);
-          setNewTier({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate: 0, daily_rate_after_lock: 0 });
+          setNewTier({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate_after_lock: 0 });
         }}>
           <Plus size={14} /> {t('addTier')}
         </Button>
