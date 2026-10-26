@@ -1198,7 +1198,7 @@ function TaskManagementTab() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => startEditVideo(cat)} title={t('videoTutorialUrl')}>
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => startEditVideo(cat)}>
                     <Video size={14} />
                   </Button>
                   <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleCategory(cat)}>

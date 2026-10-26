@@ -21,7 +21,7 @@ async function fetchAdminNumber(method: string): Promise<string | null> {
   const col = ADMIN_NUMBER_KEYS[method];
   if (!col) return null;
   const { data } = await supabase.from('app_settings').select(col).eq('id', 1).maybeSingle();
-  return data ? (data[col] as string) : null;
+  return data ? (data[col as keyof typeof data] as string) : null;
 }
 
 export function Wallet() {

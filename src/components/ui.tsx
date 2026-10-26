@@ -35,7 +35,7 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   return <div className={`neon-card rounded-2xl p-5 ${className}`}>{children}</div>;
 }
 
-export function Button({ children, onClick, variant = 'primary', className = '', type = 'button', disabled }: { children: ReactNode; onClick?: () => void; variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; className?: string; type?: 'button' | 'submit'; disabled?: boolean }) {
+export function Button({ children, onClick, variant = 'primary', className = '', type = 'button', disabled, style }: { children: ReactNode; onClick?: () => void; variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; className?: string; type?: 'button' | 'submit'; disabled?: boolean; style?: React.CSSProperties }) {
   const variants = {
     primary: 'neon-btn-primary',
     secondary: 'neon-btn-ghost',
@@ -48,6 +48,7 @@ export function Button({ children, onClick, variant = 'primary', className = '',
       type={type}
       onClick={onClick}
       disabled={disabled}
+      style={style}
       className={`px-4 py-2.5 rounded-xl font-medium transition disabled:opacity-50 ${variants[variant]} ${className}`}
     >
       {children}
