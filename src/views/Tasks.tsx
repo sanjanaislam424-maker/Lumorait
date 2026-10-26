@@ -485,7 +485,7 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
   const { t, profile, refreshProfile } = useApp();
   const { notify } = useToast();
   const [form, setForm] = useState({ title: '', description: '', target_url: '', reward_coins: 10, slots: 1 });
-  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number }[]>([]);
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number; daily_rate_after_lock_free?: number; daily_rate_after_lock_pro?: number; daily_rate_after_lock_vip?: number }[]>([]);
   const [selectedTier, setSelectedTier] = useState<number>(-1);
   const [promoEndDate, setPromoEndDate] = useState<string>('');
   const [promoBusy, setPromoBusy] = useState(false);
@@ -518,7 +518,7 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
   const longTerm = isLongTermTier(selectedTierObj);
   const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
   const phase1Rate = oneDayTierCost(promotionTiers, ut);
-  const phase2Rate = selectedTier >= 0 ? (promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : 0;
+  const phase2Rate = selectedTier >= 0 ? (ut === 'vip' ? (promotionTiers[selectedTier]?.daily_rate_after_lock_vip ?? promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : ut === 'pro' ? (promotionTiers[selectedTier]?.daily_rate_after_lock_pro ?? promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : (promotionTiers[selectedTier]?.daily_rate_after_lock_free ?? promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0)) : 0;
   const currentlyPromoted = isPromotionActive(task);
 
   const handleSave = () => {
@@ -701,7 +701,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<{ name: string; label: string }[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
-  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number }[]>([]);
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number; daily_rate_after_lock_free?: number; daily_rate_after_lock_pro?: number; daily_rate_after_lock_vip?: number }[]>([]);
   const [selectedTier, setSelectedTier] = useState<number>(-1);
   const [promoEndDate, setPromoEndDate] = useState<string>('');
 
@@ -729,7 +729,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const longTerm = isLongTermTier(selectedTierObj);
   const promoCost = selectedTier >= 0 ? tierCost(promotionTiers[selectedTier] || {}, ut) : 0;
   const phase1Rate = oneDayTierCost(promotionTiers, ut);
-  const phase2Rate = selectedTier >= 0 ? (promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : 0;
+  const phase2Rate = selectedTier >= 0 ? (ut === 'vip' ? (promotionTiers[selectedTier]?.daily_rate_after_lock_vip ?? promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : ut === 'pro' ? (promotionTiers[selectedTier]?.daily_rate_after_lock_pro ?? promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0) : (promotionTiers[selectedTier]?.daily_rate_after_lock_free ?? promotionTiers[selectedTier]?.daily_rate_after_lock ?? 0)) : 0;
   const promoUpfront = longTerm ? 0 : promoCost;
   const totalCost = taskCost + promoUpfront;
 
