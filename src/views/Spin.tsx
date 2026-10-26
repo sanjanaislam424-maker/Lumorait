@@ -1,11 +1,29 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock } from 'lucide-react';
+import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
+
+type WinnerRow = {
+  id: string;
+  user_name: string;
+  box_type: string;
+  box_label: string;
+  coins_won: number;
+  created_at: string;
+};
+
+type SuperEvent = {
+  id: number;
+  is_active: boolean;
+  activation_at: string | null;
+  winner_limit: number;
+  reward_coins: number;
+  claimers_count: number;
+};
 
 // ---- Reward tiers with distinct funny comments ----
 type Reward = { value: number; label: string; color: string; comment: string; emoji: string };
@@ -153,6 +171,10 @@ export function Spin() {
   const [adCountdown, setAdCountdown] = useState(15);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [winners, setWinners] = useState<WinnerRow[]>([]);
+  const [superEvent, setSuperEvent] = useState<SuperEvent | null>(null);
+  const [superClaimed, setSuperClaimed] = useState(false);
+  const [superBusy, setSuperBusy] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -164,6 +186,56 @@ export function Spin() {
     setLastBlastTs(getStoredLastBlast());
     setExtraBlasts(0);
   }, [profile?.id]);
+
+  // Load public winners feed
+  const loadWinners = useCallback(async () => {
+    const { data } = await supabase
+      .from('box_winners')
+      .select('id, user_name, box_type, box_label, coins_won, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setWinners((data as WinnerRow[]) || []);
+  }, []);
+
+  // Load super mystery box event config
+  const loadSuperEvent = useCallback(async () => {
+    const { data } = await supabase
+      .from('super_mystery_events')
+      .select('id, is_active, activation_at, winner_limit, reward_coins, claimers_count')
+      .eq('id', 1)
+      .maybeSingle();
+    setSuperEvent((data as SuperEvent) || null);
+  }, []);
+
+  // Check if current user already claimed the super reward
+  useEffect(() => {
+    if (!profile?.id || !superEvent || !superEvent.is_active) return;
+    (async () => {
+      const { data } = await supabase
+        .from('box_winners')
+        .select('id')
+        .eq('user_id', profile.id)
+        .eq('box_type', 'super')
+        .limit(1);
+      setSuperClaimed(!!(data && data.length > 0));
+    })();
+  }, [profile?.id, superEvent]);
+
+  useEffect(() => {
+    loadWinners();
+    loadSuperEvent();
+  }, [loadWinners, loadSuperEvent]);
+
+  // Realtime subscription for new winners
+  useEffect(() => {
+    const ch = supabase
+      .channel('box_winners_feed')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'box_winners' }, () => {
+        loadWinners();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [loadWinners]);
 
   // Tick every second for countdown
   useEffect(() => {
@@ -452,6 +524,13 @@ export function Spin() {
             await supabase.from('transactions').insert({
               user_id: profile.id, type: 'spin', amount: reward.value, status: 'completed', note: `Mystery box blast: ${reward.label}`,
             });
+            await supabase.from('box_winners').insert({
+              user_id: profile.id,
+              user_name: profile?.full_name || profile?.phone || 'Lumora User',
+              box_type: 'normal',
+              box_label: lang === 'bn' ? 'নরমাল মিস্ট্রি বক্স' : 'Normal Mystery Box',
+              coins_won: reward.value,
+            });
           }
           await refreshProfile();
         }
@@ -519,6 +598,82 @@ export function Spin() {
     notify(t('extraBlastEarned'), 'success');
   };
 
+  // ---- SUPER MYSTERY BOX CLAIM ----
+  const claimSuperReward = async () => {
+    if (!profile || !superEvent || superBusy) return;
+    const now = Date.now();
+    const activationTime = superEvent.activation_at ? new Date(superEvent.activation_at).getTime() : 0;
+    if (!superEvent.is_active || now < activationTime) {
+      notify(t('superEventInactive'), 'error');
+      return;
+    }
+    if (superClaimed) {
+      notify(t('superEventClaimed'), 'error');
+      return;
+    }
+    if (superEvent.claimers_count >= superEvent.winner_limit) {
+      notify(t('superEventFull'), 'error');
+      return;
+    }
+    setSuperBusy(true);
+    try {
+      const { data: fresh } = await supabase
+        .from('profiles')
+        .select('lumora_coins, bonus_coins')
+        .eq('id', profile.id)
+        .maybeSingle();
+      const reward = superEvent.reward_coins;
+      await supabase.from('profiles').update({
+        lumora_coins: (fresh?.lumora_coins ?? profile.lumora_coins) + reward,
+        bonus_coins: (fresh?.bonus_coins ?? 0) + reward,
+      }).eq('id', profile.id);
+      await supabase.from('transactions').insert({
+        user_id: profile.id, type: 'spin', amount: reward, status: 'completed',
+        note: `Super Mystery Box grand reward: ${reward} coins`,
+      });
+      await supabase.from('box_winners').insert({
+        user_id: profile.id,
+        user_name: profile?.full_name || profile?.phone || 'Lumora User',
+        box_type: 'super',
+        box_label: lang === 'bn' ? 'সুপার মিস্ট্রি বক্স' : 'Super Mystery Box',
+        coins_won: reward,
+      });
+      await supabase.from('super_mystery_events').update({
+        claimers_count: (superEvent.claimers_count ?? 0) + 1,
+        updated_at: new Date().toISOString(),
+      }).eq('id', 1);
+      await refreshProfile();
+      setSuperClaimed(true);
+      setSuperEvent({ ...superEvent, claimers_count: (superEvent.claimers_count ?? 0) + 1 });
+      setCelebrate(true);
+      if (soundOn) playFanfare();
+      notify(t('superEventClaimedSuccess'), 'success');
+      loadWinners();
+    } finally { setSuperBusy(false); }
+  };
+
+  // Format Bengali date for winners feed
+  const formatWinnerDate = (iso: string): string => {
+    try {
+      const d = new Date(iso);
+      if (lang === 'bn') {
+        const months = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+        const h = d.getHours();
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        const m = d.getMinutes();
+        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${ampm === 'PM' ? 'দুপুর/রাত' : 'সকাল'} ${h12}:${m < 10 ? '0' + m : m}`;
+      }
+      return d.toLocaleString();
+    } catch { return iso; }
+  };
+
+  // Super event live status
+  const superLive = superEvent?.is_active && superEvent?.activation_at
+    ? Date.now() >= new Date(superEvent.activation_at).getTime()
+    : superEvent?.is_active;
+  const superSlotsLeft = superEvent ? Math.max(0, superEvent.winner_limit - superEvent.claimers_count) : 0;
+
   if (!profile) return null;
 
   const btnLabelTask = lang === 'bn' ? 'টাস্ক করে আরেকটি বক্স ফোটাও' : t('taskForBlastBtn');
@@ -563,6 +718,96 @@ export function Spin() {
           <p className="text-xs text-blue-300 mt-2">
             {lang === 'bn' ? `অতিরিক্ত ব্লাস্ট: ${extraBlasts}` : `Extra blasts: ${extraBlasts}`}
           </p>
+        )}
+      </Card>
+
+      {/* ===== SUPER MYSTERY BOX EVENT BANNER ===== */}
+      {superEvent && superEvent.is_active && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-4"
+        >
+          <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-600/20 via-orange-600/15 to-yellow-600/20 p-4">
+            <div className="absolute inset-0 opacity-20" style={{ background: 'radial-gradient(circle at 50% 0%, rgba(251,191,36,0.3), transparent 60%)' }} />
+            <div className="relative z-10 text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Crown size={22} className="text-amber-400" />
+                <h3 className="text-lg font-bold text-amber-300">{t('superMysteryBoxEvent')}</h3>
+              </div>
+              {superLive ? (
+                <>
+                  <p className="text-2xl font-extrabold text-amber-200 mb-1">
+                    {superEvent.reward_coins} {t('lumoraCoins')}
+                  </p>
+                  <p className="text-xs text-amber-300/80 mb-3">
+                    {superSlotsLeft} / {superEvent.winner_limit} {t('superEventWinnerLimit')}
+                  </p>
+                  <Button
+                    disabled={superBusy || superClaimed || superSlotsLeft === 0}
+                    onClick={claimSuperReward}
+                    className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold"
+                  >
+                    <Zap size={16} className="mr-1" />
+                    {superClaimed ? t('superEventClaimed') : superSlotsLeft === 0 ? t('superEventFull') : t('superEventClaimBtn')}
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-amber-300/80">
+                  {t('superEventStartsIn')}: {superEvent.activation_at ? new Date(superEvent.activation_at).toLocaleString() : '—'}
+                </p>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ===== RECENT WINNERS FEED ===== */}
+      <Card className="mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Trophy size={18} className="text-amber-400" />
+          <h3 className="text-sm font-bold text-white">{t('recentWinners')}</h3>
+        </div>
+        <p className="text-[10px] text-slate-400 mb-3">{t('recentWinnersDesc')}</p>
+        {winners.length === 0 ? (
+          <p className="text-xs text-slate-500 text-center py-4">{t('noWinnersYet')}</p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <AnimatePresence>
+              {winners.map((w, i) => (
+                <motion.div
+                  key={w.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  className={`flex items-center gap-3 rounded-xl p-2.5 border ${
+                    w.box_type === 'super'
+                      ? 'bg-amber-500/10 border-amber-500/30'
+                      : 'bg-slate-800/50 border-white/10'
+                  }`}
+                >
+                  <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
+                    w.box_type === 'super' ? 'bg-amber-500/20' : 'bg-fuchsia-500/15'
+                  }`}>
+                    {w.box_type === 'super'
+                      ? <Crown size={16} className="text-amber-400" />
+                      : <Gift size={16} className="text-fuchsia-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white font-medium truncate">{w.user_name || 'Lumora User'}</p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {w.box_label} • {formatWinnerDate(w.created_at)}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-bold text-amber-300">+{w.coins_won}</p>
+                    <p className="text-[9px] text-slate-500">{t('lumoraCoins')}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         )}
       </Card>
 

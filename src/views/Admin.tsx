@@ -684,6 +684,8 @@ function SettingsTab() {
   const logoFileRef = useRef<HTMLInputElement>(null);
   const [promoTiers, setPromoTiers] = useState<{ duration_days: number; label: string; free_cost: number; pro_cost: number; vip_cost: number; daily_rate_after_lock?: number }[]>([]);
   const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate_after_lock: 0 });
+  const [superEvt, setSuperEvt] = useState<any>(null);
+  const [superForm, setSuperForm] = useState({ is_active: false, activation_at: '', winner_limit: 10, reward_coins: 1000 });
 
   useEffect(() => {
     (async () => {
@@ -692,8 +694,31 @@ function SettingsTab() {
       if (data?.promotion_tiers && Array.isArray(data.promotion_tiers)) {
         setPromoTiers(data.promotion_tiers);
       }
+      const { data: se } = await supabase.from('super_mystery_events').select('*').eq('id', 1).maybeSingle();
+      if (se) {
+        setSuperEvt(se);
+        setSuperForm({
+          is_active: se.is_active,
+          activation_at: se.activation_at ? new Date(se.activation_at).toISOString().slice(0, 16) : '',
+          winner_limit: se.winner_limit,
+          reward_coins: se.reward_coins,
+        });
+      }
     })();
   }, []);
+
+  const saveSuperEvent = async () => {
+    const payload = {
+      is_active: superForm.is_active,
+      activation_at: superForm.activation_at ? new Date(superForm.activation_at).toISOString() : null,
+      winner_limit: superForm.winner_limit,
+      reward_coins: superForm.reward_coins,
+      updated_at: new Date().toISOString(),
+    };
+    await supabase.from('super_mystery_events').update(payload).eq('id', 1);
+    setSuperEvt({ ...superEvt, ...payload });
+    notify(t('saved'), 'success');
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -855,6 +880,62 @@ function SettingsTab() {
           await supabase.from('app_settings').update({ promotion_tiers: promoTiers }).eq('id', 1);
           notify(t('saved'), 'success');
         }}>{t('save')}</Button>
+      </div>
+    </Card>
+
+    {/* Super Mystery Box Event Control */}
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <Crown size={18} className="text-amber-400" />
+        <h3 className="font-semibold text-white">{t('superEventAdminTitle')}</h3>
+      </div>
+      <p className="text-xs text-slate-400 mb-3">{t('superEventAdminDesc')}</p>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSuperForm({ ...superForm, is_active: !superForm.is_active })}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${superForm.is_active ? 'bg-green-500/20 text-green-300 border border-green-500/40' : 'bg-slate-700 text-slate-400 border border-white/10'}`}
+          >
+            {superForm.is_active ? t('superEventActive') : t('superEventInactive')}
+          </button>
+          {superEvt && (
+            <span className="text-[10px] text-slate-500">
+              {t('superEventWinnerLimit')}: {superEvt.claimers_count ?? 0} / {superEvt.winner_limit}
+            </span>
+          )}
+        </div>
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('superEventActivation')}</label>
+          <input
+            type="datetime-local"
+            value={superForm.activation_at}
+            onChange={(e) => setSuperForm({ ...superForm, activation_at: e.target.value })}
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('superEventWinnerLimit')}</label>
+            <input
+              type="number"
+              min={1}
+              value={superForm.winner_limit}
+              onChange={(e) => setSuperForm({ ...superForm, winner_limit: +e.target.value })}
+              className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('superEventReward')}</label>
+            <input
+              type="number"
+              min={1}
+              value={superForm.reward_coins}
+              onChange={(e) => setSuperForm({ ...superForm, reward_coins: +e.target.value })}
+              className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm"
+            />
+          </div>
+        </div>
+        <Button className="w-full" onClick={saveSuperEvent}>{t('save')}</Button>
       </div>
     </Card>
 
