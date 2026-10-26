@@ -37,8 +37,8 @@ function toEmbedUrl(url: string): string | null {
   }
 }
 
-function isPromotionActive(task: TaskRow): boolean {
-  if (!task.is_promoted) return false;
+function isPromotionActive(task: TaskRow | null | undefined): boolean {
+  if (!task || !task.is_promoted) return false;
   if (!task.promotion_expires_at) return true;
   return new Date(task.promotion_expires_at).getTime() > Date.now();
 }
@@ -100,8 +100,8 @@ export function Tasks() {
 
   useEffect(() => { loadTasks(); loadCategories(); }, []);
 
-  const myCreated = tasks.filter((tk) => tk.creator_id === profile?.id);
-  const browseable = tasks.filter((tk) => tk.creator_id !== profile?.id && tk.status === 'open' && tk.filled < tk.slots);
+  const myCreated = (tasks || []).filter((tk) => tk && tk.creator_id === profile?.id);
+  const browseable = (tasks || []).filter((tk) => tk && tk.creator_id !== profile?.id && tk.status === 'open' && tk.filled < tk.slots);
 
   const categoryCounts = (catName: string) => browseable.filter((tk) => tk.platform === catName).length;
 
@@ -287,7 +287,7 @@ function CategoryPage({
 }) {
   const embedUrl = toEmbedUrl(categoryData?.video_tutorial_url || '');
 
-  const categoryTasks = tasks.filter((tk) => tk.platform === categoryName && (tk.status === 'open' || tk.creator_id === profile?.id) && tk.filled < tk.slots);
+  const categoryTasks = (tasks || []).filter((tk) => tk && tk.platform === categoryName && (tk.status === 'open' || tk.creator_id === profile?.id) && tk.filled < tk.slots);
 
   // 3-tier smart sorting:
   // Priority 1: User's own tasks
