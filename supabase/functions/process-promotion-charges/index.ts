@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
     // Fetch all active long-term promotions (those with a daily rate)
     const { data: tasks, error } = await supabase
       .from("tasks")
-      .select("id, creator_id, title, promotion_daily_rate, promotion_end_at, promotion_last_charged_at, promotion_started_at, promotion_locked_until")
+      .select("id, creator_id, title, promotion_daily_rate, promotion_end_at, promotion_last_charged_at, promotion_started_at, promotion_locked_until, promotion_coins, promotion_weight")
       .eq("is_promoted", true)
       .not("promotion_daily_rate", "is", null);
 
@@ -103,10 +103,11 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Update last charged timestamp
+      // Update last charged timestamp and accumulate total spent
       await supabase.from("tasks").update({
         promotion_last_charged_at: nowIso,
-        promotion_coins: (task as any).promotion_coins ?? 0,
+        promotion_coins: (task.promotion_coins ?? 0) + chargeRate,
+        promotion_weight: (task.promotion_weight ?? 0) + chargeRate,
       }).eq("id", taskId);
 
       charged += 1;
