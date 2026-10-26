@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -682,11 +682,16 @@ function SettingsTab() {
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileRef = useRef<HTMLInputElement>(null);
+  const [promoTiers, setPromoTiers] = useState<{ duration_days: number; coin_cost: number; label: string }[]>([]);
+  const [newTier, setNewTier] = useState({ duration_days: 1, coin_cost: 50, label: '' });
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('app_settings').select('*').eq('id', 1).maybeSingle();
       setS(data);
+      if (data?.promotion_tiers && Array.isArray(data.promotion_tiers)) {
+        setPromoTiers(data.promotion_tiers);
+      }
     })();
   }, []);
 
@@ -762,6 +767,53 @@ function SettingsTab() {
             )}
           </div>
         </div>
+      </div>
+    </Card>
+
+    {/* Promotion Tier Pricing */}
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <Zap size={18} className="text-fuchsia-400" />
+        <h3 className="font-semibold text-white">{t('promotionTiers')}</h3>
+      </div>
+      <p className="text-xs text-slate-400 mb-3">{t('promotionTiersDesc')}</p>
+      <div className="space-y-2 mb-3">
+        {promoTiers.length === 0 ? (
+          <EmptyState message={t('promotionTiers')} />
+        ) : promoTiers.map((tier, i) => (
+          <div key={i} className="bg-slate-800/50 border border-fuchsia-500/20 rounded-xl p-3 flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white font-medium flex items-center gap-1.5">
+                <Zap size={12} className="text-fuchsia-400" /> {tier.label}
+              </p>
+              <p className="text-xs text-slate-500">
+                {tier.duration_days === 0 ? t('unlimitedDuration') : `${tier.duration_days} ${t('day')}`} • {tier.coin_cost} {t('lumoraCoins')}
+              </p>
+            </div>
+            <Button variant="danger" className="text-xs px-2 py-1" onClick={() => {
+              setPromoTiers(promoTiers.filter((_, idx) => idx !== i));
+            }}><Trash2 size={14} /></Button>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2 pt-3 border-t border-white/10">
+        <p className="text-xs text-fuchsia-400 font-semibold">{t('addTier')}</p>
+        <div className="grid grid-cols-3 gap-2">
+          <input value={newTier.label} onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} placeholder={t('tierLabel')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          <input type="number" min={0} value={newTier.duration_days} onChange={(e) => setNewTier({ ...newTier, duration_days: +e.target.value })} placeholder={t('tierDurationDays')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          <input type="number" min={1} value={newTier.coin_cost} onChange={(e) => setNewTier({ ...newTier, coin_cost: +e.target.value })} placeholder={t('tierCoinCost')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+        </div>
+        <Button variant="ghost" className="w-full text-sm flex items-center justify-center gap-1.5" onClick={() => {
+          if (!newTier.label.trim()) { notify(t('tierLabel'), 'error'); return; }
+          setPromoTiers([...promoTiers, { ...newTier, label: newTier.label.trim() }]);
+          setNewTier({ duration_days: 1, coin_cost: 50, label: '' });
+        }}>
+          <Plus size={14} /> {t('addTier')}
+        </Button>
+        <Button className="w-full" onClick={async () => {
+          await supabase.from('app_settings').update({ promotion_tiers: promoTiers }).eq('id', 1);
+          notify(t('saved'), 'success');
+        }}>{t('save')}</Button>
       </div>
     </Card>
 
