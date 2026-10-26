@@ -54,6 +54,11 @@ export type TaskRow = {
   slots: number;
   filled: number;
   created_at: string;
+  is_promoted?: boolean;
+  promotion_coins?: number;
+  promotion_expires_at?: string | null;
+  daily_slot_limit?: number | null;
+  promotion_weight?: number;
 };
 
 export type SubmissionRow = {

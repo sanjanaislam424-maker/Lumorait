@@ -74,6 +74,33 @@ const VIDEO_TUTORIAL_HEADER = [
   'কাজ কীভাবে করবে? ভিডিও দেখে নাও, তারপর হাত পাতো! 🎬',
   'একবার দেখে নাও মামা, তারপর কাজে নামো — ভুল হবে না! 👀',
   'ভিডিও টিউটোরিয়াল চালাও, তারপর কাজ ধরো — একদম ঝটপট! ⚡',
+  'ভিডিও দেখে কাজ না বুঝলে খবর আছে! 🩴',
+  'আগে ভিডিওটা দেখ, তারপর মারো ক্লিকের পর ক্লিক! 🚀',
+  'ভিডিও না দেখে কাজে নামলে ভুল হইবো মামা! আগে দেখো! ⚠️',
+];
+
+const VIDEO_PANEL_SUBTITLE = [
+  'ভিডিও দেখে নাও, তারপর কাজে নামো — ভুল হইলে চপেটাঘাত আছে! 😜',
+  'দুই মিনিট ভিডিও, বাকি জীবনের জন্য কাজ শিখে নাও! ⏱️',
+  'এই ভিডিওটা না দেখলে কাজ করতে গিয়ে গোলমাল হইবো! দেখো মামা! 🎥',
+];
+
+const PROMOTION_SUCCESS = [
+  'কাজ প্রমোট হইয়া গেছে মামা! এবার তোমার কাজ সবার চোখে পড়বে! 🚀🔥',
+  'বুস্ট মারা কামাল ওস্তাদ! এখন তোমার কাজ একদম টপে থাকবে! 📌✨',
+  'প্রমোশন সফল! কাজ এখন পিন করা — সবাই দেখবে আগে আগে! 🎯👑',
+];
+
+const PROMOTION_EMPTY = [
+  'প্রমোট করা কাজ নাই এখন! তোমার কাজ প্রমোট করো, সবার উপরে থাকো! 📌',
+  'কেউ এখনো বুস্ট মারে নাই! প্রথম হও মামা, কাজ প্রমোট করো! 🚀',
+  'প্রমোটেড কাজ ফাঁকা! তাড়াতাড়ি নিজের কাজ বুস্ট করো! ⚡',
+];
+
+const NOT_ENOUGH_PROMO_COINS = [
+  'প্রমোশনের জন্য কয়েন কম মামা! একটু কামাই করো, তারপর বুস্ট মারো! 💸',
+  'কয়েন কম আছে ওস্তাদ! প্রমোশনের আগে পকেট ভারী করো! 💰',
+  'প্রমোট করতে গেলে কয়েন লাগে মামা! আগে কিছু কাজ করো! 🪙',
 ];
 
 function randomPick(arr: string[]): string {
@@ -95,4 +122,8 @@ export const microcopy = {
   taskEditSuccess: () => randomPick(TASK_EDIT_SUCCESS),
   yourTasksFirst: () => randomPick(YOUR_TASKS_FIRST),
   videoTutorialHeader: () => randomPick(VIDEO_TUTORIAL_HEADER),
+  videoPanelSubtitle: () => randomPick(VIDEO_PANEL_SUBTITLE),
+  promotionSuccess: () => randomPick(PROMOTION_SUCCESS),
+  promotionEmpty: () => randomPick(PROMOTION_EMPTY),
+  notEnoughPromoCoins: () => randomPick(NOT_ENOUGH_PROMO_COINS),
 };

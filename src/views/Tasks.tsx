@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, TrendingUp } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -35,6 +35,12 @@ function toEmbedUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+function isPromotionActive(task: TaskRow): boolean {
+  if (!task.is_promoted) return false;
+  if (!task.promotion_expires_at) return true;
+  return new Date(task.promotion_expires_at).getTime() > Date.now();
 }
 
 export function Tasks() {
@@ -122,21 +128,27 @@ export function Tasks() {
     await loadTasks();
   };
 
-  // When a specific category is selected, show the Category Page
   if (tab === 'browse' && activeCategory) {
     return (
-      <CategoryPage
-        categoryName={activeCategory}
-        categoryData={activeCategoryData}
-        tasks={tasks}
-        profile={profile}
-        loading={loading}
-        onBack={closeCategory}
-        onAccept={acceptTask}
-        onChat={(task) => setChatTask(task)}
-        onEdit={(task) => setEditTask(task)}
-        t={t}
-      />
+      <>
+        <CategoryPage
+          categoryName={activeCategory}
+          categoryData={activeCategoryData}
+          tasks={tasks}
+          profile={profile}
+          loading={loading}
+          onBack={closeCategory}
+          onAccept={acceptTask}
+          onChat={(task) => setChatTask(task)}
+          onEdit={(task) => setEditTask(task)}
+          t={t}
+        />
+        <ProofModal task={proofTask} onClose={() => setProofTask(null)} onSubmit={submitProof} />
+        <ChatModal task={chatTask} onClose={() => setChatTask(null)} />
+        <EditTaskModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} />
+        <TaskTimerOverlay active={timer.active} onExpire={() => {}} taskTitle={timer.title} />
+        <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
+      </>
     );
   }
 
@@ -199,7 +211,6 @@ export function Tasks() {
                 })}
               </div>
 
-              {/* All Categories master list */}
               {activeCategory === null && (
                 <div className="space-y-3">
                   <p className="text-xs text-amber-400 font-semibold">{microcopy.yourTasksFirst()}</p>
@@ -250,16 +261,24 @@ function CategoryPage({
 }) {
   const embedUrl = toEmbedUrl(categoryData?.video_tutorial_url || '');
 
-  // Category-specific tasks: include user's own + others
   const categoryTasks = tasks.filter((tk) => tk.platform === categoryName && (tk.status === 'open' || tk.creator_id === profile?.id) && tk.filled < tk.slots);
 
-  // Priority: user's own tasks first, then others
+  // 3-tier smart sorting:
+  // Priority 1: User's own tasks
+  // Priority 2: Actively promoted tasks (sorted by promotion weight, then reward)
+  // Priority 3: Remaining regular tasks (sorted by highest reward)
   const myTasks = categoryTasks.filter((tk) => tk.creator_id === profile?.id);
-  const otherTasks = categoryTasks.filter((tk) => tk.creator_id !== profile?.id);
+
+  const othersAll = categoryTasks.filter((tk) => tk.creator_id !== profile?.id);
+  const promotedTasks = othersAll
+    .filter((tk) => isPromotionActive(tk))
+    .sort((a, b) => (b.promotion_weight || 0) - (a.promotion_weight || 0) || b.reward_coins - a.reward_coins);
+  const regularTasks = othersAll
+    .filter((tk) => !isPromotionActive(tk))
+    .sort((a, b) => b.reward_coins - a.reward_coins);
 
   return (
     <div className="space-y-4">
-      {/* Back button + category header */}
       <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-400 hover:text-amber-400 transition">
         <ArrowLeft size={16} /> {t('backToList')}
       </button>
@@ -278,7 +297,7 @@ function CategoryPage({
         </div>
       </div>
 
-      {/* Video Tutorial Section */}
+      {/* Video Tutorial Panel */}
       {embedUrl && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -299,13 +318,13 @@ function CategoryPage({
               allowFullScreen
             />
           </div>
-          <div className="px-4 py-2 bg-slate-900/30">
-            <p className="text-xs text-slate-400">{microcopy.videoTutorialHeader()}</p>
+          <div className="px-4 py-2.5 bg-slate-900/30 border-t border-amber-500/10">
+            <p className="text-xs font-medium text-amber-200">{microcopy.videoTutorialHeader()}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{microcopy.videoPanelSubtitle()}</p>
           </div>
         </motion.div>
       )}
 
-      {/* Loading state */}
       {loading && (
         <div className="text-center py-6">
           <p className="text-sm text-slate-400 animate-pulse">{microcopy.loadingTasks()}</p>
@@ -318,7 +337,7 @@ function CategoryPage({
         </div>
       )}
 
-      {/* User's own tasks — Priority 1 */}
+      {/* Priority 1: User's own tasks */}
       {!loading && myTasks.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -332,13 +351,28 @@ function CategoryPage({
         </div>
       )}
 
-      {/* Other users' tasks — Priority 2 */}
-      {!loading && otherTasks.length > 0 && (
+      {/* Priority 2: Promoted tasks */}
+      {!loading && promotedTasks.length > 0 && (
         <div className="space-y-3">
-          {myTasks.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-fuchsia-400" />
+            <span className="text-xs font-bold text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-full px-3 py-1">
+              {t('promotedTasks')}
+            </span>
+          </div>
+          {promotedTasks.map((task) => (
+            <TaskCard key={task.id} task={task} isPromoted onAccept={() => onAccept(task)} onChat={() => onChat(task)} />
+          ))}
+        </div>
+      )}
+
+      {/* Priority 3: Regular tasks */}
+      {!loading && regularTasks.length > 0 && (
+        <div className="space-y-3">
+          {(myTasks.length > 0 || promotedTasks.length > 0) && (
             <p className="text-xs text-slate-500 font-medium pt-2">{t('otherTasks')}</p>
           )}
-          {otherTasks.map((task) => (
+          {regularTasks.map((task) => (
             <TaskCard key={task.id} task={task} onAccept={() => onAccept(task)} onChat={() => onChat(task)} />
           ))}
         </div>
@@ -347,11 +381,11 @@ function CategoryPage({
   );
 }
 
-function TaskCard({ task, onAccept, onChat, isOwner, onEdit }: { task: TaskRow; onAccept?: () => void; onChat?: () => void; isOwner?: boolean; onEdit?: () => void }) {
+function TaskCard({ task, onAccept, onChat, isOwner, isPromoted, onEdit }: { task: TaskRow; onAccept?: () => void; onChat?: () => void; isOwner?: boolean; isPromoted?: boolean; onEdit?: () => void }) {
   const { t } = useApp();
   const effectiveReward = task.is_admin_task ? task.reward_coins * 2 : task.reward_coins;
   return (
-    <motion.div layout whileHover={{ y: -2 }} className={`bg-slate-800/50 border rounded-2xl p-4 ${isOwner ? 'border-amber-500/40' : 'border-white/10'}`}>
+    <motion.div layout whileHover={{ y: -2 }} className={`bg-slate-800/50 border rounded-2xl p-4 ${isOwner ? 'border-amber-500/40' : isPromoted ? 'border-fuchsia-500/40' : 'border-white/10'} ${isPromoted ? 'shadow-lg shadow-fuchsia-500/10' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
           {platformIcons[task.platform]}
@@ -361,6 +395,11 @@ function TaskCard({ task, onAccept, onChat, isOwner, onEdit }: { task: TaskRow; 
           {task.is_admin_task && (
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
               <Flame size={10} /> {t('adminTask')}
+            </span>
+          )}
+          {isPromoted && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-bold">
+              <Zap size={10} /> {t('boosted')}
             </span>
           )}
           {isOwner && (
@@ -465,45 +504,74 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
 function CreateTaskForm({ onDone }: { onDone: () => void }) {
   const { t, profile, refreshProfile } = useApp();
   const { notify } = useToast();
-  const [form, setForm] = useState({ platform: 'facebook', title: '', description: '', target_url: '', reward: 25, slots: 1 });
+  const [form, setForm] = useState({ platform: 'facebook', title: '', description: '', target_url: '', reward: 25, slots: 1, daily_slot_limit: '' });
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<{ name: string; label: string }[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
+  const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; coin_cost: number; label: string }[]>([]);
+  const [selectedTier, setSelectedTier] = useState<number>(-1);
 
   useEffect(() => {
     (async () => {
       const [catRes, settingsRes] = await Promise.all([
         supabase.from('task_categories').select('name, label').eq('is_active', true).order('sort_order', { ascending: true }),
-        supabase.from('app_settings').select('min_task_reward, max_task_reward').eq('id', 1).maybeSingle(),
+        supabase.from('app_settings').select('min_task_reward, max_task_reward, promotion_tiers').eq('id', 1).maybeSingle(),
       ]);
       if (catRes.data && catRes.data.length > 0) setCategories(catRes.data);
       else setCategories([{ name: 'facebook', label: 'Facebook' }, { name: 'instagram', label: 'Instagram' }, { name: 'youtube', label: 'YouTube' }, { name: 'app_review', label: 'App Review' }, { name: 'tiktok', label: 'TikTok' }, { name: 'other', label: 'Other' }]);
-      if (settingsRes.data) setLimits(settingsRes.data);
+      if (settingsRes.data) {
+        setLimits(settingsRes.data);
+        if (settingsRes.data.promotion_tiers && Array.isArray(settingsRes.data.promotion_tiers)) {
+          setPromotionTiers(settingsRes.data.promotion_tiers);
+        }
+      }
     })();
   }, []);
 
   const isAdmin = profile?.role === 'admin';
-  const cost = isAdmin ? 0 : form.reward;
+  const taskCost = isAdmin ? 0 : form.reward;
+  const promoCost = selectedTier >= 0 ? promotionTiers[selectedTier]?.coin_cost || 0 : 0;
+  const totalCost = taskCost + promoCost;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
     if (form.reward < limits.min_task_reward) { notify(t('rewardTooLow'), 'error'); return; }
     if (form.reward > limits.max_task_reward) { notify(t('rewardTooHigh'), 'error'); return; }
-    if (!isAdmin && profile.lumora_coins < cost) { notify(t('notEnoughCoins'), 'error'); return; }
+    if (!isAdmin && profile.lumora_coins < totalCost) {
+      notify(selectedTier >= 0 ? microcopy.notEnoughPromoCoins() : t('notEnoughCoins'), 'error');
+      return;
+    }
     setBusy(true);
     try {
+      const tier = selectedTier >= 0 ? promotionTiers[selectedTier] : null;
+      const isPromoted = !!tier;
+      const promotionExpiry = tier
+        ? (tier.duration_days === 0 ? null : new Date(Date.now() + tier.duration_days * 86400000).toISOString())
+        : null;
+
       await supabase.from('tasks').insert({
-        creator_id: profile.id, platform: form.platform, title: form.title, description: form.description,
-        target_url: form.target_url || null, reward_coins: form.reward, cost_coins: cost,
-        is_admin_task: isAdmin, slots: form.slots,
+        creator_id: profile.id,
+        platform: form.platform,
+        title: form.title,
+        description: form.description,
+        target_url: form.target_url || null,
+        reward_coins: form.reward,
+        cost_coins: taskCost,
+        is_admin_task: isAdmin,
+        slots: form.slots,
+        is_promoted: isPromoted,
+        promotion_coins: promoCost,
+        promotion_expires_at: promotionExpiry,
+        daily_slot_limit: form.daily_slot_limit ? +form.daily_slot_limit : null,
+        promotion_weight: isPromoted ? promoCost : 0,
       });
       if (!isAdmin) {
-        await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - cost }).eq('id', profile.id);
-        await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -cost, status: 'completed', note: `Created: ${form.title}` });
+        await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - totalCost }).eq('id', profile.id);
+        await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -totalCost, status: 'completed', note: `Created: ${form.title}${isPromoted ? ` + ${t('promoteTask')}` : ''}` });
         await refreshProfile();
       }
-      notify(t('submitted'), 'success');
+      notify(isPromoted ? microcopy.promotionSuccess() : t('submitted'), 'success');
       onDone();
     } finally { setBusy(false); }
   };
@@ -530,9 +598,50 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
             <input type="number" min={1} value={form.slots} onChange={(e) => setForm({ ...form, slots: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
         </div>
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('dailySlotLimit')}</label>
+          <p className="text-[10px] text-slate-500 mb-1">{t('dailySlotLimitHint')}</p>
+          <input type="number" min={1} value={form.daily_slot_limit} onChange={(e) => setForm({ ...form, daily_slot_limit: e.target.value })} placeholder="∞" className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+        </div>
+
+        {/* Promotion / Boost Section */}
+        {promotionTiers.length > 0 && (
+          <div className="pt-3 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap size={16} className="text-fuchsia-400" />
+              <p className="text-sm font-semibold text-fuchsia-300">{t('promoteTask')}</p>
+            </div>
+            <p className="text-xs text-slate-400 mb-2">{t('promoteTaskDesc')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedTier(-1)}
+                className={`p-3 rounded-xl border text-left transition ${selectedTier === -1 ? 'bg-slate-700 border-slate-500' : 'bg-slate-800/50 border-white/10'}`}
+              >
+                <p className="text-xs text-white font-medium">{t('noPromotion')}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">+0 {t('lumoraCoins')}</p>
+              </button>
+              {promotionTiers.map((tier, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedTier(i)}
+                  className={`p-3 rounded-xl border text-left transition ${selectedTier === i ? 'bg-fuchsia-500/15 border-fuchsia-500/50' : 'bg-slate-800/50 border-white/10'}`}
+                >
+                  <p className="text-xs text-white font-medium">{tier.label}</p>
+                  <p className="text-[10px] text-fuchsia-300 mt-0.5">+{tier.coin_cost} {t('lumoraCoins')}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isAdmin && <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 text-xs text-amber-300 flex items-center gap-2"><ShieldCheck size={14} /> {t('freeTask')} + {t('doubleReward')}</div>}
         <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-400">{t('cost')}: <CoinBadge amount={cost} /></span>
+          <span className="text-sm text-slate-400">
+            {t('cost')}: <CoinBadge amount={totalCost} />
+            {promoCost > 0 && <span className="text-[10px] text-fuchsia-400 ml-1">(+{promoCost} boost)</span>}
+          </span>
           <Button type="submit" disabled={busy}>{busy ? '...' : t('submit')}</Button>
         </div>
       </form>
