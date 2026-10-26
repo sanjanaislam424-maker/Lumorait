@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -937,9 +937,11 @@ function TaskManagementTab() {
   const [categories, setCategories] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
-  const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other', icon_url: '' });
+  const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other', icon_url: '', video_tutorial_url: '' });
   const [iconUploading, setIconUploading] = useState(false);
   const iconFileRef = useRef<HTMLInputElement>(null);
+  const [videoEditing, setVideoEditing] = useState<string | null>(null);
+  const [videoUrlDraft, setVideoUrlDraft] = useState('');
   const [editTask, setEditTask] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', reward_coins: 25, slots: 1, status: 'open' });
 
@@ -975,12 +977,26 @@ function TaskManagementTab() {
       label: newCat.label.trim(),
       icon: newCat.icon,
       icon_url: newCat.icon_url.trim() || null,
+      video_tutorial_url: newCat.video_tutorial_url.trim() || null,
       sort_order: categories.length + 1,
       created_by: profile.id,
     });
     if (error) { notify(error.message, 'error'); return; }
     notify(t('saved'), 'success');
-    setNewCat({ name: '', label: '', icon: 'other', icon_url: '' });
+    setNewCat({ name: '', label: '', icon: 'other', icon_url: '', video_tutorial_url: '' });
+    load();
+  };
+
+  const startEditVideo = (cat: any) => {
+    setVideoEditing(cat.id);
+    setVideoUrlDraft(cat.video_tutorial_url || '');
+  };
+
+  const saveVideoUrl = async (catId: string) => {
+    await supabase.from('task_categories').update({ video_tutorial_url: videoUrlDraft.trim() || null }).eq('id', catId);
+    notify(t('saved'), 'success');
+    setVideoEditing(null);
+    setVideoUrlDraft('');
     load();
   };
 
@@ -1093,24 +1109,48 @@ function TaskManagementTab() {
         </div>
         <div className="space-y-2 mb-4">
           {categories.length === 0 ? <EmptyState message={t('noCategories')} /> : categories.map((cat) => (
-            <div key={cat.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                {cat.icon_url ? (
-                  <img src={cat.icon_url} alt={cat.label} className="w-8 h-8 rounded-lg object-cover shrink-0" />
-                ) : null}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{cat.label}</p>
-                  <p className="text-xs text-slate-500 truncate">{cat.name} {!cat.is_active && ' • INACTIVE'}</p>
+            <div key={cat.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {cat.icon_url ? (
+                    <img src={cat.icon_url} alt={cat.label} className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                  ) : null}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white font-medium truncate">{cat.label}</p>
+                    <p className="text-xs text-slate-500 truncate">{cat.name} {!cat.is_active && ' • INACTIVE'}</p>
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => startEditVideo(cat)} title={t('videoTutorialUrl')}>
+                    <Video size={14} />
+                  </Button>
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleCategory(cat)}>
+                    {cat.is_active ? <Pause size={14} /> : <Play size={14} />}
+                  </Button>
+                  <Button variant="danger" className="text-xs px-2 py-1" onClick={() => deleteCategory(cat.id)}>
+                    <Trash2 size={14} />
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-1">
-                <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleCategory(cat)}>
-                  {cat.is_active ? <Pause size={14} /> : <Play size={14} />}
-                </Button>
-                <Button variant="danger" className="text-xs px-2 py-1" onClick={() => deleteCategory(cat.id)}>
-                  <Trash2 size={14} />
-                </Button>
-              </div>
+              {videoEditing === cat.id && (
+                <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                  <label className="text-xs text-slate-400 block">{t('videoTutorialUrl')}</label>
+                  <p className="text-[10px] text-slate-500">{t('videoTutorialHint')}</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={videoUrlDraft}
+                      onChange={(e) => setVideoUrlDraft(e.target.value)}
+                      placeholder="https://youtube.com/watch?v=..."
+                      className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-sm"
+                    />
+                    <Button variant="ghost" className="text-xs px-3 py-2" onClick={() => setVideoEditing(null)}>{t('cancel')}</Button>
+                    <Button className="text-xs px-3 py-2" onClick={() => saveVideoUrl(cat.id)}>{t('save')}</Button>
+                  </div>
+                  {cat.video_tutorial_url && !videoUrlDraft && (
+                    <p className="text-[10px] text-emerald-400">Current: {cat.video_tutorial_url}</p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1129,6 +1169,9 @@ function TaskManagementTab() {
             </select>
           </div>
           <div>
+            <label className="text-xs text-slate-400 block mb-1">{t('videoTutorialUrl')}</label>
+            <p className="text-[10px] text-slate-500 mb-1">{t('videoTutorialHint')}</p>
+            <input value={newCat.video_tutorial_url} onChange={(e) => setNewCat({ ...newCat, video_tutorial_url: e.target.value })} placeholder="https://youtube.com/watch?v=..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm mb-2" />
             <label className="text-xs text-slate-400 block mb-1">{t('fileOrUrl')}</label>
             <div className="flex items-center gap-2 mb-2">
               <input

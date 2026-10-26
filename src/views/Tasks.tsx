@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
-import { supabase, TaskRow, SubmissionRow, Profile } from '@/lib/supabase';
+import { supabase, TaskRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { TaskTimerOverlay } from '@/components/TaskTimerOverlay';
