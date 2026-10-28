@@ -252,7 +252,7 @@ export function Tasks() {
                     <LayoutGrid size={24} className="text-amber-400" />
                   </div>
                   <p className="text-xs text-white font-medium">{t('allCategories')}</p>
-                  <p className="text-[10px] text-slate-400">{browseable.length} {t('tasksCounter')}</p>
+                  <p className="text-[10px] text-slate-400">{microcopy.tasksCounter(allAvailable.length)}</p>
                 </button>
                 {categories.map((cat) => {
                   const count = categoryCounts(cat.name);
@@ -279,12 +279,12 @@ export function Tasks() {
               {activeCategory === null && (
                 <div className="space-y-3">
                   <p className="text-xs text-amber-400 font-semibold">{microcopy.yourTasksFirst()}</p>
-                  {browseable.length === 0 ? (
+                  {allAvailable.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-sm text-slate-400">{microcopy.categoryEmpty()}</p>
                     </div>
-                  ) : browseable.map((task) => (
-                    <TaskCard key={task.id} task={task} onAccept={() => acceptTask(task)} onChat={() => setChatTask(task)} />
+                  ) : allAvailable.map((task) => (
+                    <TaskCard key={task.id} task={task} isOwner={task.creator_id === profile?.id} onAccept={() => acceptTask(task)} onChat={() => setChatTask(task)} />
                   ))}
                 </div>
               )}
