@@ -339,33 +339,47 @@ function CategoryPage({
         </div>
       </div>
 
-      {/* Video Tutorial Panel */}
-      {embedUrl && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl overflow-hidden border border-amber-500/20 bg-slate-800/50"
-        >
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10">
-            <PlayCircle size={18} className="text-amber-400" />
-            <p className="text-sm font-semibold text-amber-300">{t('howToComplete')}</p>
+      {/* Video Tutorial Panel — always visible */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl overflow-hidden border border-amber-500/20 bg-slate-800/50"
+      >
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10">
+          <PlayCircle size={18} className="text-amber-400" />
+          <p className="text-sm font-semibold text-amber-300">{t('howToComplete')}</p>
+        </div>
+
+        {embedUrl ? (
+          <>
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                src={embedUrl}
+                title="Video Tutorial"
+                className="absolute inset-0 w-full h-full"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            <div className="px-4 py-2.5 bg-slate-900/30 border-t border-amber-500/10">
+              <p className="text-sm font-medium text-amber-200 leading-relaxed">
+                🎥 এই ভিডিও টিউটোরিয়াল দেখে কাজ কীভাবে করতে হয়, তা ভালোমতো বুঝে নাও তুমি! 😌
+              </p>
+            </div>
+          </>
+        ) : (
+          <div
+            className="flex flex-col items-center justify-center text-center px-6 py-10 bg-slate-900/30 border-t border-amber-500/10"
+            style={{ minHeight: '180px' }}
+          >
+            <PlayCircle size={40} className="text-amber-400/40 mb-3" />
+            <p className="text-sm font-medium text-amber-200 leading-relaxed">
+              🎬 আরে তুমি তো দেখি একদম আগে চলে এলে! — ভিডিওর মধ্যে বসো 😅, খুব শীঘ্রই এখানে টিউটোরিয়াল ভিডিও দেখতে পাবে!
+            </p>
           </div>
-          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-            <iframe
-              src={embedUrl}
-              title="Video Tutorial"
-              className="absolute inset-0 w-full h-full"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-          <div className="px-4 py-2.5 bg-slate-900/30 border-t border-amber-500/10">
-            <p className="text-xs font-medium text-amber-200">{microcopy.videoTutorialHeader()}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{microcopy.videoPanelSubtitle()}</p>
-          </div>
-        </motion.div>
-      )}
+        )}
+      </motion.div>
 
       {loading && (
         <div className="text-center py-6">
