@@ -18,23 +18,45 @@ const platformIcons: Record<string, React.ReactNode> = {
   other: <Star size={16} className="text-slate-400" />,
 };
 
-function toEmbedUrl(url: string): string | null {
+function extractYouTubeId(url: string): string | null {
   if (!url) return null;
+  const trimmed = url.trim();
+
+  // Bare 11-char video ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+
   try {
-    const u = new URL(url);
-    if (u.hostname === 'youtu.be') {
-      const id = u.pathname.slice(1);
-      return `https://www.youtube.com/embed/${id}`;
+    const u = new URL(trimmed);
+
+    // youtu.be/VIDEO_ID
+    if (u.hostname === 'youtu.be' || u.hostname === 'www.youtu.be') {
+      const id = u.pathname.slice(1).split('/')[0];
+      return id || null;
     }
+
     if (u.hostname.includes('youtube.com')) {
-      const id = u.searchParams.get('v');
-      if (id) return `https://www.youtube.com/embed/${id}`;
-      if (u.pathname.includes('/embed/')) return url;
+      // youtube.com/watch?v=VIDEO_ID
+      const v = u.searchParams.get('v');
+      if (v) return v;
+
+      // youtube.com/shorts/VIDEO_ID or youtube.com/embed/VIDEO_ID or youtube.com/v/VIDEO_ID
+      const parts = u.pathname.split('/').filter(Boolean);
+      if ((parts[0] === 'shorts' || parts[0] === 'embed' || parts[0] === 'v' || parts[0] === 'live') && parts[1]) {
+        return parts[1];
+      }
     }
-    return url;
   } catch {
-    return null;
+    // Not a valid URL — try regex fallback
+    const match = trimmed.match(/([a-zA-Z0-9_-]{11})/);
+    if (match) return match[1];
   }
+  return null;
+}
+
+function toEmbedUrl(url: string): string | null {
+  const id = extractYouTubeId(url);
+  if (!id) return null;
+  return `https://www.youtube.com/embed/${id}`;
 }
 
 function isPromotionActive(task: TaskRow | null | undefined): boolean {
@@ -119,7 +141,8 @@ export function Tasks() {
   const myCreated = (tasks || []).filter((tk) => tk && tk.creator_id === profile?.id);
   const browseable = (tasks || []).filter((tk) => tk && tk.creator_id !== profile?.id && tk.status === 'open' && tk.filled < tk.slots);
 
-  const categoryCounts = (catName: string) => browseable.filter((tk) => tk.platform === catName).length;
+  const allAvailable = (tasks || []).filter((tk) => tk && tk.status === 'open' && tk.filled < tk.slots);
+  const categoryCounts = (catName: string) => allAvailable.filter((tk) => tk.platform === catName).length;
 
   const openCategory = (catName: string) => {
     setActiveCategory(catName);
@@ -303,7 +326,7 @@ function CategoryPage({
 }) {
   const embedUrl = toEmbedUrl(categoryData?.video_tutorial_url || '');
 
-  const categoryTasks = (tasks || []).filter((tk) => tk && tk.platform === categoryName && (tk.status === 'open' || tk.creator_id === profile?.id) && tk.filled < tk.slots);
+  const categoryTasks = (tasks || []).filter((tk) => tk && tk.platform === categoryName && (tk.status === 'open' || (tk.creator_id === profile?.id && tk.status !== 'completed')) && tk.filled < tk.slots);
 
   // 3-tier smart sorting:
   // Priority 1: User's own tasks
