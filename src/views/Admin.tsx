@@ -816,6 +816,7 @@ function SettingsTab() {
                 setPromoTiers(promoTiers.filter((_, idx) => idx !== i));
               }}><Trash2 size={14} /></Button>
             </div>
+            {tier.duration_days !== 0 && (
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-[10px] text-slate-500 block">{t('tierFree')}</label>
@@ -830,6 +831,7 @@ function SettingsTab() {
                 <input type="number" min={0} value={tier.vip_cost} onChange={(e) => setPromoTiers(promoTiers.map((x, idx) => idx === i ? { ...x, vip_cost: +e.target.value } : x))} className="w-full bg-slate-700 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs" />
               </div>
             </div>
+            )}
             {tier.duration_days === 0 && (
               <div className="mt-3 pt-3 border-t border-fuchsia-500/10">
                 <label className="text-[10px] text-fuchsia-400 block mb-1">{t('dailyRateAfterLock')} {t('perDay')} — Free / Pro / VIP</label>
@@ -859,6 +861,7 @@ function SettingsTab() {
           <input value={newTier.label} onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} placeholder={t('tierLabel')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           <input type="number" min={0} value={newTier.duration_days} onChange={(e) => setNewTier({ ...newTier, duration_days: +e.target.value })} placeholder={t('tierDurationDays')} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
         </div>
+        {newTier.duration_days !== 0 && (
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-[10px] text-slate-500 block mb-0.5">{t('freeCost')}</label>
@@ -873,6 +876,7 @@ function SettingsTab() {
             <input type="number" min={0} value={newTier.vip_cost} onChange={(e) => setNewTier({ ...newTier, vip_cost: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
         </div>
+        )}
         {newTier.duration_days === 0 && (
           <div>
             <label className="text-[10px] text-fuchsia-400 block mb-0.5">{t('dailyRateAfterLock')} {t('perDay')} — Free / Pro / VIP</label>
