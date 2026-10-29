@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
@@ -81,6 +81,7 @@ export function Admin() {
     { key: 'support_chats', icon: <MessageSquare size={16} />, label: 'Support' },
     { key: 'badges', icon: <Award size={16} />, label: 'Badges' },
     { key: 'ad_campaigns', icon: <Megaphone size={16} />, label: 'Ads' },
+    { key: 'ai_content', icon: <Sparkles size={16} />, label: 'AI Content' },
   ];
 
   const visibleTabs = tabs.filter((tb) => hasPermission(profile, TAB_PERMISSIONS[tb.key]));
@@ -2058,6 +2059,194 @@ function BadgesTab() {
             </div>
           ))}
         </div>
+      </Card>
+    </div>
+  );
+}
+
+function AiContentTab() {
+  const { notify } = useToast();
+  const [contentRow, setContentRow] = useState<Record<string, string> | null>(null);
+  const [uiCopyRow, setUiCopyRow] = useState<Record<string, string> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [langView, setLangView] = useState<'bn' | 'en'>('bn');
+
+  const CONTENT_FIELDS: { key: string; labelBn: string; labelEn: string }[] = [
+    { key: 'funny_bn', labelBn: 'ফানি কৌতুক (বাংলা)', labelEn: 'Funny Quote (Bangla)' },
+    { key: 'funny_en', labelBn: 'ফানি কৌতুক (English)', labelEn: 'Funny Quote (English)' },
+    { key: 'tip_bn', labelBn: 'গ্রোথ টিপস (বাংলা)', labelEn: 'Growth Tip (Bangla)' },
+    { key: 'tip_en', labelBn: 'গ্রোথ টিপস (English)', labelEn: 'Growth Tip (English)' },
+  ];
+
+  const UI_COPY_FIELDS: { key: string; labelBn: string; labelEn: string }[] = [
+    { key: 'tasks_header', labelBn: 'Tasks Header', labelEn: 'Tasks Header' },
+    { key: 'loading_tasks', labelBn: 'Loading Tasks', labelEn: 'Loading Tasks' },
+    { key: 'category_empty', labelBn: 'Category Empty', labelEn: 'Category Empty' },
+    { key: 'your_tasks_first', labelBn: 'Your Tasks First', labelEn: 'Your Tasks First' },
+    { key: 'video_tutorial_header', labelBn: 'Video Tutorial Header', labelEn: 'Video Tutorial Header' },
+    { key: 'video_panel_subtitle', labelBn: 'Video Panel Subtitle', labelEn: 'Video Panel Subtitle' },
+    { key: 'daily_tip', labelBn: 'Daily Tip', labelEn: 'Daily Tip' },
+    { key: 'dashboard_alert', labelBn: 'Dashboard Alert', labelEn: 'Dashboard Alert' },
+    { key: 'task_available', labelBn: 'Task Available', labelEn: 'Task Available' },
+    { key: 'watch_tutorial', labelBn: 'Watch Tutorial', labelEn: 'Watch Tutorial' },
+  ];
+
+  const load = async () => {
+    setLoading(true);
+    const today = new Date().toISOString().split('T')[0];
+    const [contentRes, uiCopyRes] = await Promise.all([
+      supabase.from('daily_ai_content').select('*').eq('content_date', today).maybeSingle(),
+      supabase.from('daily_ai_ui_copy').select('*').eq('content_date', today).maybeSingle(),
+    ]);
+    setContentRow(contentRes.data as Record<string, string> | null);
+    setUiCopyRow(uiCopyRes.data as Record<string, string> | null);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const regenerate = async (table: string, field: string) => {
+    const key = `${table}.${field}`;
+    setRegenerating(key);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-regenerate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ table, field }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        notify(data.error || 'Regeneration failed', 'error');
+        return;
+      }
+      notify('Regenerated successfully', 'success');
+      await load();
+      invalidateDailyAiCache();
+      invalidateAiCopyCache();
+    } catch {
+      notify('Connection error', 'error');
+    } finally {
+      setRegenerating(null);
+    }
+  };
+
+  const isFieldForLang = (field: string, lang: 'bn' | 'en'): boolean => {
+    if (lang === 'bn') return field.endsWith('_bn');
+    return field.endsWith('_en');
+  };
+
+  const filterFields = (fields: { key: string; labelBn: string; labelEn: string }[], lang: 'bn' | 'en') => {
+    return fields.filter((f) => {
+      if (f.key.endsWith('_bn') || f.key.endsWith('_en')) {
+        return isFieldForLang(f.key, lang);
+      }
+      return true;
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">AI Generated Content Management</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          View and regenerate today's AI-generated content. Click "Regenerate" on any item to fetch a fresh alternative via Gemini API. All users will see the updated content immediately.
+        </p>
+
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setLangView('bn')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${langView === 'bn' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+          >
+            বাংলা
+          </button>
+          <button
+            onClick={() => setLangView('en')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${langView === 'en' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+          >
+            English
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-slate-400 text-center py-8">Loading today's content...</p>
+        ) : (
+          <>
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={14} className="text-amber-400" />
+                <h4 className="text-sm font-semibold text-amber-300">Funny Quote & Growth Tip</h4>
+              </div>
+              <div className="space-y-2">
+                {filterFields(CONTENT_FIELDS, langView).map((f) => {
+                  const value = contentRow?.[f.key] || '—';
+                  const regenKey = `daily_ai_content.${f.key}`;
+                  const isRegenerating = regenerating === regenKey;
+                  return (
+                    <div key={f.key} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
+                      <div className="flex items-start justify-between gap-3 mb-1">
+                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">{langView === 'bn' ? f.labelBn : f.labelEn}</p>
+                        <Button
+                          variant="ghost"
+                          className="text-xs px-2 py-1 shrink-0 flex items-center gap-1"
+                          disabled={isRegenerating}
+                          onClick={() => regenerate('daily_ai_content', f.key)}
+                        >
+                          {isRegenerating ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+                        </Button>
+                      </div>
+                      <p className="text-sm text-white leading-relaxed">{value}</p>
+                    </div>
+                  );
+                })}
+                {!contentRow && (
+                  <p className="text-xs text-slate-500 italic">No content generated for today yet. It will auto-generate on first visit.</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={14} className="text-cyan-400" />
+                <h4 className="text-sm font-semibold text-cyan-300">Task Alerts & Tutorial Prompts (Banglish)</h4>
+              </div>
+              <div className="space-y-2">
+                {UI_COPY_FIELDS.map((f) => {
+                  const value = uiCopyRow?.[f.key] || '—';
+                  const regenKey = `daily_ai_ui_copy.${f.key}`;
+                  const isRegenerating = regenerating === regenKey;
+                  return (
+                    <div key={f.key} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
+                      <div className="flex items-start justify-between gap-3 mb-1">
+                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">{f.labelEn}</p>
+                        <Button
+                          variant="ghost"
+                          className="text-xs px-2 py-1 shrink-0 flex items-center gap-1"
+                          disabled={isRegenerating}
+                          onClick={() => regenerate('daily_ai_ui_copy', f.key)}
+                        >
+                          {isRegenerating ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+                        </Button>
+                      </div>
+                      <p className="text-sm text-white leading-relaxed">{value}</p>
+                    </div>
+                  );
+                })}
+                {!uiCopyRow && (
+                  <p className="text-xs text-slate-500 italic">No UI copy generated for today yet. It will auto-generate on first visit.</p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </Card>
     </div>
   );

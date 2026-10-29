@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+// Per-item AI content regeneration endpoint for admin panel
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
