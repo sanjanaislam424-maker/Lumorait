@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Bug, Lightbulb, HelpCircle, MessageSquare, Send } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { ChatWidget } from '@/components/ChatWidget';
+import { ChatHistory } from '@/components/ChatHistory';
 import { Card } from '@/components/ui';
 
 export function SupportView() {
@@ -118,6 +119,8 @@ export function SupportView() {
             : 'AI will help first. Tap "Talk to Human Agent" if you need a real person.'}
         </span>
       </div>
+
+      <ChatHistory />
     </div>
   );
 }
