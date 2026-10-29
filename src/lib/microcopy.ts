@@ -1,129 +1,215 @@
-const PROMO_EXPIRED = [
-  'খেলার সময় শেষ, মামা! এই প্রমো কোডের মেয়াদ কবেই পার হয়ে গেছে! 🏃\u200d♂️💨',
-  'আরে ওস্তাদ, বাস তো ছাইড়া দিছে! এত দেরিতে আইলে কাজ হয়? মেয়াদ শেষ! 🚌💨',
-  'ডেডলাইন শেষ মামা! টাইম মতো না আইলে বোনাস কি বাতাসে উড়বে? 💸',
-];
+import { supabase } from '@/lib/supabase';
 
-const PROMO_USED = [
-  'আরে ওস্তাদ! এই কোড তো তুমি আগেই মেরে দিয়েছো! এক মাঘে কি আর শীত যায়? 😎',
-  'একই গাছে বারবার ইট মারলে আম পড়ে না মামা! এই প্রমো কোড অলরেডি নেওয়া শেষ! 🌳',
-  'লোভের একটা সীমা আছে মামা! একবার বোনাস পাইছো না? আবার ট্রাই মারো ক্যান? 😜',
-];
+const STATIC_FALLBACKS: Record<string, string> = {
+  tasksHeader: "Kaj er palla ora kore, apni boshe chaye khao moshay!",
+  loadingTasks: "Kaj ane barita hocche moshay, ektu dhoyro doro!",
+  categoryEmpty: "Ekhon kaj nai mama, cha-biskut khaiya asho!",
+  yourTasksFirst: "Apnar kaj sobar upore, rajar moto bosun!",
+  videoTutorialHeader: "Shob parbo bhabe bose theko na, ektukhani tutorial dekhe ashbe?",
+  videoPanelSubtitle: "Dui minit video, baki jiboner jonno kaj shikhe nao!",
+  dailyTip: "Ajker tippony: Chat-e ghumash na, kaj shesh kore baki ghumum.",
+  dashboardAlert: "Arey moshay! Check-in kore coins nibe na? Koshto kore kamaiben!",
+  taskAvailable: "Arey moshay! Kaj apnar jonno opekkha korche, ektu haat chalao!",
+  watchTutorial: "Shob parbo bhabe bose theko na, bolo to ektukhani tutorial ta dekhe ashbe?",
+};
 
-const PROMO_INVALID = [
-  'ভুল কোড বসাইয়া ফকিরা চাল দিও না ওস্তাদ! সঠিক কোডটা ভালোমতো দেখে বসাও! 🔍',
-  'আরে মামা, এই কোড তো খামিরের মতো ফুলে উঠলো না! সঠিক কোড দাও! 🫓',
-  'এক্কেরে ভুল কোড দিয়ে ফেলছো? চশমা পরে আবার দেখে বসাও ওস্তাদ! 👓',
-];
+const DB_FIELD_MAP: Record<string, string> = {
+  tasksHeader: 'tasks_header',
+  loadingTasks: 'loading_tasks',
+  categoryEmpty: 'category_empty',
+  yourTasksFirst: 'your_tasks_first',
+  videoTutorialHeader: 'video_tutorial_header',
+  videoPanelSubtitle: 'video_panel_subtitle',
+  dailyTip: 'daily_tip',
+  dashboardAlert: 'dashboard_alert',
+  taskAvailable: 'task_available',
+  watchTutorial: 'watch_tutorial',
+};
 
-const PROMO_SUCCESS = [
-  'সাবাশ ওস্তাদ! কেল্লা ফতে! অ্যাকাউন্টে বোনাস কয়েন ঢুকে গেছে, এবার পার্টি দাও! 🎉🔥',
-  'বাহ বাহ! মামার ভাগ্য আজ চমৎকার! বোনাস কয়েন এসে গেছে — এবার পার্টি! 🎊💰',
-  'কেল্লা ফতে ওস্তাদ! পকেট ভারী হইলো, এবার একটু জমজি খাও! 🍛🔥',
-];
+type CopyKey = keyof typeof DB_FIELD_MAP;
 
-const PROMO_LIMIT = [
-  'খেলার সময় শেষ, মামা! এই প্রমো কোডের মেয়াদ কবেই পার হয়ে গেছে। পরেরবার একটু ফাস্ট হইতে হবে! 🏃\u200d♂️💨',
-  'সিট ফুল মামা! এই কোডের সব টিকেট বিক্রি হয়ে গেছে! পরেরবার আগে আসো! 🎫',
-  'দেরি করলে যে হয় মামা! এই কোডের স্টক শেষ! নেক্সট টাইম ফাস্ট হও! ⏰',
-];
+interface AiCopyCache {
+  date: string;
+  copy: Record<string, string>;
+}
 
-const PROMO_INACTIVE = [
-  'এই প্রোমো কোডটা এখন ঘুমাচ্ছে মামা! পরে আবার চেষ্টা করো! 😴',
-  'কোডটা এখন ব্রেক নিচ্ছে ওস্তাদ! একটু পরে এসো! ☕',
-  'এই প্রমো কোড এখন অফ মামা! চালু হলে আমি ডাক দিবো! 🔔',
-];
+let memoryCache: AiCopyCache | null = null;
+let fetchPromise: Promise<Record<string, string>> | null = null;
 
-const TASKS_HEADER = 'কামকাজ করে পকেট গরম করো ওস্তাদ! 💸🔥';
+function getCacheKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
-const TASKS_COUNTER = (n: number) => `${n} টা কাজ রেডি, ধইরা কোপ দাও! 🚀`;
+function getLocalStorageCache(): AiCopyCache | null {
+  try {
+    const raw = localStorage.getItem('lumora_ai_ui_copy');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AiCopyCache;
+    if (parsed.date !== getCacheKey()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
-const CATEGORY_EMPTY = [
-  'এই ক্যাটাগরিতে এখন কাজ নাই মামা! চা-বিস্কুট খাইয়া একটু পরে আবার নক দাও! ☕😜',
-  'আরে ওস্তাদ, এই ক্যাটাগরিতে কাজ এখন ফাঁকা! একটু ঘুরে আইসো তো! 🚶\u200d♂️',
-  'কাজ নাই ক্যাটাগরিতে, তাইলে কি আকাশের তারা গুনবে? একটু পরে আবার চেক করো! ⭐',
-  'মামা, এই ক্যাটাগরি এখন শূন্য! একটু চা খাইয়া এসো, ততক্ষণে কাজ আসবো! 🫖',
-  'এই রে ভাই! কাজ তো এখনো আসে নাই! একটু পরে আবার হাজির হইও! 🕐',
-];
+function setLocalStorageCache(copy: Record<string, string>) {
+  try {
+    localStorage.setItem('lumora_ai_ui_copy', JSON.stringify({ date: getCacheKey(), copy }));
+  } catch {
+    // ignore
+  }
+}
 
-const LOADING_TASKS = [
-  'কাজ আনতেছি মামা, একটু ধৈর্য ধরো! চা বানাইতে পারো এই ফাঁকে! 🍵',
-  'লোড হইতেছে ওস্তাদ! তাড়াহুড়া করলে কাজ পালাইবো! 🏃',
-  'একটু সযত্নে কাজ সাজাইতেছি, চোখ বন্ধ করে তিন গুনো! 🧘',
-];
+async function fetchDailyCopy(): Promise<Record<string, string>> {
+  if (memoryCache && memoryCache.date === getCacheKey()) {
+    return memoryCache.copy;
+  }
 
-const ERROR_GENERIC = [
-  'আরে মামা, এইবার একটু ঝামেলা হইছে! একটু পরে আবার ট্রাই করো! 🔧',
-  'কিছু একটা গোলমাল হইছে ওস্তাদ! রিফ্রেশ দিয়া আবার দেখো! 🔄',
-  'নেট একটু মন্দ মামা! চা খাইয়া এসো, ততক্ষণে ঠিক হইয়া যাবে! 📶',
-];
+  const lsCache = getLocalStorageCache();
+  if (lsCache) {
+    memoryCache = lsCache;
+    return lsCache.copy;
+  }
 
-const TASK_EDIT_SUCCESS = [
-  'কাজ এডিট হইয়া গেছে মামা! এখন সব ঠিকঠাক, চালিয়ে দাও! ✅🔥',
-  'এডিট কামাল ওস্তাদ! কাজটা এবার ঝকঝকে! ✨',
-  'হুশিয়ার! কাজ আপডেট হইছে, এবার রেডি হও! 🎯',
-];
+  if (fetchPromise) return fetchPromise;
 
-const YOUR_TASKS_FIRST = [
-  'তোমার কাজ সবার উপরে, মামা! প্রাইওরিটি তো তোমারই! 👑',
-  'নিজের কাজ আগে, তারপর বাকি! এহেন আইন! ⚖️',
-  'তোমার পোস্ট করা কাজ একদম টপে — রাজার মতো বসো! 🫅',
-];
+  fetchPromise = (async () => {
+    try {
+      const today = getCacheKey();
+      const { data: dbRow } = await supabase
+        .from('daily_ai_ui_copy')
+        .select('*')
+        .eq('content_date', today)
+        .maybeSingle();
 
-const VIDEO_TUTORIAL_HEADER = [
-  'কাজ কীভাবে করবে? ভিডিও দেখে নাও, তারপর হাত পাতো! 🎬',
-  'একবার দেখে নাও মামা, তারপর কাজে নামো — ভুল হবে না! 👀',
-  'ভিডিও টিউটোরিয়াল চালাও, তারপর কাজ ধরো — একদম ঝটপট! ⚡',
-  'ভিডিও দেখে কাজ না বুঝলে খবর আছে! 🩴',
-  'আগে ভিডিওটা দেখ, তারপর মারো ক্লিকের পর ক্লিক! 🚀',
-  'ভিডিও না দেখে কাজে নামলে ভুল হইবো মামা! আগে দেখো! ⚠️',
-];
+      let copy: Record<string, string> = {};
 
-const VIDEO_PANEL_SUBTITLE = [
-  'ভিডিও দেখে নাও, তারপর কাজে নামো — ভুল হইলে চপেটাঘাত আছে! 😜',
-  'দুই মিনিট ভিডিও, বাকি জীবনের জন্য কাজ শিখে নাও! ⏱️',
-  'এই ভিডিওটা না দেখলে কাজ করতে গিয়ে গোলমাল হইবো! দেখো মামা! 🎥',
-];
+      if (dbRow) {
+        for (const [jsKey, dbKey] of Object.entries(DB_FIELD_MAP)) {
+          copy[jsKey] = (dbRow as Record<string, string>)[dbKey] || STATIC_FALLBACKS[jsKey];
+        }
+      } else {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-ui-copy`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          for (const [jsKey, dbKey] of Object.entries(DB_FIELD_MAP)) {
+            copy[jsKey] = (data as Record<string, string>)[dbKey] || STATIC_FALLBACKS[jsKey];
+          }
+        } else {
+          copy = { ...STATIC_FALLBACKS };
+        }
+      }
 
-const PROMOTION_SUCCESS = [
-  'কাজ প্রমোট হইয়া গেছে মামা! এবার তোমার কাজ সবার চোখে পড়বে! 🚀🔥',
-  'বুস্ট মারা কামাল ওস্তাদ! এখন তোমার কাজ একদম টপে থাকবে! 📌✨',
-  'প্রমোশন সফল! কাজ এখন পিন করা — সবাই দেখবে আগে আগে! 🎯👑',
-];
+      memoryCache = { date: getCacheKey(), copy };
+      setLocalStorageCache(copy);
+      return copy;
+    } catch {
+      return { ...STATIC_FALLBACKS };
+    } finally {
+      fetchPromise = null;
+    }
+  })();
 
-const PROMOTION_EMPTY = [
-  'প্রমোট করা কাজ নাই এখন! তোমার কাজ প্রমোট করো, সবার উপরে থাকো! 📌',
-  'কেউ এখনো বুস্ট মারে নাই! প্রথম হও মামা, কাজ প্রমোট করো! 🚀',
-  'প্রমোটেড কাজ ফাঁকা! তাড়াতাড়ি নিজের কাজ বুস্ট করো! ⚡',
-];
+  return fetchPromise;
+}
 
-const NOT_ENOUGH_PROMO_COINS = [
-  'প্রমোশনের জন্য কয়েন কম মামা! একটু কামাই করো, তারপর বুস্ট মারো! 💸',
-  'কয়েন কম আছে ওস্তাদ! প্রমোশনের আগে পকেট ভারী করো! 💰',
-  'প্রমোট করতে গেলে কয়েন লাগে মামা! আগে কিছু কাজ করো! 🪙',
-];
+let currentCopy: Record<string, string> = { ...STATIC_FALLBACKS };
+let initialized = false;
+
+export function initAiCopy() {
+  if (initialized) return;
+  initialized = true;
+  fetchDailyCopy().then((copy) => { currentCopy = copy; });
+}
+
+const STATIC_PROMO_COPY = {
+  promoExpired: [
+    'Khelar shomoy shesh, mama! Promo code er moyad paren hoye gese!',
+    'Arey ostad, bas chere diche! Eto derite aile kaj hoy? Moyad shesh!',
+    'Deadline shesh mama! Time moto na aile bonus ki batase ure jabe?',
+  ],
+  promoUsed: [
+    'Arey ostad! Eita to ami agei mere disi! Ek maghe ki ar shito jay?',
+    'Eki gase barbar it marele am por na mama! Already neso!',
+    'Lover ekta sima ache mama! Ekbar bonus paiso na? Abart try maro keno?',
+  ],
+  promoInvalid: [
+    'Vul code bosaiya fakira chal dio na ostad! Thik code ta valo kore dekhao!',
+    'Arey mama, eita to khamir moto fule uth na! Thik code dao!',
+    'Ekkere vul code diso? Choshma pore abar dekhao ostad!',
+  ],
+  promoSuccess: [
+    'Sabash ostad! Kella fate! Account e bonus coin dhuke gese, ekhon party dao!',
+    'Bah bah! Mamar bhagyo aj chomotkar! Bonus coin ashe gese — party!',
+    'Kella fate ostad! Poket bhari holo, ekhon ektu jomji khao!',
+  ],
+  promoLimit: [
+    'Khelar shomoy shesh, mama! Moyad pare gese. Poribar ekta fast hote hobe!',
+    'Sit full mama! Sob ticket beche gese! Poribar age aso!',
+    'Deri korle hoy mama! Stock shesh! Next time fast ho!',
+  ],
+  promoInactive: [
+    'Ei promo code ta ekhon ghumache mama! Pore abart try koro!',
+    'Code ta ekhon break nicche ostad! Ektu pore asho!',
+    'Ei promo ekhon off mama! Chalu hole ami dak dimu!',
+  ],
+  promotionSuccess: [
+    'Kaj promote hoye gese mama! Tomar kaj sobar chokhe porbe!',
+    'Boost mara kamal ostad! Ekhn tomar kaj ekdom tope thakbe!',
+    'Promotion successful! Kaj pin kora — sobai dekhbe aga aga!',
+  ],
+  promotionEmpty: [
+    'Promote kora kaj nai ekhon! Tomar kaj promote koro, sobar upore thako!',
+    'Keu ekhono boost mare nai! Prothom how mama, kaj promote koro!',
+    'Promoted kaj faka! Taratari nije kaj boost koro!',
+  ],
+  notEnoughPromoCoins: [
+    'Promotion er jonno coin kom mama! Ektu kamaw koro, tarpor boost maro!',
+    'Coin kom ache ostad! Promotion er age poket bhari koro!',
+    'Promote korte gele coin lage mama! Age kichu kaj koro!',
+  ],
+  errorGeneric: [
+    'Arey mama, eibar ektu jhamela hoise! Ektu pore abart try koro!',
+    'Kichu ekta golmal hoise ostad! Refresh diya abar dekho!',
+    'Net ektu mond mama! Cha khaiya asho, totkhane thik hoibo!',
+  ],
+  taskEditSuccess: [
+    'Kaj edit hoye gese mama! Ekhn sob thikthak, chaliye dao!',
+    'Edit kamal ostad! Kaj ta ekhon jhakkas!',
+    'Hushiar! Kaj update hoise, ekhon ready ho!',
+  ],
+};
 
 function randomPick(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 export const microcopy = {
-  promoExpired: () => randomPick(PROMO_EXPIRED),
-  promoUsed: () => randomPick(PROMO_USED),
-  promoInvalid: () => randomPick(PROMO_INVALID),
-  promoSuccess: () => randomPick(PROMO_SUCCESS),
-  promoLimit: () => randomPick(PROMO_LIMIT),
-  promoInactive: () => randomPick(PROMO_INACTIVE),
-  tasksHeader: () => TASKS_HEADER,
-  tasksCounter: (n: number) => TASKS_COUNTER(n),
-  categoryEmpty: () => randomPick(CATEGORY_EMPTY),
-  loadingTasks: () => randomPick(LOADING_TASKS),
-  errorGeneric: () => randomPick(ERROR_GENERIC),
-  taskEditSuccess: () => randomPick(TASK_EDIT_SUCCESS),
-  yourTasksFirst: () => randomPick(YOUR_TASKS_FIRST),
-  videoTutorialHeader: () => randomPick(VIDEO_TUTORIAL_HEADER),
-  videoPanelSubtitle: () => randomPick(VIDEO_PANEL_SUBTITLE),
-  promotionSuccess: () => randomPick(PROMOTION_SUCCESS),
-  promotionEmpty: () => randomPick(PROMOTION_EMPTY),
-  notEnoughPromoCoins: () => randomPick(NOT_ENOUGH_PROMO_COINS),
+  promoExpired: () => randomPick(STATIC_PROMO_COPY.promoExpired),
+  promoUsed: () => randomPick(STATIC_PROMO_COPY.promoUsed),
+  promoInvalid: () => randomPick(STATIC_PROMO_COPY.promoInvalid),
+  promoSuccess: () => randomPick(STATIC_PROMO_COPY.promoSuccess),
+  promoLimit: () => randomPick(STATIC_PROMO_COPY.promoLimit),
+  promoInactive: () => randomPick(STATIC_PROMO_COPY.promoInactive),
+  tasksHeader: () => currentCopy.tasksHeader ?? STATIC_FALLBACKS.tasksHeader,
+  tasksCounter: (n: number) => `${n} ${currentCopy.taskAvailable ?? STATIC_FALLBACKS.taskAvailable}`,
+  categoryEmpty: () => currentCopy.categoryEmpty ?? STATIC_FALLBACKS.categoryEmpty,
+  loadingTasks: () => currentCopy.loadingTasks ?? STATIC_FALLBACKS.loadingTasks,
+  errorGeneric: () => randomPick(STATIC_PROMO_COPY.errorGeneric),
+  taskEditSuccess: () => randomPick(STATIC_PROMO_COPY.taskEditSuccess),
+  yourTasksFirst: () => currentCopy.yourTasksFirst ?? STATIC_FALLBACKS.yourTasksFirst,
+  videoTutorialHeader: () => currentCopy.videoTutorialHeader ?? STATIC_FALLBACKS.videoTutorialHeader,
+  videoPanelSubtitle: () => currentCopy.videoPanelSubtitle ?? STATIC_FALLBACKS.videoPanelSubtitle,
+  promotionSuccess: () => randomPick(STATIC_PROMO_COPY.promotionSuccess),
+  promotionEmpty: () => randomPick(STATIC_PROMO_COPY.promotionEmpty),
+  notEnoughPromoCoins: () => randomPick(STATIC_PROMO_COPY.notEnoughPromoCoins),
+  dailyTip: () => currentCopy.dailyTip ?? STATIC_FALLBACKS.dailyTip,
+  dashboardAlert: () => currentCopy.dashboardAlert ?? STATIC_FALLBACKS.dashboardAlert,
+  watchTutorial: () => currentCopy.watchTutorial ?? STATIC_FALLBACKS.watchTutorial,
 };
+
+export { fetchDailyCopy };
+export type { CopyKey };

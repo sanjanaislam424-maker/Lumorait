@@ -370,7 +370,7 @@ function CategoryPage({
       >
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10">
           <PlayCircle size={18} className="text-amber-400" />
-          <p className="text-sm font-semibold text-amber-300">{t('howToComplete')}</p>
+          <p className="text-sm font-semibold text-amber-300">{microcopy.videoTutorialHeader()}</p>
         </div>
 
         {embedUrl ? (
@@ -387,7 +387,7 @@ function CategoryPage({
             </div>
             <div className="px-4 py-2.5 bg-slate-900/30 border-t border-amber-500/10">
               <p className="text-sm font-medium text-amber-200 leading-relaxed">
-                🎥 এই ভিডিও টিউটোরিয়াল দেখে কাজ কীভাবে করতে হয়, তা ভালোমতো বুঝে নাও তুমি! 😌
+                {microcopy.videoPanelSubtitle()}
               </p>
             </div>
           </>

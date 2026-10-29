@@ -13,3 +13,7 @@ entrypoint = "./functions/ai-chat/index.ts"
 [functions.ai-test-key]
 verify_jwt = false
 entrypoint = "./functions/ai-test-key/index.ts"
+
+[functions.ai-ui-copy]
+verify_jwt = false
+entrypoint = "./functions/ai-ui-copy/index.ts"

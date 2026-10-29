@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar, Sparkles, Calculator, Wallet as WalletIcon } from 'lucide-react';
+import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar, Sparkles, Calculator, Wallet as WalletIcon, Lightbulb } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { WeatherHeader } from '@/components/WeatherHeader';
 import { Card, Button, CoinBadge, Modal } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { View } from '@/components/AppShell';
+import { microcopy } from '@/lib/microcopy';
 
 const checkinRewards = [20, 40, 60, 80, 100, 200, 300];
 
@@ -67,6 +68,20 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
         </div>
       )}
 
+      {/* AI-generated witty alert */}
+      {!banned && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 rounded-2xl p-3 border border-amber-500/20 bg-gradient-to-r from-amber-500/10 to-orange-500/5"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-amber-400 shrink-0" />
+            <p className="text-sm text-amber-200">{microcopy.dashboardAlert()}</p>
+          </div>
+        </motion.div>
+      )}
+
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <motion.div whileTap={{ scale: 0.97 }} onClick={() => setCalcOpen(true)} className="bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-white/10 rounded-2xl p-4 cursor-pointer text-amber-300">
@@ -107,6 +122,19 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
           })}
         </div>
       </Card>
+
+      {/* AI-generated daily tip */}
+      <div className="mb-4 rounded-2xl p-4 border border-blue-500/20 bg-gradient-to-br from-blue-500/10 to-cyan-500/5">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
+            <Lightbulb size={18} className="text-blue-400" />
+          </div>
+          <div>
+            <p className="text-[10px] text-blue-400 font-bold mb-1">AI TIPPONY</p>
+            <p className="text-sm text-blue-200 leading-relaxed">{microcopy.dailyTip()}</p>
+          </div>
+        </div>
+      </div>
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3 mb-6">
