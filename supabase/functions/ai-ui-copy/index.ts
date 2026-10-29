@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+// AI-driven dynamic UI copy generator for Lumora IT
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
