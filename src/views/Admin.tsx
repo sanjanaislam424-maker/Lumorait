@@ -1500,27 +1500,44 @@ function AiKeysTab() {
   const [keys, setKeys] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [newKey, setNewKey] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [emails, setEmails] = useState<Record<string, string>>({});
 
   const load = async () => {
-    const { data } = await supabase.from('app_settings').select('gemini_api_keys, ai_active_key_index').eq('id', 1).maybeSingle();
-    setKeys(Array.isArray(data?.gemini_api_keys) ? data.gemini_api_keys : []);
-    setActiveIndex(data?.ai_active_key_index ?? 0);
+    const [{ data: settings }, { data: emailRows }] = await Promise.all([
+      supabase.from('app_settings').select('gemini_api_keys, ai_active_key_index').eq('id', 1).maybeSingle(),
+      supabase.from('gemini_key_emails').select('key_value, email'),
+    ]);
+    setKeys(Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : []);
+    setActiveIndex(settings?.ai_active_key_index ?? 0);
+    setEmails(Object.fromEntries((emailRows ?? []).map((row) => [row.key_value, row.email])));
   };
   useEffect(() => { load(); }, []);
 
   const addKey = async () => {
-    if (!newKey.trim()) return;
-    const updated = [...keys, newKey.trim()];
-    await supabase.from('app_settings').update({ gemini_api_keys: updated }).eq('id', 1);
+    const key = newKey.trim();
+    const email = newEmail.trim();
+    if (!key) return;
+    const updated = [...keys, key];
+    const { error } = await supabase.from('app_settings').update({ gemini_api_keys: updated }).eq('id', 1);
+    if (error) { notify(error.message, 'error'); return; }
+    if (email) {
+      const { error: emailError } = await supabase.from('gemini_key_emails').upsert({ key_value: key, email });
+      if (emailError) { notify(emailError.message, 'error'); }
+    }
     setNewKey('');
+    setNewEmail('');
     notify(t('saved'), 'success');
     load();
   };
 
   const removeKey = async (idx: number) => {
+    const removed = keys[idx];
     const updated = keys.filter((_, i) => i !== idx);
     const newActive = Math.min(activeIndex, updated.length - 1);
-    await supabase.from('app_settings').update({ gemini_api_keys: updated, ai_active_key_index: Math.max(0, newActive) }).eq('id', 1);
+    const { error } = await supabase.from('app_settings').update({ gemini_api_keys: updated, ai_active_key_index: Math.max(0, newActive) }).eq('id', 1);
+    if (error) { notify(error.message, 'error'); return; }
+    await supabase.from('gemini_key_emails').delete().eq('key_value', removed);
     notify('Key removed', 'success');
     load();
   };
@@ -1541,7 +1558,7 @@ function AiKeysTab() {
         <p className="text-xs text-slate-400 mb-3">
           Add multiple Gemini API keys for automatic rotation. When one key hits rate limits, the system switches to the next key instantly.
         </p>
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
@@ -1549,7 +1566,16 @@ function AiKeysTab() {
             className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
             onKeyDown={(e) => { if (e.key === 'Enter') addKey(); }}
           />
-          <Button className="flex items-center gap-1" onClick={addKey}><Plus size={16} /> Add</Button>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="Email address"
+            aria-label="Email address for this key"
+            className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+            onKeyDown={(e) => { if (e.key === 'Enter') addKey(); }}
+          />
+          <Button className="flex items-center justify-center gap-1" onClick={addKey}><Plus size={16} /> Add</Button>
         </div>
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {keys.length === 0 ? (
@@ -1558,6 +1584,7 @@ function AiKeysTab() {
             <div key={i} className={`bg-slate-800/50 border rounded-xl p-3 flex items-center gap-3 ${i === activeIndex ? 'border-emerald-500/40' : 'border-white/10'}`}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white font-mono truncate">{k.slice(0, 12)}...{k.slice(-4)}</p>
+                <p className="text-xs text-slate-400 truncate">{emails[k] || 'No email set'}</p>
                 {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
               </div>
               {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
