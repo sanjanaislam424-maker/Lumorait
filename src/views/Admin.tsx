@@ -1502,6 +1502,8 @@ function AiKeysTab() {
   const [newKey, setNewKey] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [emails, setEmails] = useState<Record<string, string>>({});
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState('');
 
   const load = async () => {
     const [{ data: settings }, { data: emailRows }] = await Promise.all([
@@ -1548,6 +1550,23 @@ function AiKeysTab() {
     notify(t('saved'), 'success');
   };
 
+  const openEmailEditor = (key: string) => {
+    setEditingKey(key);
+    setEditEmail(emails[key] || '');
+  };
+
+  const saveEmail = async () => {
+    if (!editingKey) return;
+    const email = editEmail.trim();
+    const { error } = email
+      ? await supabase.from('gemini_key_emails').upsert({ key_value: editingKey, email })
+      : await supabase.from('gemini_key_emails').delete().eq('key_value', editingKey);
+    if (error) { notify(error.message, 'error'); return; }
+    notify(t('saved'), 'success');
+    setEditingKey(null);
+    load();
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -1588,11 +1607,28 @@ function AiKeysTab() {
                 {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
               </div>
               {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
+              <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Edit email" onClick={() => openEmailEditor(k)}><Edit2 size={12} /></Button>
               <Button variant="danger" className="text-xs px-2 py-1" onClick={() => removeKey(i)}><Trash2 size={12} /></Button>
             </div>
           ))}
         </div>
       </Card>
+      <Modal open={editingKey !== null} onClose={() => setEditingKey(null)} title="Key email address">
+        <div className="space-y-4">
+          <p className="text-xs text-slate-400 font-mono truncate">{editingKey ? `${editingKey.slice(0, 12)}...${editingKey.slice(-4)}` : ''}</p>
+          <input
+            type="email"
+            value={editEmail}
+            onChange={(e) => setEditEmail(e.target.value)}
+            placeholder="Email address"
+            aria-label="Email address for this key"
+            className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+            onKeyDown={(e) => { if (e.key === 'Enter') saveEmail(); }}
+          />
+          <p className="text-[11px] text-slate-500">Leave empty to remove the saved email for this key.</p>
+          <Button className="w-full" onClick={saveEmail}>Save</Button>
+        </div>
+      </Modal>
     </div>
   );
 }
