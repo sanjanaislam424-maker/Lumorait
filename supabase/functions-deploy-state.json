@@ -1,6 +1,10 @@
 {
   "projectId": "72223063",
   "functions": {
+    "ai-chat": {
+      "hasChanged": false,
+      "hash": "429989a813458b64f3c27d8e3dc68a221bc5ca94b6039e1b2d25dd5cf5d1f489"
+    },
     "daily-ai-content": {
       "hasChanged": false,
       "hash": "c4d9719f8a213e5481730e90a3f12fead290811d3b4a2c5f510b480e125199c0"
@@ -8,10 +12,6 @@
     "process-promotion-charges": {
       "hasChanged": false,
       "hash": "637c9994edbb1441c6b1a090bb74fec131f0bbcbc60a257d14db373ba52b60aa"
-    },
-    "ai-chat": {
-      "hasChanged": false,
-      "hash": "3f65cc9e8cece4bfece3331fc29388997a6b674d5fcbdbea43c9123876e4f599"
     }
   }
 }
