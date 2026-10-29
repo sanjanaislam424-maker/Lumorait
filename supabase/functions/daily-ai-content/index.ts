@@ -41,18 +41,26 @@ async function generateWithAI(): Promise<{ funny_bn: string; funny_en: string; t
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return null;
 
-  const prompt = `Generate exactly 4 lines of content for a social media micro-task app called "Lumora IT".
+  const prompt = `You are the witty, sarcastic, hilarious AI assistant for "Lumora IT", a Bangladeshi social media micro-task and SMM app.
+Generate exactly 4 lines of content. Be extremely funny, witty, and sarcastic — like a best friend who roasts you lovingly.
+
+The Bengali lines MUST be in PURE Bengali script (বাংলা হরফ), NOT Banglish.
+The English lines MUST be in witty, engaging English.
+
 Return ONLY valid JSON, no markdown, no code fences.
 
 Format:
 {
-  "funny_bn": "A witty 1-line funny truth about social media algorithms, viral marketing, freelancing, or micro-tasks in Bengali, casual best-friend tone, max 120 chars",
-  "funny_en": "English translation of the funny line, max 100 chars",
-  "tip_bn": "A practical, actionable social media growth tip in Bengali, max 150 chars",
-  "tip_en": "English translation of the tip, max 120 chars"
+  "funny_bn": "A witty, sarcastic 1-line funny truth about social media algorithms, viral marketing, freelancing, or micro-tasks in PURE Bengali script, casual best-friend tone, max 120 chars",
+  "funny_en": "The same funny line in witty English, max 100 chars",
+  "tip_bn": "A practical, actionable social media growth tip in PURE Bengali script, with a funny sarcastic twist, max 150 chars",
+  "tip_en": "The same tip in witty English with a sarcastic twist, max 120 chars"
 }
 
-Make it fresh and different each time. Be creative and specific.`;
+Example tone for Bengali: "ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে!"
+Example tone for English: "Facebook's algorithm knows your ex better than you!"
+
+Make it fresh and different each time. Be creative, specific, and hilarious. No emoji.`;
 
   try {
     const res = await fetch(

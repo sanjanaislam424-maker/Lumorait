@@ -1,112 +1,21 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Snowflake, CloudRain, Cloud, Sun, Flame, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useClock, useWeather, greetingKey } from '@/lib/weather';
 import { useApp } from '@/lib/AppContext';
-import { supabase } from '@/lib/supabase';
+import { useDailyAiContent } from '@/lib/useDailyAiContent';
 
-// ---- Static fallback content (used if edge function / DB fails) ----
-const FALLBACK = {
-  funny_bn: [
-    'ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে!',
-    'ভাইরাল হওয়ার আগে কনফিডেন্স লাগে — তোমার কনটেন্ট নাকি হিম্মত?',
-    'ফ্রিল্যান্সিং মানে স্বাধীনতা? ক্লায়েন্ট না দিলে ঘুমানোর স্বাধীনতা!',
-    'মাইক্রো-টাস্ক করে কোটিপতি হওয়া যায় না, কিন্তু চা-ও বানানো যায় না না করলে!',
-  ],
-  funny_en: [
-    "Facebook's algorithm knows your ex better than you!",
-    'Going viral takes confidence — your content or your courage?',
-    'Freelancing means freedom? Freedom to sleep without clients!',
-    "Micro-tasks won't make you rich, but without them no tea either!",
-  ],
-  tip_bn: [
-    'ফেসবুক পেজ রিচ বাড়াতে প্রতিদিন সকাল ৯টা ও রাত ৮টায় পোস্ট করো!',
-    'ইউটিউব শর্টস আপলোড করো বিকেল ৫টা থেকে রাত ৯টা — অ্যালগরিদম সবচেয়ে সক্রিয়!',
-    'টাস্ক প্রমাণে ভালো স্ক্রিনশট দাও — অ্যাপ্রুভ পাওয়ার সম্ভাবনা ৩x বাড়ে!',
-    'ভিডিওর প্রথম ৩ সেকেন্ডে হুক রাখো — নাহলে দর্শক স্ক্রল করে যাবে!',
-  ],
-  tip_en: [
-    'Post on Facebook at 9 AM and 8 PM daily for peak reach!',
-    'Upload YouTube Shorts 5-9 PM — the algorithm is most active!',
-    'High-quality screenshots as task proof triple approval chances!',
-    'Hook viewers in the first 3 seconds or they scroll away!',
-  ],
-};
-
-type AIContent = { funny_bn: string; funny_en: string; tip_bn: string; tip_en: string };
-
-function pickFallback(lang: 'bn' | 'en', type: 'funny' | 'tip'): string {
-  const arr = lang === 'bn'
-    ? (type === 'funny' ? FALLBACK.funny_bn : FALLBACK.tip_bn)
-    : (type === 'funny' ? FALLBACK.funny_en : FALLBACK.tip_en);
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+// (Daily AI content is now handled by the useDailyAiContent hook)
 
 export function WeatherHeader() {
   const { t, profile, lang } = useApp();
   const now = useClock();
   const weather = useWeather();
+  const { content: aiContent } = useDailyAiContent();
 
   const [icon, setIcon] = useState(<Sun size={28} />);
-  const [aiContent, setAiContent] = useState<AIContent | null>(null);
   const [carouselTab, setCarouselTab] = useState<0 | 1>(0);
   const [dragStart, setDragStart] = useState<number | null>(null);
-  const fetchedDateRef = useRef<string | null>(null);
-
-  // ---- Fetch daily AI content (once per day) ----
-  const fetchAIContent = useCallback(async () => {
-    const today = new Date().toISOString().split('T')[0];
-    if (fetchedDateRef.current === today && aiContent) return;
-    fetchedDateRef.current = today;
-
-    try {
-      // Try DB first
-      const { data: existing } = await supabase
-        .from('daily_ai_content')
-        .select('funny_bn, funny_en, tip_bn, tip_en')
-        .eq('content_date', today)
-        .maybeSingle();
-
-      if (existing && (existing.funny_bn || existing.tip_bn)) {
-        setAiContent(existing as AIContent);
-        return;
-      }
-
-      // Trigger edge function to generate + cache
-      const funcUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-ai-content`;
-      const res = await fetch(funcUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data && (data.funny_bn || data.tip_bn)) {
-          setAiContent(data as AIContent);
-          return;
-        }
-      }
-      // Fallback to static content
-      setAiContent({
-        funny_bn: pickFallback('bn', 'funny'),
-        funny_en: pickFallback('en', 'funny'),
-        tip_bn: pickFallback('bn', 'tip'),
-        tip_en: pickFallback('en', 'tip'),
-      });
-    } catch {
-      setAiContent({
-        funny_bn: pickFallback('bn', 'funny'),
-        funny_en: pickFallback('en', 'funny'),
-        tip_bn: pickFallback('bn', 'tip'),
-        tip_en: pickFallback('en', 'tip'),
-      });
-    }
-  }, [aiContent]);
-
-  useEffect(() => { fetchAIContent(); }, [fetchAIContent]);
 
   // ---- Weather icon ----
   useEffect(() => {
@@ -131,8 +40,8 @@ export function WeatherHeader() {
   const gKey = greetingKey(now.getHours());
   const name = profile?.full_name || (lang === 'bn' ? 'বন্ধু' : 'buddy');
 
-  const funnyText = lang === 'bn' ? aiContent?.funny_bn : aiContent?.funny_en;
-  const tipText = lang === 'bn' ? aiContent?.tip_bn : aiContent?.tip_en;
+  const funnyText = lang === 'bn' ? aiContent.funny_bn : aiContent.funny_en;
+  const tipText = lang === 'bn' ? aiContent.tip_bn : aiContent.tip_en;
 
   // ---- Swipe handlers ----
   const handleTouchStart = (e: React.TouchEvent) => setDragStart(e.touches[0].clientX);

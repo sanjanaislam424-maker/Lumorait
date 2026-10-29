@@ -7,6 +7,7 @@ import { Card, Button, CoinBadge, Modal } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { View } from '@/components/AppShell';
 import { microcopy } from '@/lib/microcopy';
+import { useDailyAiContent } from '@/lib/useDailyAiContent';
 
 const checkinRewards = [20, 40, 60, 80, 100, 200, 300];
 
@@ -16,6 +17,7 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
   const [rank, setRank] = useState<number | null>(null);
   const [referralStats, setReferralStats] = useState({ active: 0, total: 0 });
   const [calcOpen, setCalcOpen] = useState(false);
+  const { content: aiContent } = useDailyAiContent();
 
   useEffect(() => {
     if (profile) {
@@ -77,7 +79,7 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
         >
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-amber-400 shrink-0" />
-            <p className="text-sm text-amber-200">{microcopy.dashboardAlert()}</p>
+            <p className="text-sm text-amber-200">{lang === 'bn' ? aiContent.funny_bn : aiContent.funny_en}</p>
           </div>
         </motion.div>
       )}
@@ -130,8 +132,8 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
             <Lightbulb size={18} className="text-blue-400" />
           </div>
           <div>
-            <p className="text-[10px] text-blue-400 font-bold mb-1">AI TIPPONY</p>
-            <p className="text-sm text-blue-200 leading-relaxed">{microcopy.dailyTip()}</p>
+            <p className="text-[10px] text-blue-400 font-bold mb-1">{lang === 'bn' ? 'এআই টিপস' : 'AI TIP'}</p>
+            <p className="text-sm text-blue-200 leading-relaxed">{lang === 'bn' ? aiContent.tip_bn : aiContent.tip_en}</p>
           </div>
         </div>
       </div>
