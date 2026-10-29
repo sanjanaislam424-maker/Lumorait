@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, Send, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning } from 'lucide-react';
+import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
-import { Card, Button, Modal } from '@/components/ui';
+import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { ChatWidget } from '@/components/ChatWidget';
+
+const badgeIcons: Record<string, React.ReactNode> = {
+  Award: <Award size={16} />, Crown: <Crown size={16} />, Flame: <Flame size={16} />, Coins: <Coins size={16} />, TrendingUp: <TrendingUp size={16} />, Zap: <Zap size={16} />, Footprints: <Footprints size={16} />,
+};
+const tierColors: Record<string, string> = {
+  bronze: 'from-amber-700/20 to-amber-600/20 text-amber-400 border-amber-700/30',
+  silver: 'from-slate-400/20 to-slate-300/20 text-slate-300 border-slate-400/30',
+  gold: 'from-yellow-500/20 to-amber-400/20 text-yellow-300 border-yellow-500/30',
+  platinum: 'from-cyan-400/20 to-blue-400/20 text-cyan-300 border-cyan-400/30',
+};
 
 type KycStatus = 'none' | 'pending' | 'approved' | 'rejected' | 'appeal_pending' | 'appeal_approved';
 
@@ -128,6 +139,12 @@ export function ProfileView() {
         </div>
       </Card>
 
+      {/* Badges */}
+      <BadgeDisplay userId={profile.id} />
+
+      {/* Advertiser Panel */}
+      <AdvertiserPanel userId={profile.id} />
+
       {/* Support */}
       <Card>
         <button onClick={() => setSupportOpen(true)} className="flex items-center gap-2 w-full text-left">
@@ -155,8 +172,146 @@ export function ProfileView() {
         onClose={() => setAppealOpen(false)}
         onDone={() => { setAppealOpen(false); setKycStatus('appeal_pending'); notify(t('appealSubmitted'), 'success'); }}
       />
-      <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
+      <Modal open={supportOpen} onClose={() => setSupportOpen(false)} title={t('liveChat')}>
+        <ChatWidget supportMode subject="Support Request" />
+      </Modal>
     </div>
+  );
+}
+
+function BadgeDisplay({ userId }: { userId: string }) {
+  const { t } = useApp();
+  const [userBadges, setUserBadges] = useState<any[]>([]);
+  const [allBadges, setAllBadges] = useState<any[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const [ub, ab] = await Promise.all([
+        supabase.from('user_badges').select('*, badges(*)').eq('user_id', userId).order('awarded_at', { ascending: false }),
+        supabase.from('badges').select('*').eq('is_active', true).order('threshold_tasks', { ascending: true }),
+      ]);
+      setUserBadges(ub.data || []);
+      setAllBadges(ab.data || []);
+    })();
+  }, [userId]);
+
+  const earnedIds = new Set(userBadges.map((ub) => ub.badge_id));
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <Award size={18} className="text-amber-400" />
+        <h3 className="font-semibold text-white text-sm">{t('streakMax')}</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {allBadges.map((b) => {
+          const earned = earnedIds.has(b.id);
+          return (
+            <div
+              key={b.id}
+              className={`rounded-xl p-3 border transition ${earned ? tierColors[b.tier] || tierColors.bronze : 'bg-slate-800/30 border-white/5 opacity-40'}`}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/10">
+                  {badgeIcons[b.icon] || <Award size={14} />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold truncate" style={{ color: earned ? undefined : 'var(--neon-muted)' }}>{b.label}</p>
+                  <p className="text-[10px] opacity-60 truncate">{b.description}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function AdvertiserPanel({ userId }: { userId: string }) {
+  const { t, lang } = useApp();
+  const { notify } = useToast();
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', target_url: '', budget_coins: 100, reward_per_view: 1 });
+
+  const load = async () => {
+    const { data } = await supabase.from('ad_campaigns').select('*').eq('advertiser_id', userId).order('created_at', { ascending: false });
+    setCampaigns(data || []);
+  };
+  useEffect(() => { load(); }, [userId]);
+
+  const submit = async () => {
+    if (!form.title.trim() || !form.target_url.trim()) {
+      notify(lang === 'bn' ? 'টাইটেল এবং লিংক দাও' : 'Title and URL required', 'error');
+      return;
+    }
+    await supabase.from('ad_campaigns').insert({
+      advertiser_id: userId,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      target_url: form.target_url.trim(),
+      budget_coins: form.budget_coins,
+      reward_per_view: form.reward_per_view,
+      status: 'pending',
+    });
+    setForm({ title: '', description: '', target_url: '', budget_coins: 100, reward_per_view: 1 });
+    setCreating(false);
+    notify(lang === 'bn' ? 'ক্যাম্পেইন জমা হয়েছে! অ্যাডমিন অ্যাপ্রুভ করবে।' : 'Campaign submitted! Admin will approve.', 'success');
+    load();
+  };
+
+  const statusColors: Record<string, string> = {
+    pending: 'bg-slate-500/20 text-slate-300',
+    approved: 'bg-emerald-500/20 text-emerald-300',
+    rejected: 'bg-red-500/20 text-red-300',
+    paused: 'bg-amber-500/20 text-amber-300',
+    completed: 'bg-blue-500/20 text-blue-300',
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Megaphone size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white text-sm">{lang === 'bn' ? 'বিজ্ঞাপন প্যানেল' : 'Advertiser Panel'}</h3>
+        </div>
+        {!creating && (
+          <Button variant="ghost" className="text-xs px-2 py-1 flex items-center gap-1" onClick={() => setCreating(true)}>
+            <Plus size={12} /> {lang === 'bn' ? 'নতুন' : 'New'}
+          </Button>
+        )}
+      </div>
+
+      {creating && (
+        <div className="space-y-2 mb-3">
+          <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder={lang === 'bn' ? 'ক্যাম্পেইন টাইটেল' : 'Campaign title'} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+          <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={lang === 'bn' ? 'বিবরণ' : 'Description'} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+          <input value={form.target_url} onChange={(e) => setForm({ ...form, target_url: e.target.value })} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+          <div className="grid grid-cols-2 gap-2">
+            <input type="number" min={1} value={form.budget_coins} onChange={(e) => setForm({ ...form, budget_coins: +e.target.value })} placeholder={lang === 'bn' ? 'বাজেট (কয়েন)' : 'Budget (coins)'} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+            <input type="number" min={1} value={form.reward_per_view} onChange={(e) => setForm({ ...form, reward_per_view: +e.target.value })} placeholder={lang === 'bn' ? 'প্রতি ভিউ রিওয়ার্ড' : 'Reward/view'} className="bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+          </div>
+          <div className="flex gap-2">
+            <Button className="flex-1 text-sm" onClick={submit}>{lang === 'bn' ? 'জমা দাও' : 'Submit'}</Button>
+            <Button variant="ghost" className="text-sm" onClick={() => setCreating(false)}>{t('cancel')}</Button>
+          </div>
+        </div>
+      )}
+
+      {campaigns.length === 0 && !creating ? (
+        <p className="text-xs text-slate-500 text-center py-4">{lang === 'bn' ? 'কোনো ক্যাম্পেইন নেই' : 'No campaigns yet'}</p>
+      ) : campaigns.map((c) => (
+        <div key={c.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 mb-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-white font-medium truncate">{c.title}</p>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColors[c.status] || statusColors.pending}`}>{c.status}</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">{c.spent_coins}/{c.budget_coins} coins | {c.reward_per_view}/view</p>
+          {c.admin_note && <p className="text-[10px] text-amber-300 mt-1">{c.admin_note}</p>}
+        </div>
+      ))}
+    </Card>
   );
 }
 
