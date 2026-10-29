@@ -9,3 +9,7 @@ entrypoint = "./functions/process-promotion-charges/index.ts"
 [functions.ai-chat]
 verify_jwt = false
 entrypoint = "./functions/ai-chat/index.ts"
+
+[functions.ai-test-key]
+verify_jwt = false
+entrypoint = "./functions/ai-test-key/index.ts"

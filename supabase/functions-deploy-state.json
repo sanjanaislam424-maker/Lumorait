@@ -3,7 +3,7 @@
   "functions": {
     "ai-chat": {
       "hasChanged": false,
-      "hash": "657d92f7965c06ae01a3a4ac794eb024a24a6697aa07dfa0f1a2d93a40ba6ac2"
+      "hash": "0c0bf7e19be0a1c319ad4f5c2ca850ad6c7c8216a44e24fe97312641e013db79"
     },
     "daily-ai-content": {
       "hasChanged": false,
@@ -12,6 +12,10 @@
     "process-promotion-charges": {
       "hasChanged": false,
       "hash": "637c9994edbb1441c6b1a090bb74fec131f0bbcbc60a257d14db373ba52b60aa"
+    },
+    "ai-test-key": {
+      "hasChanged": false,
+      "hash": "f31a80048e3861c6ca20ce46812dd0dce681c87bce52ccb309b3484f11353cdc"
     }
   }
 }

@@ -100,6 +100,35 @@ async function* geminiTextDeltas(body: ReadableStream<Uint8Array>): AsyncGenerat
   }
 }
 
+async function* geminiTextAndUsage(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<{ text?: string; usage?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } }> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line.startsWith("data:")) continue;
+      try {
+        const data = JSON.parse(line.slice(5));
+        const text: string | undefined = data?.candidates?.[0]?.content?.parts
+          ?.map((p: { text?: string }) => p.text ?? "")
+          .join("");
+        const usage = data?.usageMetadata;
+        if (text || usage) yield { text, usage };
+      } catch (err) {
+        console.error("Could not parse Gemini stream line:", err);
+      }
+    }
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -155,12 +184,28 @@ Deno.serve(async (req: Request) => {
           controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
         };
         let fullReply = "";
+        let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | null = null;
         try {
-          for await (const delta of geminiTextDeltas(upstream.body)) {
-            fullReply += delta;
-            send({ type: "text", delta });
+          for await (const { text, usage } of geminiTextAndUsage(upstream.body)) {
+            if (text) {
+              fullReply += text;
+              send({ type: "text", delta: text });
+            }
+            if (usage) lastUsage = usage;
           }
           if (!fullReply.trim()) throw new Error("Gemini returned an empty reply");
+
+          const usedKey = allKeys[upstream.keyIndex];
+          const promptTokens = lastUsage?.promptTokenCount ?? 0;
+          const outputTokens = lastUsage?.candidatesTokenCount ?? 0;
+          if (usedKey && (promptTokens || outputTokens)) {
+            const { error: rpcError } = await supabase.rpc("increment_gemini_key_usage", {
+              p_key: usedKey,
+              p_prompt: promptTokens,
+              p_output: outputTokens,
+            });
+            if (rpcError) console.error("Could not save key usage:", rpcError);
+          }
 
           let savedId: string | null = null;
           if (sessionId) {

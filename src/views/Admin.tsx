@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -1504,15 +1504,20 @@ function AiKeysTab() {
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editEmail, setEditEmail] = useState('');
+  const [usage, setUsage] = useState<Record<string, { request_count: number; prompt_tokens: number; output_tokens: number; last_used_at: string | null }>>({});
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
 
   const load = async () => {
-    const [{ data: settings }, { data: emailRows }] = await Promise.all([
+    const [{ data: settings }, { data: emailRows }, { data: usageRows }] = await Promise.all([
       supabase.from('app_settings').select('gemini_api_keys, ai_active_key_index').eq('id', 1).maybeSingle(),
       supabase.from('gemini_key_emails').select('key_value, email'),
+      supabase.from('gemini_key_usage').select('key_value, request_count, prompt_tokens, output_tokens, last_used_at'),
     ]);
     setKeys(Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : []);
     setActiveIndex(settings?.ai_active_key_index ?? 0);
     setEmails(Object.fromEntries((emailRows ?? []).map((row) => [row.key_value, row.email])));
+    setUsage(Object.fromEntries((usageRows ?? []).map((row) => [row.key_value, row])));
   };
   useEffect(() => { load(); }, []);
 
@@ -1567,6 +1572,36 @@ function AiKeysTab() {
     load();
   };
 
+  const testKey = async (key: string) => {
+    setTestingKey(key);
+    setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: 'Testing...' } }));
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          apiKey: key,
+          messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        const tokens = data.usage ? ` (${data.usage.totalTokenCount ?? 0} tokens)` : '';
+        setTestResults((prev) => ({ ...prev, [key]: { ok: true, message: `Valid${tokens} — ${data.model}` } }));
+        notify('Key is valid and working', 'success');
+      } else {
+        const msg = data.error ? `Failed: ${String(data.error).slice(0, 120)}` : 'Key validation failed';
+        setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: msg } }));
+        notify('Key test failed', 'error');
+      }
+    } catch (err) {
+      setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: 'Connection error' } }));
+      notify('Key test connection error', 'error');
+    } finally {
+      setTestingKey(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -1596,21 +1631,40 @@ function AiKeysTab() {
           />
           <Button className="flex items-center justify-center gap-1" onClick={addKey}><Plus size={16} /> Add</Button>
         </div>
-        <div className="space-y-2 max-h-80 overflow-y-auto">
+        <div className="space-y-2 max-h-[28rem] overflow-y-auto">
           {keys.length === 0 ? (
             <EmptyState message="No API keys added yet" icon={<Key size={24} />} />
-          ) : keys.map((k, i) => (
-            <div key={i} className={`bg-slate-800/50 border rounded-xl p-3 flex items-center gap-3 ${i === activeIndex ? 'border-emerald-500/40' : 'border-white/10'}`}>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-mono truncate">{k.slice(0, 12)}...{k.slice(-4)}</p>
-                <p className="text-xs text-slate-400 truncate">{emails[k] || 'No email set'}</p>
-                {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
+          ) : keys.map((k, i) => {
+            const u = usage[k];
+            const tr = testResults[k];
+            return (
+              <div key={i} className={`bg-slate-800/50 border rounded-xl p-3 ${i === activeIndex ? 'border-emerald-500/40' : 'border-white/10'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white font-mono truncate">{k.slice(0, 12)}...{k.slice(-4)}</p>
+                    <p className="text-xs text-slate-400 truncate">{emails[k] || 'No email set'}</p>
+                    {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
+                  </div>
+                  {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
+                  <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Test key" disabled={testingKey === k} onClick={() => testKey(k)}><FlaskConical size={12} /></Button>
+                  <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Edit email" onClick={() => openEmailEditor(k)}><Edit2 size={12} /></Button>
+                  <Button variant="danger" className="text-xs px-2 py-1" onClick={() => removeKey(i)}><Trash2 size={12} /></Button>
+                </div>
+                {tr && (
+                  <p className={`text-[11px] mt-2 ${tr.ok ? 'text-emerald-400' : 'text-amber-400'}`}>{tr.message}</p>
+                )}
+                {u && (
+                  <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1"><Activity size={10} /> {u.request_count} requests</span>
+                    <span>{(u.prompt_tokens + u.output_tokens).toLocaleString()} tokens</span>
+                    <span className="hidden sm:inline">in: {u.prompt_tokens.toLocaleString()}</span>
+                    <span className="hidden sm:inline">out: {u.output_tokens.toLocaleString()}</span>
+                    {u.last_used_at && <span className="ml-auto">{new Date(u.last_used_at).toLocaleDateString()}</span>}
+                  </div>
+                )}
               </div>
-              {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
-              <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Edit email" onClick={() => openEmailEditor(k)}><Edit2 size={12} /></Button>
-              <Button variant="danger" className="text-xs px-2 py-1" onClick={() => removeKey(i)}><Trash2 size={12} /></Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
       <Modal open={editingKey !== null} onClose={() => setEditingKey(null)} title="Key email address">
