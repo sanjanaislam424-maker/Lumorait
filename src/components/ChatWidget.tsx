@@ -4,6 +4,7 @@ import { Bot, X, Send, MessageCircle, UserCog, Sparkles, RefreshCw } from 'lucid
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
+import { streamAiReply } from '@/lib/aiChatStream';
 
 interface ChatMsg {
   id: string;
@@ -21,6 +22,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<string>('active');
   const [pendingHuman, setPendingHuman] = useState(false);
@@ -134,43 +136,48 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
       setMessages((prev) => prev.map((m) => m.id === userMsg.id ? inserted as ChatMsg : m));
     }
 
-    const history = (messages.length > 0 ? messages : []).concat([{ role: 'user', content: text }]).slice(-12);
+    const history = [...messages, { role: 'user', content: text }].slice(-12).map((m) => ({ role: m.role, content: m.content }));
+    const streamId = 'stream-' + Date.now();
 
     try {
-      const res = await fetch(aiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      const result = await streamAiReply({
+        endpoint: aiEndpoint,
+        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        messages: history,
+        sessionId: sid,
+        onText: (delta) => {
+          setStreaming(true);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === streamId)) {
+              return prev.map((m) => m.id === streamId ? { ...m, content: m.content + delta } : m);
+            }
+            return [...prev, { id: streamId, role: 'assistant', content: delta, created_at: new Date().toISOString() }];
+          });
+          scrollToBottom();
         },
-        body: JSON.stringify({ messages: history, sessionId: sid }),
+        onDone: (savedId) => {
+          setMessages((prev) => {
+            if (savedId && prev.some((m) => m.id === savedId)) return prev.filter((m) => m.id !== streamId);
+            return prev.map((m) => m.id === streamId && savedId ? { ...m, id: savedId } : m);
+          });
+        },
       });
-      const data = await res.json();
-      if (data.reply) {
-        const aiMsg: ChatMsg = {
-          id: 'ai-' + Date.now(),
-          role: 'assistant',
-          content: data.reply,
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } else {
-        setMessages((prev) => [...prev, {
-          id: 'fallback-' + Date.now(),
-          role: 'assistant',
-          content: AI_FALLBACK,
-          created_at: new Date().toISOString(),
-        }]);
+
+      if (!result.ok) {
+        if (result.partial) {
+          notify(lang === 'bn' ? 'সংযোগ বিচ্ছিন্ন হয়েছে, উত্তর অসম্পূর্ণ থাকতে পারে' : 'Connection interrupted, the reply may be incomplete', 'error');
+        } else {
+          setMessages((prev) => [...prev, {
+            id: 'fallback-' + Date.now(),
+            role: 'assistant',
+            content: AI_FALLBACK,
+            created_at: new Date().toISOString(),
+          }]);
+        }
       }
-    } catch {
-      setMessages((prev) => [...prev, {
-        id: 'error-' + Date.now(),
-        role: 'assistant',
-        content: AI_FALLBACK,
-        created_at: new Date().toISOString(),
-      }]);
     } finally {
       setLoading(false);
+      setStreaming(false);
       scrollToBottom();
     }
   };
@@ -200,7 +207,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
           subtitle={pendingHuman ? (lang === 'bn' ? 'অ্যাডমিনের জন্য অপেক্ষা...' : 'Waiting for admin...') : 'Lumora AI'}
           pendingHuman={pendingHuman}
         />
-        <ChatMessages messages={messages} loading={loading} scrollRef={scrollRef} lang={lang} />
+        <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
         <ChatInput
           input={input}
           setInput={setInput}
@@ -248,7 +255,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
               pendingHuman={pendingHuman}
               onNewChat={startNewChat}
             />
-            <ChatMessages messages={messages} loading={loading} scrollRef={scrollRef} lang={lang} />
+            <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
             <ChatInput
               input={input}
               setInput={setInput}

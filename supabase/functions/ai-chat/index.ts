@@ -6,52 +6,97 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"];
+const CONNECT_TIMEOUT_MS = 20_000;
+const encoder = new TextEncoder();
+
 interface ChatMessage {
   role: string;
   content: string;
 }
 
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"];
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
-async function callGeminiModel(model: string, apiKey: string, systemPrompt: string, contents: unknown[]): Promise<string | null> {
+async function requestGeminiStream(
+  model: string,
+  apiKey: string,
+  systemPrompt: string,
+  contents: unknown[],
+): Promise<ReadableStream<Uint8Array> | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents,
           systemInstruction: { parts: [{ text: systemPrompt }] },
           generationConfig: { temperature: 0.8, maxOutputTokens: 600 },
         }),
+        signal: controller.signal,
       },
     );
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       console.error(`Gemini ${model} failed (${res.status}): ${await res.text()}`);
       return null;
     }
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) console.error(`Gemini ${model} returned no text:`, JSON.stringify(data));
-    return text || null;
+    return res.body;
   } catch (err) {
     console.error(`Gemini ${model} request error:`, err);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function callGemini(apiKey: string, systemPrompt: string, history: ChatMessage[]): Promise<string | null> {
-  const contents = history.map((m) => ({
-    role: m.role === "assistant" || m.role === "admin" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
-
-  for (const model of GEMINI_MODELS) {
-    const reply = await callGeminiModel(model, apiKey, systemPrompt, contents);
-    if (reply) return reply;
+async function openGeminiStream(
+  keys: string[],
+  startIndex: number,
+  systemPrompt: string,
+  contents: unknown[],
+): Promise<{ body: ReadableStream<Uint8Array>; keyIndex: number } | null> {
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const keyIndex = (startIndex + attempt) % keys.length;
+    for (const model of GEMINI_MODELS) {
+      const body = await requestGeminiStream(model, keys[keyIndex], systemPrompt, contents);
+      if (body) return { body, keyIndex };
+    }
   }
   return null;
+}
+
+async function* geminiTextDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line.startsWith("data:")) continue;
+      try {
+        const data = JSON.parse(line.slice(5));
+        const text: string | undefined = data?.candidates?.[0]?.content?.parts
+          ?.map((p: { text?: string }) => p.text ?? "")
+          .join("");
+        if (text) yield text;
+      } catch (err) {
+        console.error("Could not parse Gemini stream line:", err);
+      }
+    }
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -62,10 +107,7 @@ Deno.serve(async (req: Request) => {
   try {
     const { messages, sessionId } = await req.json();
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: "Messages required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Messages required" }, 400);
     }
 
     const supabase = createClient(
@@ -81,55 +123,69 @@ Deno.serve(async (req: Request) => {
 
     const apiKeys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
     const systemPrompt: string = settings?.ai_system_prompt || "You are a helpful assistant.";
-    let activeIndex: number = settings?.ai_active_key_index ?? 0;
+    const activeIndex: number = settings?.ai_active_key_index ?? 0;
 
+    const allKeys = apiKeys.filter(Boolean);
     const envKey = Deno.env.get("GEMINI_API_KEY");
-    const allKeys = [...apiKeys.filter(Boolean)];
     if (envKey && !allKeys.includes(envKey)) allKeys.push(envKey);
 
     if (allKeys.length === 0) {
-      return new Response(JSON.stringify({
-        reply: "I'm sorry, no AI keys are configured yet. Please contact support.",
-        noKeys: true,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("ai-chat: no Gemini keys configured");
+      return jsonResponse({ error: "no_keys" }, 503);
     }
 
-    let reply: string | null = null;
-    let usedKeyIndex = activeIndex % allKeys.length;
+    const contents = messages.map((m: ChatMessage) => ({
+      role: m.role === "assistant" || m.role === "admin" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
 
-    for (let attempt = 0; attempt < allKeys.length; attempt++) {
-      const keyIndex = (activeIndex + attempt) % allKeys.length;
-      reply = await callGemini(allKeys[keyIndex], systemPrompt, messages);
-      if (reply) {
-        usedKeyIndex = keyIndex;
-        if (keyIndex !== activeIndex) {
-          await supabase.from("app_settings").update({ ai_active_key_index: keyIndex }).eq("id", 1);
+    const upstream = await openGeminiStream(allKeys, activeIndex % allKeys.length, systemPrompt, contents);
+    if (!upstream) {
+      return jsonResponse({ error: "upstream_unavailable" }, 503);
+    }
+
+    if (upstream.keyIndex !== activeIndex % allKeys.length) {
+      await supabase.from("app_settings").update({ ai_active_key_index: upstream.keyIndex }).eq("id", 1);
+    }
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        };
+        let fullReply = "";
+        try {
+          for await (const delta of geminiTextDeltas(upstream.body)) {
+            fullReply += delta;
+            send({ type: "text", delta });
+          }
+          if (!fullReply.trim()) throw new Error("Gemini returned an empty reply");
+
+          let savedId: string | null = null;
+          if (sessionId) {
+            const { data, error } = await supabase
+              .from("chat_messages")
+              .insert({ session_id: sessionId, role: "assistant", content: fullReply })
+              .select("id")
+              .maybeSingle();
+            if (error) console.error("Could not save assistant reply:", error);
+            savedId = data?.id ?? null;
+          }
+          send({ type: "done", id: savedId });
+        } catch (err) {
+          console.error("ai-chat stream failed:", err);
+          send({ type: "error", message: "stream_failed" });
+        } finally {
+          controller.close();
         }
-        break;
-      }
-    }
+      },
+    });
 
-    if (!reply) {
-      reply = "I'm having trouble responding right now. Please try again in a moment, or click 'Talk to Human' to reach our support team.";
-    }
-
-    if (sessionId) {
-      await supabase.from("chat_messages").insert({
-        session_id: sessionId,
-        role: "assistant",
-        content: reply,
-      });
-    }
-
-    return new Response(JSON.stringify({ reply, keyIndex: usedKeyIndex }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(stream, {
+      headers: { ...corsHeaders, "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("ai-chat error:", err);
+    return jsonResponse({ error: "server_error" }, 500);
   }
 });
