@@ -16,17 +16,25 @@ const STATIC_FALLBACK: DailyAiContent = {
 };
 
 const LS_KEY = 'lumora_daily_ai_content';
+const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 function todayStr(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function getLSCache(): { date: string; content: DailyAiContent } | null {
+interface CacheEntry {
+  date: string;
+  ts: number;
+  content: DailyAiContent;
+}
+
+function getLSCache(): CacheEntry | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as CacheEntry;
     if (parsed.date !== todayStr()) return null;
+    if (Date.now() - parsed.ts > MAX_AGE_MS) return null;
     return parsed;
   } catch {
     return null;
@@ -35,7 +43,8 @@ function getLSCache(): { date: string; content: DailyAiContent } | null {
 
 function setLSCache(content: DailyAiContent) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ date: todayStr(), content }));
+    const entry: CacheEntry = { date: todayStr(), ts: Date.now(), content };
+    localStorage.setItem(LS_KEY, JSON.stringify(entry));
   } catch {
     // ignore
   }
@@ -47,15 +56,20 @@ export function useDailyAiContent(): { content: DailyAiContent; loading: boolean
     return cached?.content ?? STATIC_FALLBACK;
   });
   const [loading, setLoading] = useState(!getLSCache());
-  const fetchedRef = useRef(false);
+  const fetchedDateRef = useRef<string | null>(null);
 
-  const fetchContent = useCallback(async () => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+  const fetchContent = useCallback(async (force = false) => {
+    const today = todayStr();
+
+    if (!force && fetchedDateRef.current === today) {
+      const cached = getLSCache();
+      if (cached) return;
+    }
+
+    fetchedDateRef.current = today;
     setLoading(true);
 
     try {
-      const today = todayStr();
       const { data: existing } = await supabase
         .from('daily_ai_content')
         .select('funny_bn, funny_en, tip_bn, tip_en')
@@ -104,6 +118,18 @@ export function useDailyAiContent(): { content: DailyAiContent; loading: boolean
   }, []);
 
   useEffect(() => { fetchContent(); }, [fetchContent]);
+
+  // Midnight rollover checker: every 60s, check if date changed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const today = todayStr();
+      const cached = getLSCache();
+      if (!cached || cached.date !== today) {
+        fetchContent(true);
+      }
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchContent]);
 
   return { content, loading };
 }

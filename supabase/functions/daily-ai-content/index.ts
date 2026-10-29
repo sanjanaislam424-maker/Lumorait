@@ -37,16 +37,29 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-async function generateWithAI(): Promise<{ funny_bn: string; funny_en: string; tip_bn: string; tip_en: string } | null> {
+async function generateWithAI(
+  recentFunnyBn: string[], recentFunnyEn: string[], recentTipBn: string[], recentTipEn: string[],
+): Promise<{ funny_bn: string; funny_en: string; tip_bn: string; tip_en: string } | null> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return null;
+
+  const avoidList = [
+    ...recentFunnyBn.map((s) => `"${s}"`),
+    ...recentFunnyEn.map((s) => `"${s}"`),
+    ...recentTipBn.map((s) => `"${s}"`),
+    ...recentTipEn.map((s) => `"${s}"`),
+  ].join("\n");
+
+  const doNotRepeat = avoidList
+    ? `\n\nCRITICAL: Do NOT repeat or closely paraphrase any of these previous days' content. Generate completely fresh, different ideas:\n${avoidList}\n`
+    : "";
 
   const prompt = `You are the witty, sarcastic, hilarious AI assistant for "Lumora IT", a Bangladeshi social media micro-task and SMM app.
 Generate exactly 4 lines of content. Be extremely funny, witty, and sarcastic — like a best friend who roasts you lovingly.
 
 The Bengali lines MUST be in PURE Bengali script (বাংলা হরফ), NOT Banglish.
 The English lines MUST be in witty, engaging English.
-
+${doNotRepeat}
 Return ONLY valid JSON, no markdown, no code fences.
 
 Format:
@@ -115,8 +128,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Fetch recent days' content to avoid repetition
+    const { data: recentRows } = await supabase
+      .from("daily_ai_content")
+      .select("funny_bn, funny_en, tip_bn, tip_en")
+      .order("content_date", { ascending: false })
+      .limit(7);
+
+    const recentFunnyBn = (recentRows ?? []).map((r) => r.funny_bn).filter(Boolean);
+    const recentFunnyEn = (recentRows ?? []).map((r) => r.funny_en).filter(Boolean);
+    const recentTipBn = (recentRows ?? []).map((r) => r.tip_bn).filter(Boolean);
+    const recentTipEn = (recentRows ?? []).map((r) => r.tip_en).filter(Boolean);
+
     // Try AI generation, fall back to static content
-    const aiResult = await generateWithAI();
+    const aiResult = await generateWithAI(recentFunnyBn, recentFunnyEn, recentTipBn, recentTipEn);
     const content = aiResult ?? {
       funny_bn: pick(FALLBACK_FUNNY_BN),
       funny_en: pick(FALLBACK_FUNNY_EN),
