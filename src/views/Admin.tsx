@@ -1575,23 +1575,36 @@ function AiKeysTab() {
   };
 
   const testKey = async (key: string, silent = false): Promise<{ ok: boolean; status: string; message: string }> => {
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test-key`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({
-        apiKey: key,
-        messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
-      }),
-    });
-    const data = await res.json();
-    const result = data.ok
-      ? { ok: true, status: data.status || 'valid', message: data.message || 'Valid' }
-      : { ok: false, status: data.status || 'unknown', message: data.message || 'Failed' };
-    setTestResults((prev) => ({ ...prev, [key]: result }));
-    if (!silent) {
-      notify(result.ok ? 'Key is valid and working' : result.message, result.ok ? 'success' : 'error');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          apiKey: key,
+          messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
+        }),
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => ({ ok: false, status: 'server_error', message: 'Invalid response from server' }));
+      const result = data.ok
+        ? { ok: true, status: data.status || 'valid', message: data.message || 'Valid' }
+        : { ok: false, status: data.status || 'unknown', message: data.message || 'Failed' };
+      setTestResults((prev) => ({ ...prev, [key]: result }));
+      if (!silent) {
+        notify(result.ok ? 'Key is valid and working' : result.message, result.ok ? 'success' : 'error');
+      }
+      return result;
+    } catch (err) {
+      const isAbort = err instanceof DOMException && err.name === 'AbortError';
+      const result = { ok: false, status: isAbort ? 'timeout' : 'error', message: isAbort ? 'Request timed out' : 'Connection error' };
+      setTestResults((prev) => ({ ...prev, [key]: result }));
+      if (!silent) notify(result.message, 'error');
+      return result;
+    } finally {
+      clearTimeout(timer);
     }
-    return result;
   };
 
   const testSingleKey = async (key: string) => {
@@ -1691,8 +1704,8 @@ function AiKeysTab() {
                 </div>
                 {tr && (
                   <div className="flex items-center gap-2 mt-2">
-                    <span className={`inline-block w-2 h-2 rounded-full ${tr.status === 'testing' ? 'bg-amber-400 animate-pulse' : tr.ok ? 'bg-emerald-400' : tr.status === 'quota_exceeded' ? 'bg-red-500' : tr.status === 'rate_limited' ? 'bg-orange-400' : 'bg-amber-400'}`} />
-                    <p className={`text-[11px] ${tr.ok ? 'text-emerald-400' : tr.status === 'quota_exceeded' ? 'text-red-400' : tr.status === 'rate_limited' ? 'text-orange-400' : tr.status === 'invalid_key' ? 'text-red-400' : 'text-amber-400'}`}>{tr.message}</p>
+                    <span className={`inline-block w-2 h-2 rounded-full ${tr.status === 'testing' ? 'bg-amber-400 animate-pulse' : tr.ok ? 'bg-emerald-400' : tr.status === 'quota_exceeded' || tr.status === 'invalid_key' ? 'bg-red-500' : tr.status === 'rate_limited' ? 'bg-orange-400' : tr.status === 'timeout' ? 'bg-orange-400' : 'bg-amber-400'}`} />
+                    <p className={`text-[11px] ${tr.ok ? 'text-emerald-400' : tr.status === 'quota_exceeded' || tr.status === 'invalid_key' ? 'text-red-400' : tr.status === 'rate_limited' || tr.status === 'timeout' ? 'text-orange-400' : 'text-amber-400'}`}>{tr.message}</p>
                   </div>
                 )}
                 {u && (
