@@ -490,35 +490,4 @@ function AppealModal({ open, onClose, onDone }: { open: boolean; onClose: () => 
   );
 }
 
-function SupportModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t } = useApp();
-  const [msgs, setMsgs] = useState<{ id: number; from: string; text: string }[]>([
-    { id: 1, from: 'support', text: 'Hey! Lumora support this side. How can I help, buddy?' },
-  ]);
-  const [text, setText] = useState('');
 
-  const send = () => {
-    if (!text.trim()) return;
-    setMsgs((prev) => [...prev, { id: Date.now(), from: 'me', text }]);
-    setText('');
-    setTimeout(() => {
-      setMsgs((prev) => [...prev, { id: Date.now() + 1, from: 'support', text: 'Got it! We will look into that right away.' }]);
-    }, 1500);
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title={t('liveChat')}>
-      <div className="h-64 overflow-y-auto space-y-2 mb-3 bg-slate-900/50 rounded-xl p-3">
-        {msgs.map((m) => (
-          <div key={m.id} className={`flex ${m.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${m.from === 'me' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-200'}`}>{m.text}</div>
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder={t('typeMessage')} className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none" />
-        <Button onClick={send}><Send size={16} /></Button>
-      </div>
-    </Modal>
-  );
-}
