@@ -205,6 +205,11 @@ Deno.serve(async (req: Request) => {
               p_output: outputTokens,
             });
             if (rpcError) console.error("Could not save key usage:", rpcError);
+            const { error: dailyError } = await supabase.rpc("increment_gemini_daily_usage", {
+              p_prompt: promptTokens,
+              p_output: outputTokens,
+            });
+            if (dailyError) console.error("Could not save daily usage:", dailyError);
           }
 
           let savedId: string | null = null;

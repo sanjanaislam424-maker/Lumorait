@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical } from 'lucide-react';
+import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -1627,6 +1628,7 @@ function AiKeysTab() {
 
   return (
     <div className="space-y-4">
+      <UsageChart />
       <Card>
         <div className="flex items-center gap-2 mb-3">
           <Key size={18} className="text-amber-400" />
