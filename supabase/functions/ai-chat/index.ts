@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"];
+const MAX_OUTPUT_TOKENS = 8192;
 const CONNECT_TIMEOUT_MS = 20_000;
 const encoder = new TextEncoder();
 
@@ -39,7 +40,7 @@ async function requestGeminiStream(
         body: JSON.stringify({
           contents,
           systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { temperature: 0.8, maxOutputTokens: 8192 },
+          generationConfig: { temperature: 0.8, maxOutputTokens: MAX_OUTPUT_TOKENS },
         }),
         signal: controller.signal,
       },
