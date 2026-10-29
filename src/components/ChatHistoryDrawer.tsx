@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Trash2 } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
+import { useToast } from '@/components/Toast';
 import { chatSessionLabel, fetchChatSessions, type ChatSessionSummary } from '@/lib/chatSessions';
 
 interface ChatHistoryDrawerProps {
@@ -10,12 +11,15 @@ interface ChatHistoryDrawerProps {
   onClose: () => void;
   onSelect: (session: ChatSessionSummary) => void;
   onNewChat: () => void;
+  onDeleted?: (deletedId: string) => void;
 }
 
-export function ChatHistoryDrawer({ open, activeSessionId, onClose, onSelect, onNewChat }: ChatHistoryDrawerProps) {
+export function ChatHistoryDrawer({ open, activeSessionId, onClose, onSelect, onNewChat, onDeleted }: ChatHistoryDrawerProps) {
   const { profile, lang } = useApp();
+  const { notify } = useToast();
   const [sessions, setSessions] = useState<ChatSessionSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     if (!profile) return;
@@ -31,6 +35,23 @@ export function ChatHistoryDrawer({ open, activeSessionId, onClose, onSelect, on
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
+
+  const deleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    setDeletingId(sessionId);
+    const { error } = await (await import('@/lib/supabase')).supabase
+      .from('chat_sessions')
+      .delete()
+      .eq('id', sessionId);
+    setDeletingId(null);
+    if (error) {
+      notify(lang === 'bn' ? 'মুছতে সমস্যা হয়েছে' : 'Could not delete chat', 'error');
+      return;
+    }
+    notify(lang === 'bn' ? 'চ্যাট মুছে ফেলা হয়েছে' : 'Chat deleted', 'success');
+    onDeleted?.(sessionId);
+    loadSessions();
+  };
 
   return (
     <AnimatePresence>
@@ -103,22 +124,33 @@ export function ChatHistoryDrawer({ open, activeSessionId, onClose, onSelect, on
               {sessions?.map((s) => {
                 const active = s.id === activeSessionId;
                 return (
-                  <button
+                  <div
                     key={s.id}
-                    onClick={() => onSelect(s)}
-                    className="w-full text-left px-3 py-2.5 rounded-xl border transition hover:bg-white/5"
+                    className="group relative w-full text-left px-3 py-2.5 rounded-xl border transition hover:bg-white/5"
                     style={{
                       borderColor: active ? 'var(--neon-primary)' : 'var(--neon-border)',
                       background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
                     }}
                   >
-                    <p className="text-xs font-medium truncate" style={{ color: 'var(--neon-text)' }}>
-                      {chatSessionLabel(s, lang)}
-                    </p>
-                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--neon-muted)' }}>
-                      {formatDate(s.created_at)} · {s.chat_messages.length} {lang === 'bn' ? 'বার্তা' : 'msgs'}
-                    </p>
-                  </button>
+                    <button onClick={() => onSelect(s)} className="w-full text-left pr-7">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--neon-text)' }}>
+                        {chatSessionLabel(s, lang)}
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--neon-muted)' }}>
+                        {formatDate(s.created_at)} · {s.chat_messages.length} {lang === 'bn' ? 'বার্তা' : 'msgs'}
+                      </p>
+                    </button>
+                    <button
+                      onClick={(e) => deleteSession(e, s.id)}
+                      disabled={deletingId === s.id}
+                      aria-label={lang === 'bn' ? 'চ্যাট মুছো' : 'Delete chat'}
+                      title={lang === 'bn' ? 'চ্যাট মুছো' : 'Delete chat'}
+                      className="absolute top-1/2 right-2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition disabled:opacity-30"
+                      style={{ color: 'var(--neon-muted)' }}
+                    >
+                      <Trash2 size={12} className="hover:text-red-400" />
+                    </button>
+                  </div>
                 );
               })}
             </div>

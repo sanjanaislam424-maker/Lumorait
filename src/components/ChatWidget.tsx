@@ -259,7 +259,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-36 right-4 z-[100] w-[calc(100vw-2rem)] max-w-sm h-[500px] flex flex-col relative bg-slate-900/95 backdrop-blur-xl border rounded-2xl overflow-hidden"
+            className="fixed bottom-36 right-4 z-[100] w-[calc(100vw-2rem)] max-w-sm h-[500px] flex flex-col bg-slate-900/95 backdrop-blur-xl border rounded-2xl overflow-hidden"
             style={{ borderColor: 'var(--neon-border)' }}
           >
             <ChatHeader
@@ -287,6 +287,9 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
               onClose={() => setHistoryOpen(false)}
               onSelect={selectSession}
               onNewChat={startNewChat}
+              onDeleted={(deletedId) => {
+                if (deletedId === sessionId) startNewChat();
+              }}
             />
           </motion.div>
         )}

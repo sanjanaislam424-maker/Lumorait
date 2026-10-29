@@ -1506,7 +1506,8 @@ function AiKeysTab() {
   const [editEmail, setEditEmail] = useState('');
   const [usage, setUsage] = useState<Record<string, { request_count: number; prompt_tokens: number; output_tokens: number; last_used_at: string | null }>>({});
   const [testingKey, setTestingKey] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const [testingAll, setTestingAll] = useState(false);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; status: string; message: string }>>({});
 
   const load = async () => {
     const [{ data: settings }, { data: emailRows }, { data: usageRows }] = await Promise.all([
@@ -1572,34 +1573,56 @@ function AiKeysTab() {
     load();
   };
 
-  const testKey = async (key: string) => {
+  const testKey = async (key: string, silent = false): Promise<{ ok: boolean; status: string; message: string }> => {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({
+        apiKey: key,
+        messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
+      }),
+    });
+    const data = await res.json();
+    const result = data.ok
+      ? { ok: true, status: data.status || 'valid', message: data.message || 'Valid' }
+      : { ok: false, status: data.status || 'unknown', message: data.message || 'Failed' };
+    setTestResults((prev) => ({ ...prev, [key]: result }));
+    if (!silent) {
+      notify(result.ok ? 'Key is valid and working' : result.message, result.ok ? 'success' : 'error');
+    }
+    return result;
+  };
+
+  const testSingleKey = async (key: string) => {
     setTestingKey(key);
-    setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: 'Testing...' } }));
+    setTestResults((prev) => ({ ...prev, [key]: { ok: false, status: 'testing', message: 'Testing...' } }));
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test-key`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          apiKey: key,
-          messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        const tokens = data.usage ? ` (${data.usage.totalTokenCount ?? 0} tokens)` : '';
-        setTestResults((prev) => ({ ...prev, [key]: { ok: true, message: `Valid${tokens} — ${data.model}` } }));
-        notify('Key is valid and working', 'success');
-      } else {
-        const msg = data.error ? `Failed: ${String(data.error).slice(0, 120)}` : 'Key validation failed';
-        setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: msg } }));
-        notify('Key test failed', 'error');
-      }
-    } catch (err) {
-      setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: 'Connection error' } }));
+      await testKey(key);
+    } catch {
+      setTestResults((prev) => ({ ...prev, [key]: { ok: false, status: 'error', message: 'Connection error' } }));
       notify('Key test connection error', 'error');
     } finally {
       setTestingKey(null);
     }
+  };
+
+  const testAllKeys = async () => {
+    setTestingAll(true);
+    let valid = 0;
+    let failed = 0;
+    for (const k of keys) {
+      setTestResults((prev) => ({ ...prev, [k]: { ok: false, status: 'testing', message: 'Testing...' } }));
+      try {
+        const result = await testKey(k, true);
+        if (result.ok) valid++;
+        else failed++;
+      } catch {
+        setTestResults((prev) => ({ ...prev, [k]: { ok: false, status: 'error', message: 'Connection error' } }));
+        failed++;
+      }
+    }
+    setTestingAll(false);
+    notify(`${valid} valid, ${failed} failed`, valid > 0 ? 'info' : 'error');
   };
 
   return (
@@ -1631,6 +1654,20 @@ function AiKeysTab() {
           />
           <Button className="flex items-center justify-center gap-1" onClick={addKey}><Plus size={16} /> Add</Button>
         </div>
+        {keys.length > 0 && (
+          <div className="flex items-center justify-between mb-4 p-3 bg-slate-800/50 rounded-xl border border-white/10">
+            <div className="text-xs text-slate-400">
+              <span className="text-slate-300 font-medium">Auto-rotation:</span> {keys.length} key{keys.length > 1 ? 's' : ''} configured. When the active key fails, the system tries the next one.
+            </div>
+            <Button
+              className="flex items-center gap-1.5 shrink-0 text-xs"
+              onClick={testAllKeys}
+              disabled={testingAll || testingKey !== null}
+            >
+              <FlaskConical size={14} /> {testingAll ? 'Testing...' : 'Test All Keys'}
+            </Button>
+          </div>
+        )}
         <div className="space-y-2 max-h-[28rem] overflow-y-auto">
           {keys.length === 0 ? (
             <EmptyState message="No API keys added yet" icon={<Key size={24} />} />
@@ -1646,12 +1683,15 @@ function AiKeysTab() {
                     {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
                   </div>
                   {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
-                  <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Test key" disabled={testingKey === k} onClick={() => testKey(k)}><FlaskConical size={12} /></Button>
+                  <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Test key" disabled={testingKey === k || testingAll} onClick={() => testSingleKey(k)}><FlaskConical size={12} /></Button>
                   <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Edit email" onClick={() => openEmailEditor(k)}><Edit2 size={12} /></Button>
                   <Button variant="danger" className="text-xs px-2 py-1" onClick={() => removeKey(i)}><Trash2 size={12} /></Button>
                 </div>
                 {tr && (
-                  <p className={`text-[11px] mt-2 ${tr.ok ? 'text-emerald-400' : 'text-amber-400'}`}>{tr.message}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${tr.status === 'testing' ? 'bg-amber-400 animate-pulse' : tr.ok ? 'bg-emerald-400' : tr.status === 'quota_exceeded' ? 'bg-red-500' : tr.status === 'rate_limited' ? 'bg-orange-400' : 'bg-amber-400'}`} />
+                    <p className={`text-[11px] ${tr.ok ? 'text-emerald-400' : tr.status === 'quota_exceeded' ? 'text-red-400' : tr.status === 'rate_limited' ? 'text-orange-400' : tr.status === 'invalid_key' ? 'text-red-400' : 'text-amber-400'}`}>{tr.message}</p>
+                  </div>
                 )}
                 {u && (
                   <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
