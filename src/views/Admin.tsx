@@ -8,8 +8,10 @@ import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 import { uploadBrandingImage } from '@/lib/upload';
+import { invalidateAiCopyCache } from '@/lib/microcopy';
+import { invalidateDailyAiCache } from '@/lib/useDailyAiContent';
 
-type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals' | 'tasks' | 'ai_keys' | 'ai_prompt' | 'support_chats' | 'ad_campaigns' | 'badges';
+type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals' | 'tasks' | 'ai_keys' | 'ai_prompt' | 'ai_content' | 'support_chats' | 'ad_campaigns' | 'badges';
 
 const PERM_KEYS = [
   'manage_deposits',
@@ -40,6 +42,7 @@ const TAB_PERMISSIONS: Record<AdminTab, PermKey | null> = {
   support_chats: null,
   ad_campaigns: 'moderate_tasks',
   badges: 'system_settings',
+  ai_content: 'system_settings',
 };
 
 function hasPermission(profile: Profile | null, perm: PermKey | null): boolean {
@@ -120,6 +123,7 @@ export function Admin() {
       {activeTab === 'support_chats' && <SupportChatsTab />}
       {activeTab === 'ad_campaigns' && <AdCampaignsTab />}
       {activeTab === 'badges' && <BadgesTab />}
+      {activeTab === 'ai_content' && <AiContentTab />}
     </div>
   );
 }

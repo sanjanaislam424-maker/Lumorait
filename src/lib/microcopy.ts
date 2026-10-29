@@ -125,6 +125,14 @@ export function initAiCopy() {
   fetchDailyCopy().then((copy) => { currentCopy = copy; });
 }
 
+export function invalidateAiCopyCache() {
+  memoryCache = null;
+  fetchPromise = null;
+  try { localStorage.removeItem('lumora_ai_ui_copy'); } catch { /* ignore */ }
+  initialized = false;
+  initAiCopy();
+}
+
 const STATIC_PROMO_COPY = {
   promoExpired: [
     'Khelar shomoy shesh, mama! Promo code er moyad paren hoye gese!',

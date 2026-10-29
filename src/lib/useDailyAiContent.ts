@@ -50,6 +50,10 @@ function setLSCache(content: DailyAiContent) {
   }
 }
 
+export function invalidateDailyAiCache() {
+  try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
+}
+
 export function useDailyAiContent(): { content: DailyAiContent; loading: boolean } {
   const [content, setContent] = useState<DailyAiContent>(() => {
     const cached = getLSCache();
