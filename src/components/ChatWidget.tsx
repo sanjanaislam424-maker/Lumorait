@@ -11,6 +11,13 @@ import { ChatHistoryDrawer } from '@/components/ChatHistoryDrawer';
 
 const AI_FALLBACK = "আমি এখন একটু ব্যস্ত আছি, একটু পরে আবার চেষ্টা করো — অথবা মানুষের সাথে কথা বলতে নিচের বাটনে ট্যাপ করো! 😊";
 
+interface QuotaState {
+  activeCount: number;
+  dailyLimit: number;
+  remaining: number;
+  nextRestore: string | null;
+}
+
 function useCountdown() {
   const [remaining, setRemaining] = useState<number | null>(null);
   useEffect(() => {
@@ -40,10 +47,10 @@ function formatDuration(seconds: number): string {
   return `${s}s`;
 }
 
-function secondsUntilMidnightUTC(): number {
-  const now = new Date();
-  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
-  return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
+function secondsUntil(isoTimestamp: string | null): number {
+  if (!isoTimestamp) return 0;
+  const diff = Math.floor((new Date(isoTimestamp).getTime() - Date.now()) / 1000);
+  return Math.max(0, diff);
 }
 
 export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?: boolean; subject?: string }) {
@@ -59,8 +66,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const [sessionStatus, setSessionStatus] = useState<string>('active');
   const [pendingHuman, setPendingHuman] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
-  const [msgCount, setMsgCount] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(25);
+  const [quota, setQuota] = useState<QuotaState>({ activeCount: 0, dailyLimit: 25, remaining: 25, nextRestore: null });
   const [limitReached, setLimitReached] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
@@ -77,34 +83,45 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-  const loadMessageCount = useCallback(async () => {
-    if (!profile) return;
-    const { data, error } = await supabase.rpc('get_chat_message_count', { p_user_id: profile.id });
-    if (error || !data) return;
-    const count = (data as { current_count: number; daily_limit: number })?.current_count ?? 0;
-    const limit = (data as { current_count: number; daily_limit: number })?.daily_limit ?? 25;
-    setMsgCount(count);
-    setDailyLimit(limit);
-    if (count >= limit) {
-      setLimitReached(true);
-      countdown.start(secondsUntilMidnightUTC());
+  const applyQuota = useCallback((q: QuotaState) => {
+    setQuota(q);
+    const reached = q.remaining <= 0;
+    setLimitReached(reached);
+    if (reached && q.nextRestore) {
+      const secs = secondsUntil(q.nextRestore);
+      if (secs > 0) {
+        countdown.start(secs);
+        notify(
+          lang === 'bn'
+            ? `দৈনিক লিমিট শেষ! প্রথম মেসেজ ফিরে পাবে ${formatDuration(secs)} পরে`
+            : `Daily limit reached! First message restores in ${formatDuration(secs)}`,
+          'info'
+        );
+      }
     } else {
-      setLimitReached(false);
       countdown.stop();
     }
-  }, [profile, countdown]);
+  }, [countdown, lang, notify]);
+
+  const loadQuota = useCallback(async () => {
+    if (!profile) return;
+    const { data, error } = await supabase.rpc('get_chat_quota', { p_user_id: profile.id });
+    if (error || !data) return;
+    const row = (data as QuotaState[]);
+    if (row && row.length > 0) {
+      applyQuota(row[0]);
+    }
+  }, [profile, applyQuota]);
 
   useEffect(() => {
-    if (profile) loadMessageCount();
-  }, [profile, loadMessageCount]);
+    if (profile) loadQuota();
+  }, [profile, loadQuota]);
 
   useEffect(() => {
     if (countdown.remaining === 0 && limitReached) {
-      setLimitReached(false);
-      setMsgCount(0);
-      loadMessageCount();
+      loadQuota();
     }
-  }, [countdown.remaining, limitReached, loadMessageCount]);
+  }, [countdown.remaining, limitReached, loadQuota]);
 
   const createSession = useCallback(async (): Promise<string | null> => {
     if (!profile) return null;
@@ -175,7 +192,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const sendMessage = async () => {
     if (!input.trim() || loading || pendingHuman) return;
     if (limitReached) {
-      notify(lang === 'bn' ? 'আজকের লিমিট শেষ, কাল আবার চেষ্টা করো' : 'Daily limit reached, try again tomorrow', 'error');
+      notify(lang === 'bn' ? 'লিমিট শেষ, একটু পরে আবার চেষ্টা করো' : 'Limit reached, try again later', 'error');
       return;
     }
 
@@ -187,6 +204,16 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
     if (!sid) {
       sid = await createSession();
       if (!sid) { setLoading(false); return; }
+    }
+
+    if (profile) {
+      const { data: quotaData } = await supabase.rpc('record_chat_message', { p_user_id: profile.id });
+      if (quotaData) {
+        const row = (quotaData as QuotaState[]);
+        if (row && row.length > 0) {
+          applyQuota(row[0]);
+        }
+      }
     }
 
     const userMsg: ChatMsg = {
@@ -206,20 +233,6 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
 
     if (inserted) {
       setMessages((prev) => prev.map((m) => m.id === userMsg.id ? inserted as ChatMsg : m));
-    }
-
-    if (profile) {
-      const { data: countData } = await supabase.rpc('increment_chat_message_count', { p_user_id: profile.id });
-      if (countData) {
-        const newCount = (countData as { new_count: number; daily_limit: number }).new_count;
-        const limit = (countData as { new_count: number; daily_limit: number }).daily_limit;
-        setMsgCount(newCount);
-        setDailyLimit(limit);
-        if (newCount >= limit) {
-          setLimitReached(true);
-          countdown.start(secondsUntilMidnightUTC());
-        }
-      }
     }
 
     const history = [...messages, { role: 'user', content: text }].slice(-12).map((m) => ({ role: m.role, content: m.content }));
@@ -301,8 +314,6 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
     loadMessages(session.id);
   };
 
-  const remainingMessages = Math.max(0, dailyLimit - msgCount);
-
   if (supportMode) {
     return (
       <div className="flex flex-col h-[500px] bg-slate-900/60 border border-white/10 rounded-2xl overflow-hidden">
@@ -310,8 +321,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
           title={subject || t('support')}
           subtitle={pendingHuman ? (lang === 'bn' ? 'অ্যাডমিনের জন্য অপেক্ষা...' : 'Waiting for admin...') : 'Lumora AI'}
           pendingHuman={pendingHuman}
-          remainingMessages={remainingMessages}
-          dailyLimit={dailyLimit}
+          remainingMessages={quota.remaining}
+          dailyLimit={quota.dailyLimit}
         />
         <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
         <ChatInput
@@ -363,8 +374,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
               pendingHuman={pendingHuman}
               onNewChat={startNewChat}
               onOpenHistory={() => setHistoryOpen(true)}
-              remainingMessages={remainingMessages}
-              dailyLimit={dailyLimit}
+              remainingMessages={quota.remaining}
+              dailyLimit={quota.dailyLimit}
             />
             <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
             <ChatInput
@@ -425,7 +436,7 @@ function ChatHeader({ title, subtitle, pendingHuman, onNewChat, onOpenHistory, r
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${remainingMessages <= 5 ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-500/20 text-slate-400'}`}>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${remainingMessages <= 5 ? 'bg-amber-500/20 text-amber-300' : remainingMessages <= 0 ? 'bg-red-500/20 text-red-300' : 'bg-slate-500/20 text-slate-400'}`}>
           {remainingMessages}/{dailyLimit}
         </span>
         {onNewChat && (
@@ -511,7 +522,7 @@ function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHu
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30">
           <Clock size={16} className="text-red-400" />
           <p className="text-xs text-red-300 flex-1">
-            {lang === 'bn' ? 'আজকের লিমিট শেষ। রিসেট হতে বাকি:' : 'Daily limit reached. Resets in:'}{' '}
+            {lang === 'bn' ? 'লিমিট শেষ। প্রথম মেসেজ ফিরে আসবে' : 'Limit reached. First message restores in:'}{' '}
             <span className="font-bold font-mono">{formatDuration(countdownRemaining)}</span>
           </p>
         </div>
@@ -526,7 +537,8 @@ function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHu
       ) : (
         <button
           onClick={onRequestHuman}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium transition"
+          disabled={limitReached && countdownRemaining === null}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium transition disabled:opacity-40"
           style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}
         >
           <UserCog size={14} />
@@ -538,7 +550,7 @@ function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHu
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
-          placeholder={limitReached ? (lang === 'bn' ? 'লিমিট শেষ — কাল আবার...' : 'Limit reached — try tomorrow...') : (lang === 'bn' ? 'মেসেজ লেখো...' : 'Type a message...')}
+          placeholder={limitReached ? (lang === 'bn' ? 'লিমিট শেষ — একটু পরে...' : 'Limit reached — wait for reset...') : (lang === 'bn' ? 'মেসেজ লেখো...' : 'Type a message...')}
           disabled={inputDisabled}
           className="flex-1 bg-slate-800 border rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-50"
           style={{ borderColor: 'var(--neon-border)', color: 'var(--neon-text)' }}
