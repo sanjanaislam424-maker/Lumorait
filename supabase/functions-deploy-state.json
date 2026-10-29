@@ -8,6 +8,10 @@
     "process-promotion-charges": {
       "hasChanged": false,
       "hash": "637c9994edbb1441c6b1a090bb74fec131f0bbcbc60a257d14db373ba52b60aa"
+    },
+    "ai-chat": {
+      "hasChanged": false,
+      "hash": "3f65cc9e8cece4bfece3331fc29388997a6b674d5fcbdbea43c9123876e4f599"
     }
   }
 }

@@ -14,6 +14,7 @@ import { Admin } from '@/views/Admin';
 import { Membership } from '@/views/Membership';
 import { BuyConvert } from '@/views/BuyConvert';
 import { ReferView } from '@/views/Refer';
+import { SupportView } from '@/views/Support';
 
 function Main() {
   const { session, profile, loading } = useApp();
@@ -60,6 +61,7 @@ function Main() {
           {view === 'membership' && <Membership />}
           {view === 'buyconvert' && <BuyConvert />}
           {view === 'refer' && <ReferView />}
+          {view === 'support' && <SupportView />}
         </motion.div>
       </AnimatePresence>
     </AppShell>

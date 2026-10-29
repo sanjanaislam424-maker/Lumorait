@@ -5,3 +5,7 @@ entrypoint = "./functions/daily-ai-content/index.ts"
 [functions.process-promotion-charges]
 verify_jwt = false
 entrypoint = "./functions/process-promotion-charges/index.ts"
+
+[functions.ai-chat]
+verify_jwt = false
+entrypoint = "./functions/ai-chat/index.ts"

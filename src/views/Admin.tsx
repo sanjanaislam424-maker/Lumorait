@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -8,7 +8,7 @@ import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 import { uploadBrandingImage } from '@/lib/upload';
 
-type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals' | 'tasks';
+type AdminTab = 'overview' | 'users' | 'staff' | 'verifications' | 'finance' | 'disputes' | 'settings' | 'broadcast' | 'promo' | 'appeals' | 'tasks' | 'ai_keys' | 'ai_prompt' | 'support_chats' | 'ad_campaigns' | 'badges';
 
 const PERM_KEYS = [
   'manage_deposits',
@@ -34,6 +34,11 @@ const TAB_PERMISSIONS: Record<AdminTab, PermKey | null> = {
   promo: 'manage_promo_codes',
   appeals: 'verify_kyc',
   tasks: 'moderate_tasks',
+  ai_keys: 'system_settings',
+  ai_prompt: 'system_settings',
+  support_chats: null,
+  ad_campaigns: 'moderate_tasks',
+  badges: 'system_settings',
 };
 
 function hasPermission(profile: Profile | null, perm: PermKey | null): boolean {
@@ -67,6 +72,11 @@ export function Admin() {
     { key: 'promo', icon: <Ticket size={16} />, label: t('promoManager') },
     { key: 'appeals', icon: <FileWarning size={16} />, label: t('kycAppeals') },
     { key: 'tasks', icon: <ListChecks size={16} />, label: t('taskManagement') },
+    { key: 'ai_keys', icon: <Key size={16} />, label: 'API Keys' },
+    { key: 'ai_prompt', icon: <Bot size={16} />, label: 'AI Prompt' },
+    { key: 'support_chats', icon: <MessageSquare size={16} />, label: 'Support' },
+    { key: 'badges', icon: <Award size={16} />, label: 'Badges' },
+    { key: 'ad_campaigns', icon: <Megaphone size={16} />, label: 'Ads' },
   ];
 
   const visibleTabs = tabs.filter((tb) => hasPermission(profile, TAB_PERMISSIONS[tb.key]));
@@ -104,6 +114,11 @@ export function Admin() {
       {activeTab === 'promo' && <PromoCodesTab />}
       {activeTab === 'appeals' && <AppealsTab />}
       {activeTab === 'tasks' && <TaskManagementTab />}
+      {activeTab === 'ai_keys' && <AiKeysTab />}
+      {activeTab === 'ai_prompt' && <AiPromptTab />}
+      {activeTab === 'support_chats' && <SupportChatsTab />}
+      {activeTab === 'ad_campaigns' && <AdCampaignsTab />}
+      {activeTab === 'badges' && <BadgesTab />}
     </div>
   );
 }
@@ -1475,6 +1490,399 @@ function TaskManagementTab() {
           <Button className="w-full" onClick={saveEdit}>{t('save')}</Button>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function AiKeysTab() {
+  const { t } = useApp();
+  const { notify } = useToast();
+  const [keys, setKeys] = useState<string[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [newKey, setNewKey] = useState('');
+
+  const load = async () => {
+    const { data } = await supabase.from('app_settings').select('gemini_api_keys, ai_active_key_index').eq('id', 1).maybeSingle();
+    setKeys(Array.isArray(data?.gemini_api_keys) ? data.gemini_api_keys : []);
+    setActiveIndex(data?.ai_active_key_index ?? 0);
+  };
+  useEffect(() => { load(); }, []);
+
+  const addKey = async () => {
+    if (!newKey.trim()) return;
+    const updated = [...keys, newKey.trim()];
+    await supabase.from('app_settings').update({ gemini_api_keys: updated }).eq('id', 1);
+    setNewKey('');
+    notify(t('saved'), 'success');
+    load();
+  };
+
+  const removeKey = async (idx: number) => {
+    const updated = keys.filter((_, i) => i !== idx);
+    const newActive = Math.min(activeIndex, updated.length - 1);
+    await supabase.from('app_settings').update({ gemini_api_keys: updated, ai_active_key_index: Math.max(0, newActive) }).eq('id', 1);
+    notify('Key removed', 'success');
+    load();
+  };
+
+  const setActive = async (idx: number) => {
+    await supabase.from('app_settings').update({ ai_active_key_index: idx }).eq('id', 1);
+    setActiveIndex(idx);
+    notify(t('saved'), 'success');
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Key size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">Gemini API Keys ({keys.length})</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          Add multiple Gemini API keys for automatic rotation. When one key hits rate limits, the system switches to the next key instantly.
+        </p>
+        <div className="flex gap-2 mb-4">
+          <input
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="AIza..."
+            className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
+            onKeyDown={(e) => { if (e.key === 'Enter') addKey(); }}
+          />
+          <Button className="flex items-center gap-1" onClick={addKey}><Plus size={16} /> Add</Button>
+        </div>
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {keys.length === 0 ? (
+            <EmptyState message="No API keys added yet" icon={<Key size={24} />} />
+          ) : keys.map((k, i) => (
+            <div key={i} className={`bg-slate-800/50 border rounded-xl p-3 flex items-center gap-3 ${i === activeIndex ? 'border-emerald-500/40' : 'border-white/10'}`}>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-mono truncate">{k.slice(0, 12)}...{k.slice(-4)}</p>
+                {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
+              </div>
+              {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
+              <Button variant="danger" className="text-xs px-2 py-1" onClick={() => removeKey(i)}><Trash2 size={12} /></Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function AiPromptTab() {
+  const { t } = useApp();
+  const { notify } = useToast();
+  const [prompt, setPrompt] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase.from('app_settings').select('ai_system_prompt').eq('id', 1).maybeSingle();
+    setPrompt(data?.ai_system_prompt || '');
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await supabase.from('app_settings').update({ ai_system_prompt: prompt }).eq('id', 1);
+      notify(t('saved'), 'success');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Bot size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">AI System Prompt</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          This instruction controls how the AI chatbot behaves. Edit it to set the persona, rules, and guidelines the bot follows when talking to users.
+        </p>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={12}
+          className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-3 text-white text-sm outline-none focus:border-amber-500/50 resize-y"
+          placeholder="You are Lumora AI..."
+        />
+        <div className="flex items-center justify-between mt-3">
+          <p className="text-xs text-slate-500">{prompt.length} characters</p>
+          <Button className="flex items-center gap-1" onClick={save} disabled={saving}>
+            <Send size={14} /> {saving ? 'Saving...' : t('save')}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SupportChatsTab() {
+  const { t } = useApp();
+  const { notify } = useToast();
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [reply, setReply] = useState('');
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from('chat_sessions')
+      .select('*, profiles!chat_sessions_user_id_fkey(full_name, phone)')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setSessions(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const loadMessages = async (sid: string) => {
+    setLoadingMsgs(true);
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', sid)
+      .order('created_at', { ascending: true });
+    setMessages(data || []);
+    setLoadingMsgs(false);
+    if (sessions.find((s) => s.id === sid)?.status === 'pending_human') {
+      await supabase.from('chat_sessions').update({ status: 'resolved' }).eq('id', sid);
+      load();
+    }
+  };
+
+  const sendReply = async () => {
+    if (!reply.trim() || !selectedSession) return;
+    await supabase.from('chat_messages').insert({
+      session_id: selectedSession,
+      role: 'admin',
+      content: reply.trim(),
+    });
+    setReply('');
+    loadMessages(selectedSession);
+    notify(t('saved'), 'success');
+  };
+
+  useEffect(() => {
+    if (!selectedSession) return;
+    const channel = supabase
+      .channel(`admin_chat:${selectedSession}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `session_id=eq.${selectedSession}` },
+        () => loadMessages(selectedSession)
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedSession]);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <MessageSquare size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">Support Chats</h3>
+        </div>
+        <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
+          {sessions.length === 0 ? <EmptyState message="No support chats yet" /> : sessions.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => { setSelectedSession(s.id); loadMessages(s.id); }}
+              className={`w-full text-left bg-slate-800/50 border rounded-xl p-3 transition ${selectedSession === s.id ? 'border-amber-500/50' : 'border-white/10'}`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-white font-medium truncate">
+                  {s.profiles?.full_name || s.profiles?.phone || 'User'}
+                </p>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.status === 'pending_human' ? 'bg-amber-500/20 text-amber-300' : s.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400'}`}>
+                  {s.status}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 truncate">{s.subject || s.title}</p>
+            </button>
+          ))}
+        </div>
+
+        {selectedSession && (
+          <div className="border-t border-white/10 pt-4">
+            <h4 className="text-sm font-semibold text-white mb-2">Conversation</h4>
+            <div className="space-y-2 max-h-64 overflow-y-auto mb-3">
+              {loadingMsgs ? <p className="text-xs text-slate-400 text-center py-4">Loading...</p> : messages.map((m) => (
+                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : m.role === 'admin' ? 'bg-amber-500/20 text-amber-200' : 'bg-slate-700 text-slate-200'}`}>
+                    {m.role !== 'user' && <p className="text-[10px] font-bold mb-1 opacity-70">{m.role}</p>}
+                    <p>{m.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder="Type admin reply..."
+                className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none"
+                onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
+              />
+              <Button className="flex items-center gap-1" onClick={sendReply}><Send size={14} /> Send</Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function AdCampaignsTab() {
+  const { t } = useApp();
+  const { notify } = useToast();
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from('ad_campaigns')
+      .select('*, profiles!ad_campaigns_advertiser_id_fkey(full_name, phone)')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setCampaigns(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const approve = async (id: string) => {
+    await supabase.from('ad_campaigns').update({ status: 'approved' }).eq('id', id);
+    notify('Campaign approved', 'success');
+    load();
+  };
+
+  const reject = async (id: string) => {
+    await supabase.from('ad_campaigns').update({ status: 'rejected', admin_note: 'Not compliant' }).eq('id', id);
+    notify('Campaign rejected', 'success');
+    load();
+  };
+
+  const pauseCampaign = async (id: string) => {
+    await supabase.from('ad_campaigns').update({ status: 'paused' }).eq('id', id);
+    notify('Campaign paused', 'success');
+    load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Megaphone size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">Ad Campaigns</h3>
+        </div>
+        <div className="space-y-3">
+          {campaigns.length === 0 ? <EmptyState message="No ad campaigns submitted yet" icon={<Megaphone size={24} />} /> : campaigns.map((c) => (
+            <div key={c.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm text-white font-semibold">{c.title}</p>
+                  <p className="text-xs text-slate-500">{c.profiles?.full_name || c.profiles?.phone || 'Advertiser'} | Budget: {c.budget_coins} coins</p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  c.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300' :
+                  c.status === 'rejected' ? 'bg-red-500/20 text-red-300' :
+                  c.status === 'paused' ? 'bg-amber-500/20 text-amber-300' :
+                  c.status === 'completed' ? 'bg-blue-500/20 text-blue-300' :
+                  'bg-slate-500/20 text-slate-400'
+                }`}>{c.status}</span>
+              </div>
+              {c.description && <p className="text-xs text-slate-400 mb-2">{c.description}</p>}
+              {c.target_url && <a href={c.target_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline mb-2 inline-block">{c.target_url}</a>}
+              <div className="text-xs text-slate-500 mb-2">Spent: {c.spent_coins}/{c.budget_coins} | Reward/view: {c.reward_per_view}</div>
+              {c.status === 'pending' && (
+                <div className="flex gap-2">
+                  <Button className="text-xs flex items-center gap-1" onClick={() => approve(c.id)}><Check size={12} /> Approve</Button>
+                  <Button variant="danger" className="text-xs flex items-center gap-1" onClick={() => reject(c.id)}><X size={12} /> Reject</Button>
+                </div>
+              )}
+              {c.status === 'approved' && (
+                <Button variant="ghost" className="text-xs" onClick={() => pauseCampaign(c.id)}>Pause</Button>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function BadgesTab() {
+  const { t } = useApp();
+  const { notify } = useToast();
+  const [badges, setBadges] = useState<any[]>([]);
+
+  const load = async () => {
+    const { data } = await supabase.from('badges').select('*').order('threshold_tasks', { ascending: true });
+    setBadges(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggleActive = async (b: any) => {
+    await supabase.from('badges').update({ is_active: !b.is_active }).eq('id', b.id);
+    notify(t('saved'), 'success');
+    load();
+  };
+
+  const deleteBadge = async (id: string) => {
+    await supabase.from('badges').delete().eq('id', id);
+    notify('Badge deleted', 'success');
+    load();
+  };
+
+  const tierColors: Record<string, string> = {
+    bronze: 'from-amber-700/20 to-amber-600/20 text-amber-400 border-amber-700/30',
+    silver: 'from-slate-400/20 to-slate-300/20 text-slate-300 border-slate-400/30',
+    gold: 'from-yellow-500/20 to-amber-400/20 text-yellow-300 border-yellow-500/30',
+    platinum: 'from-cyan-400/20 to-blue-400/20 text-cyan-300 border-cyan-400/30',
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          <Award size={18} className="text-amber-400" />
+          <h3 className="font-semibold text-white">Badges ({badges.length})</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          Badges are awarded automatically based on task completion and coin thresholds. 7 badges are pre-seeded.
+        </p>
+        <div className="space-y-2">
+          {badges.map((b) => (
+            <div key={b.id} className={`bg-gradient-to-br border rounded-xl p-3 ${tierColors[b.tier] || tierColors.bronze}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/10">
+                    <Award size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{b.label}</p>
+                    <p className="text-xs opacity-70">{b.description}</p>
+                    <p className="text-[10px] opacity-50 mt-1">
+                      {b.threshold_tasks > 0 && `${b.threshold_tasks} tasks`}
+                      {b.threshold_tasks > 0 && b.threshold_coins > 0 && ' | '}
+                      {b.threshold_coins > 0 && `${b.threshold_coins} coins`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.is_active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400'}`}>
+                    {b.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => toggleActive(b)}>
+                    {b.is_active ? 'Disable' : 'Enable'}
+                  </Button>
+                  <Button variant="danger" className="text-xs px-2 py-1" onClick={() => deleteBadge(b.id)}>
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

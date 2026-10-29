@@ -3,16 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, ListChecks, Wallet, Gift, Trophy, User as UserIcon,
   Shield, LogOut, Languages, Bell, RefreshCw, Palette, Menu, X,
-  ArrowLeftRight, Sparkles, Crown, Bot, Settings as SettingsIcon,
+  ArrowLeftRight, Sparkles, Crown, Bot, Settings as SettingsIcon, MessageCircle,
 } from 'lucide-react';
 import { useApp, Theme } from '@/lib/AppContext';
 import { Modal, Button, NeonParticles } from './ui';
 import { Logo } from './Logo';
 import { supabase } from '@/lib/supabase';
+import { ChatWidget } from './ChatWidget';
 
 export type View =
   | 'dashboard' | 'tasks' | 'wallet' | 'spin' | 'leaderboard'
-  | 'profile' | 'admin' | 'buyconvert' | 'membership' | 'refer';
+  | 'profile' | 'admin' | 'buyconvert' | 'membership' | 'refer' | 'support';
 
 export function AppShell({ view, setView, children }: { view: View; setView: (v: View) => void; children: ReactNode }) {
   const { t, profile, lang, theme, themeConfig, setLang, setTheme, signOut } = useApp();
@@ -44,6 +45,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
     { key: 'tasks', icon: <ListChecks size={20} />, label: t('navTasks') },
     { key: 'spin', icon: <Gift size={20} />, label: t('navMysteryBox') },
     { key: 'refer', icon: <Sparkles size={20} />, label: t('navReferEarn') },
+    { key: 'support', icon: <MessageCircle size={20} />, label: t('support') },
     { key: 'profile', icon: <Shield size={20} />, label: t('navKyc') },
     { key: 'membership', icon: <Crown size={20} />, label: t('navMembership') },
     { key: 'leaderboard', icon: <Trophy size={20} />, label: t('leaderboard') },
@@ -180,7 +182,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
               {/* AI Assistant entry at bottom */}
               <div className="p-3 mt-auto" style={{ borderTop: `1px solid ${themeConfig.border}` }}>
                 <button
-                  onClick={() => { setView('tasks'); setDrawerOpen(false); }}
+                  onClick={() => { setView('support'); setDrawerOpen(false); }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition"
                   style={{ background: `linear-gradient(135deg, ${themeConfig.primary}15, ${themeConfig.secondary}08)`, color: themeConfig.primary, border: `1px solid ${themeConfig.border}` }}
                 >
@@ -252,6 +254,8 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
         )}
         <Button variant="ghost" className="w-full mt-4" onClick={() => setNotifOpen(false)}>{t('close')}</Button>
       </Modal>
+
+      <ChatWidget />
 
       <AnimatePresence />
     </div>
