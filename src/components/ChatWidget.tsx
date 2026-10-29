@@ -1,17 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, X, Send, MessageCircle, UserCog, Sparkles, RefreshCw } from 'lucide-react';
+import { Bot, X, Send, UserCog, Sparkles, RefreshCw, Menu } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { streamAiReply } from '@/lib/aiChatStream';
-
-interface ChatMsg {
-  id: string;
-  role: string;
-  content: string;
-  created_at: string;
-}
+import { createTypewriter } from '@/lib/typewriter';
+import type { ChatMessageRow as ChatMsg, ChatSessionSummary } from '@/lib/chatSessions';
+import { ChatHistoryDrawer } from '@/components/ChatHistoryDrawer';
 
 const AI_FALLBACK = "আমি এখন একটু ব্যস্ত আছি, একটু পরে আবার চেষ্টা করো — অথবা মানুষের সাথে কথা বলতে নিচের বাটনে ট্যাপ করো! 😊";
 
@@ -19,6 +15,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const { t, profile, lang } = useApp();
   const { notify } = useToast();
   const [open, setOpen] = useState(supportMode);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +25,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const [pendingHuman, setPendingHuman] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef(false);
   const aiEndpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
   const scrollToBottom = useCallback(() => {
@@ -86,6 +84,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `session_id=eq.${sessionId}` },
         (payload) => {
           const newMsg = payload.new as ChatMsg;
+          if (newMsg.role === 'assistant' && streamingRef.current) return;
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
@@ -138,6 +137,18 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
 
     const history = [...messages, { role: 'user', content: text }].slice(-12).map((m) => ({ role: m.role, content: m.content }));
     const streamId = 'stream-' + Date.now();
+    streamingRef.current = true;
+
+    const typewriter = createTypewriter((chunk) => {
+      setStreaming(true);
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === streamId)) {
+          return prev.map((m) => m.id === streamId ? { ...m, content: m.content + chunk } : m);
+        }
+        return [...prev, { id: streamId, role: 'assistant', content: chunk, created_at: new Date().toISOString() }];
+      });
+      scrollToBottom();
+    });
 
     try {
       const result = await streamAiReply({
@@ -145,26 +156,18 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
         anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
         messages: history,
         sessionId: sid,
-        onText: (delta) => {
-          setStreaming(true);
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === streamId)) {
-              return prev.map((m) => m.id === streamId ? { ...m, content: m.content + delta } : m);
-            }
-            return [...prev, { id: streamId, role: 'assistant', content: delta, created_at: new Date().toISOString() }];
-          });
-          scrollToBottom();
-        },
-        onDone: (savedId) => {
-          setMessages((prev) => {
-            if (savedId && prev.some((m) => m.id === savedId)) return prev.filter((m) => m.id !== streamId);
-            return prev.map((m) => m.id === streamId && savedId ? { ...m, id: savedId } : m);
-          });
+        onText: (delta) => typewriter.push(delta),
+        onDone: async (savedId) => {
+          await typewriter.drain();
+          if (savedId) {
+            setMessages((prev) => prev.map((m) => m.id === streamId ? { ...m, id: savedId } : m));
+          }
         },
       });
 
       if (!result.ok) {
         if (result.partial) {
+          await typewriter.drain();
           notify(lang === 'bn' ? 'সংযোগ বিচ্ছিন্ন হয়েছে, উত্তর অসম্পূর্ণ থাকতে পারে' : 'Connection interrupted, the reply may be incomplete', 'error');
         } else {
           setMessages((prev) => [...prev, {
@@ -176,6 +179,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
         }
       }
     } finally {
+      typewriter.stop();
+      streamingRef.current = false;
       setLoading(false);
       setStreaming(false);
       scrollToBottom();
@@ -190,13 +195,23 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
     notify(lang === 'bn' ? 'সাপোর্ট টিমের জন্য অনুরোধ পাঠানো হয়েছে!' : 'Human support requested!', 'success');
   };
 
-  const startNewChat = async () => {
+  const startNewChat = () => {
+    if (loading) return;
     setMessages([]);
     setSessionId(null);
     setPendingHuman(false);
     setSessionStatus('active');
-    const sid = await createSession();
-    if (sid) loadMessages(sid);
+    setHistoryOpen(false);
+  };
+
+  const selectSession = (session: ChatSessionSummary) => {
+    if (loading) return;
+    setMessages([]);
+    setSessionId(session.id);
+    setSessionStatus(session.status);
+    setPendingHuman(session.status === 'pending_human');
+    setHistoryOpen(false);
+    loadMessages(session.id);
   };
 
   if (supportMode) {
@@ -244,7 +259,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-36 right-4 z-[100] w-[calc(100vw-2rem)] max-w-sm h-[500px] flex flex-col bg-slate-900/95 backdrop-blur-xl border rounded-2xl overflow-hidden"
+            className="fixed bottom-36 right-4 z-[100] w-[calc(100vw-2rem)] max-w-sm h-[500px] flex flex-col relative bg-slate-900/95 backdrop-blur-xl border rounded-2xl overflow-hidden"
             style={{ borderColor: 'var(--neon-border)' }}
           >
             <ChatHeader
@@ -254,6 +269,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
                 : 'Lumora AI'}
               pendingHuman={pendingHuman}
               onNewChat={startNewChat}
+              onOpenHistory={() => setHistoryOpen(true)}
             />
             <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
             <ChatInput
@@ -265,6 +281,13 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
               onRequestHuman={requestHuman}
               lang={lang}
             />
+            <ChatHistoryDrawer
+              open={historyOpen}
+              activeSessionId={sessionId}
+              onClose={() => setHistoryOpen(false)}
+              onSelect={selectSession}
+              onNewChat={startNewChat}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -272,17 +295,28 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   );
 }
 
-function ChatHeader({ title, subtitle, pendingHuman, onNewChat }: {
-  title: string; subtitle: string; pendingHuman: boolean; onNewChat?: () => void;
+function ChatHeader({ title, subtitle, pendingHuman, onNewChat, onOpenHistory }: {
+  title: string; subtitle: string; pendingHuman: boolean; onNewChat?: () => void; onOpenHistory?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--neon-border)', background: 'var(--neon-card-bg)' }}>
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--neon-primary), var(--neon-secondary))' }}>
+      <div className="flex items-center gap-2 min-w-0">
+        {onOpenHistory && (
+          <button
+            onClick={onOpenHistory}
+            aria-label="Chat history"
+            title="Chat history"
+            className="p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition shrink-0"
+            style={{ color: 'var(--neon-muted)' }}
+          >
+            <Menu size={18} />
+          </button>
+        )}
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, var(--neon-primary), var(--neon-secondary))' }}>
           <Bot size={16} className="text-white" />
         </div>
-        <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--neon-text)' }}>{title}</p>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--neon-text)' }}>{title}</p>
           <p className="text-[10px]" style={{ color: pendingHuman ? '#f59e0b' : 'var(--neon-muted)' }}>
             {pendingHuman && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1 animate-pulse" />}
             {subtitle}
@@ -290,7 +324,7 @@ function ChatHeader({ title, subtitle, pendingHuman, onNewChat }: {
         </div>
       </div>
       {onNewChat && (
-        <button onClick={onNewChat} className="p-1.5 rounded-lg hover:bg-white/10 transition" style={{ color: 'var(--neon-muted)' }} title="New chat">
+        <button onClick={onNewChat} className="p-1.5 rounded-lg hover:bg-white/10 transition shrink-0" style={{ color: 'var(--neon-muted)' }} title="New chat">
           <RefreshCw size={14} />
         </button>
       )}

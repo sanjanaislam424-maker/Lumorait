@@ -4,7 +4,7 @@ export interface StreamOptions {
   messages: { role: string; content: string }[];
   sessionId: string | null;
   onText: (delta: string) => void;
-  onDone: (savedId: string | null) => void;
+  onDone: (savedId: string | null) => Promise<void>;
 }
 
 export type StreamResult = { ok: true } | { ok: false; partial: boolean };
@@ -63,7 +63,7 @@ async function runAttempt(opts: StreamOptions, onFirstText: () => void): Promise
           onFirstText();
           opts.onText(event.delta);
         } else if (event.type === 'done') {
-          opts.onDone(event.id);
+          await opts.onDone(event.id);
           receivedDone = true;
           break;
         } else {

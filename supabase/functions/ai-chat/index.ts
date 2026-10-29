@@ -39,7 +39,7 @@ async function requestGeminiStream(
         body: JSON.stringify({
           contents,
           systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { temperature: 0.8, maxOutputTokens: 600 },
+          generationConfig: { temperature: 0.8, maxOutputTokens: 8192 },
         }),
         signal: controller.signal,
       },
