@@ -6,7 +6,6 @@ import { WeatherHeader } from '@/components/WeatherHeader';
 import { Card, Button, CoinBadge, Modal } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { View } from '@/components/AppShell';
-import { microcopy } from '@/lib/microcopy';
 import { useDailyAiContent } from '@/lib/useDailyAiContent';
 
 const checkinRewards = [20, 40, 60, 80, 100, 200, 300];

@@ -16,7 +16,6 @@ const STATIC_FALLBACK: DailyAiContent = {
 };
 
 const LS_KEY = 'lumora_daily_ai_content';
-const LS_LANG_KEY = 'lumora_daily_ai_lang';
 
 function todayStr(): string {
   return new Date().toISOString().split('T')[0];
