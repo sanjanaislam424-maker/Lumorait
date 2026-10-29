@@ -14,17 +14,22 @@
 
 ## Visual design & UX direction
 
-- (No explicit design details inferred yet beyond `.bolt/prompt` constraints — Vite + React + Tailwind CSS + lucide-react icons)
-- Chat widget currently renders plain text only; avoid sending markdown-formatted responses from the AI
+- Vite + React + Tailwind CSS + lucide-react icons (per `.bolt/prompt`)
+- Chat widget renders plain text only; avoid markdown-formatted responses from the AI
+- Typing indicator (three dots) should only show before any streamed text arrives; hide it once text starts streaming
 
 ## Decisions, constraints & rationale
 
 - Gemini API integration uses stored API key loaded from a database table (not `.env`); key is valid
-- Switched to current Gemini model after prior model was retired by Google (caused silent fallback to "trouble responding" message)
-- Added a backup/fallback model since Google retires models quickly
-- Failures now logged in function logs for diagnosability
-- System prompt corrected: VIP has 0% service charge (prompt previously said 2%)
-- System prompt includes instruction to avoid markdown symbols in replies
+- Switched to current Gemini model after prior model was retired by Google; backup/fallback model also configured
+- Failures logged in function logs for diagnosability
+- System prompt corrected: VIP has 0% service charge; prompt also instructs avoiding markdown symbols in replies
+- **Streaming implemented:** Gemini API now uses streaming responses (newline-delimited JSON chunks forwarded to browser as they arrive); full reply saved after stream completes
+- **Client stream reader** handles idle timeout (45s) and retries once, but only before any text has appeared
+- **Error handling refined:**
+  - Connection fail before any text → retry once → fallback message only if retry also fails
+  - Connection drop after text started → partial reply kept + short notice shown
+  - 45s idle timeout → treated as connection problem
 - Membership tier service charges: VIP = 0%; Pro listed as 2% in membership table but Buy & Convert / Wallet pages treat Pro and VIP as exempt from 3% charge — unresolved conflict
 
 ## Open questions & assumptions
