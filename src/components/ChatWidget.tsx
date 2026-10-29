@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, X, Send, UserCog, Sparkles, RefreshCw, Menu } from 'lucide-react';
+import { Bot, X, Send, UserCog, Sparkles, RefreshCw, Menu, Clock } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
@@ -10,6 +10,41 @@ import type { ChatMessageRow as ChatMsg, ChatSessionSummary } from '@/lib/chatSe
 import { ChatHistoryDrawer } from '@/components/ChatHistoryDrawer';
 
 const AI_FALLBACK = "আমি এখন একটু ব্যস্ত আছি, একটু পরে আবার চেষ্টা করো — অথবা মানুষের সাথে কথা বলতে নিচের বাটনে ট্যাপ করো! 😊";
+
+function useCountdown() {
+  const [remaining, setRemaining] = useState<number | null>(null);
+  useEffect(() => {
+    if (remaining === null) return;
+    const interval = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [remaining]);
+  const start = useCallback((seconds: number) => setRemaining(seconds), []);
+  const stop = useCallback(() => setRemaining(null), []);
+  return { remaining, start, stop };
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function secondsUntilMidnightUTC(): number {
+  const now = new Date();
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+  return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
+}
 
 export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?: boolean; subject?: string }) {
   const { t, profile, lang } = useApp();
@@ -24,9 +59,13 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const [sessionStatus, setSessionStatus] = useState<string>('active');
   const [pendingHuman, setPendingHuman] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [msgCount, setMsgCount] = useState(0);
+  const [dailyLimit, setDailyLimit] = useState(25);
+  const [limitReached, setLimitReached] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const aiEndpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
+  const countdown = useCountdown();
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -37,6 +76,35 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+
+  const loadMessageCount = useCallback(async () => {
+    if (!profile) return;
+    const { data, error } = await supabase.rpc('get_chat_message_count', { p_user_id: profile.id });
+    if (error || !data) return;
+    const count = (data as { current_count: number; daily_limit: number })?.current_count ?? 0;
+    const limit = (data as { current_count: number; daily_limit: number })?.daily_limit ?? 25;
+    setMsgCount(count);
+    setDailyLimit(limit);
+    if (count >= limit) {
+      setLimitReached(true);
+      countdown.start(secondsUntilMidnightUTC());
+    } else {
+      setLimitReached(false);
+      countdown.stop();
+    }
+  }, [profile, countdown]);
+
+  useEffect(() => {
+    if (profile) loadMessageCount();
+  }, [profile, loadMessageCount]);
+
+  useEffect(() => {
+    if (countdown.remaining === 0 && limitReached) {
+      setLimitReached(false);
+      setMsgCount(0);
+      loadMessageCount();
+    }
+  }, [countdown.remaining, limitReached, loadMessageCount]);
 
   const createSession = useCallback(async (): Promise<string | null> => {
     if (!profile) return null;
@@ -106,6 +174,11 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
 
   const sendMessage = async () => {
     if (!input.trim() || loading || pendingHuman) return;
+    if (limitReached) {
+      notify(lang === 'bn' ? 'আজকের লিমিট শেষ, কাল আবার চেষ্টা করো' : 'Daily limit reached, try again tomorrow', 'error');
+      return;
+    }
+
     const text = input.trim();
     setInput('');
     setLoading(true);
@@ -133,6 +206,20 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
 
     if (inserted) {
       setMessages((prev) => prev.map((m) => m.id === userMsg.id ? inserted as ChatMsg : m));
+    }
+
+    if (profile) {
+      const { data: countData } = await supabase.rpc('increment_chat_message_count', { p_user_id: profile.id });
+      if (countData) {
+        const newCount = (countData as { new_count: number; daily_limit: number }).new_count;
+        const limit = (countData as { new_count: number; daily_limit: number }).daily_limit;
+        setMsgCount(newCount);
+        setDailyLimit(limit);
+        if (newCount >= limit) {
+          setLimitReached(true);
+          countdown.start(secondsUntilMidnightUTC());
+        }
+      }
     }
 
     const history = [...messages, { role: 'user', content: text }].slice(-12).map((m) => ({ role: m.role, content: m.content }));
@@ -214,6 +301,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
     loadMessages(session.id);
   };
 
+  const remainingMessages = Math.max(0, dailyLimit - msgCount);
+
   if (supportMode) {
     return (
       <div className="flex flex-col h-[500px] bg-slate-900/60 border border-white/10 rounded-2xl overflow-hidden">
@@ -221,6 +310,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
           title={subject || t('support')}
           subtitle={pendingHuman ? (lang === 'bn' ? 'অ্যাডমিনের জন্য অপেক্ষা...' : 'Waiting for admin...') : 'Lumora AI'}
           pendingHuman={pendingHuman}
+          remainingMessages={remainingMessages}
+          dailyLimit={dailyLimit}
         />
         <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
         <ChatInput
@@ -231,6 +322,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
           pendingHuman={pendingHuman}
           onRequestHuman={requestHuman}
           lang={lang}
+          limitReached={limitReached}
+          countdownRemaining={countdown.remaining}
         />
       </div>
     );
@@ -270,6 +363,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
               pendingHuman={pendingHuman}
               onNewChat={startNewChat}
               onOpenHistory={() => setHistoryOpen(true)}
+              remainingMessages={remainingMessages}
+              dailyLimit={dailyLimit}
             />
             <ChatMessages messages={messages} loading={loading && !streaming} scrollRef={scrollRef} lang={lang} />
             <ChatInput
@@ -280,6 +375,8 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
               pendingHuman={pendingHuman}
               onRequestHuman={requestHuman}
               lang={lang}
+              limitReached={limitReached}
+              countdownRemaining={countdown.remaining}
             />
             <ChatHistoryDrawer
               open={historyOpen}
@@ -298,8 +395,9 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   );
 }
 
-function ChatHeader({ title, subtitle, pendingHuman, onNewChat, onOpenHistory }: {
+function ChatHeader({ title, subtitle, pendingHuman, onNewChat, onOpenHistory, remainingMessages, dailyLimit }: {
   title: string; subtitle: string; pendingHuman: boolean; onNewChat?: () => void; onOpenHistory?: () => void;
+  remainingMessages: number; dailyLimit: number;
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--neon-border)', background: 'var(--neon-card-bg)' }}>
@@ -326,11 +424,16 @@ function ChatHeader({ title, subtitle, pendingHuman, onNewChat, onOpenHistory }:
           </p>
         </div>
       </div>
-      {onNewChat && (
-        <button onClick={onNewChat} className="p-1.5 rounded-lg hover:bg-white/10 transition shrink-0" style={{ color: 'var(--neon-muted)' }} title="New chat">
-          <RefreshCw size={14} />
-        </button>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${remainingMessages <= 5 ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-500/20 text-slate-400'}`}>
+          {remainingMessages}/{dailyLimit}
+        </span>
+        {onNewChat && (
+          <button onClick={onNewChat} className="p-1.5 rounded-lg hover:bg-white/10 transition shrink-0" style={{ color: 'var(--neon-muted)' }} title="New chat">
+            <RefreshCw size={14} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -390,7 +493,7 @@ function ChatMessages({ messages, loading, scrollRef, lang }: {
   );
 }
 
-function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHuman, lang }: {
+function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHuman, lang, limitReached, countdownRemaining }: {
   input: string;
   setInput: (v: string) => void;
   onSend: () => void;
@@ -398,9 +501,21 @@ function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHu
   pendingHuman: boolean;
   onRequestHuman: () => void;
   lang: string;
+  limitReached: boolean;
+  countdownRemaining: number | null;
 }) {
+  const inputDisabled = loading || pendingHuman || limitReached;
   return (
     <div className="px-3 py-3 border-t space-y-2" style={{ borderColor: 'var(--neon-border)' }}>
+      {limitReached && countdownRemaining !== null && countdownRemaining > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30">
+          <Clock size={16} className="text-red-400" />
+          <p className="text-xs text-red-300 flex-1">
+            {lang === 'bn' ? 'আজকের লিমিট শেষ। রিসেট হতে বাকি:' : 'Daily limit reached. Resets in:'}{' '}
+            <span className="font-bold font-mono">{formatDuration(countdownRemaining)}</span>
+          </p>
+        </div>
+      )}
       {pendingHuman ? (
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30">
           <UserCog size={16} className="text-amber-400" />
@@ -423,14 +538,14 @@ function ChatInput({ input, setInput, onSend, loading, pendingHuman, onRequestHu
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
-          placeholder={lang === 'bn' ? 'মেসেজ লেখো...' : 'Type a message...'}
-          disabled={loading || pendingHuman}
+          placeholder={limitReached ? (lang === 'bn' ? 'লিমিট শেষ — কাল আবার...' : 'Limit reached — try tomorrow...') : (lang === 'bn' ? 'মেসেজ লেখো...' : 'Type a message...')}
+          disabled={inputDisabled}
           className="flex-1 bg-slate-800 border rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-50"
           style={{ borderColor: 'var(--neon-border)', color: 'var(--neon-text)' }}
         />
         <button
           onClick={onSend}
-          disabled={loading || pendingHuman || !input.trim()}
+          disabled={inputDisabled || !input.trim()}
           className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-50 transition shrink-0"
           style={{ background: 'linear-gradient(135deg, var(--neon-primary), var(--neon-secondary))' }}
         >
