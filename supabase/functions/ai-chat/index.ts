@@ -11,15 +11,17 @@ interface ChatMessage {
   content: string;
 }
 
+const GEMINI_MODEL = "gemini-2.5-flash";
+
 async function callGemini(apiKey: string, systemPrompt: string, history: ChatMessage[]): Promise<string | null> {
   const contents = history.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
+    role: m.role === "assistant" || m.role === "admin" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,13 +33,15 @@ async function callGemini(apiKey: string, systemPrompt: string, history: ChatMes
       },
     );
     if (!res.ok) {
-      if (res.status === 429 || res.status >= 500) return null;
+      console.error(`Gemini request failed (${res.status}): ${await res.text()}`);
       return null;
     }
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) console.error("Gemini returned no text:", JSON.stringify(data));
     return text || null;
-  } catch {
+  } catch (err) {
+    console.error("Gemini request error:", err);
     return null;
   }
 }
