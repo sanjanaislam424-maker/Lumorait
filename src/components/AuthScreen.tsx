@@ -110,26 +110,26 @@ export function AuthScreen() {
     >
       {/* Background wall logo — always rendered, opacity driven by light toggle */}
       <div
-        className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none transition-all duration-700 ease-in-out"
+        className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none transition-all duration-500 ease-in-out"
         style={{ opacity: lit ? 1 : 0 }}
       >
         {logoUrl ? (
           <img
             src={logoUrl}
             alt=""
-            className="rounded-3xl object-cover transition-all duration-700 ease-in-out"
+            className="rounded-3xl object-cover transition-all duration-500 ease-in-out"
             style={{
               width: 384,
               height: 384,
               opacity: lit ? 0.2 : 0,
               filter: 'blur(12px) saturate(1.3)',
-              transition: 'opacity 700ms ease-in-out, filter 700ms ease-in-out',
+              transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
               boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
             }}
           />
         ) : (
           <div
-            className="rounded-3xl flex items-center justify-center font-bold transition-all duration-700 ease-in-out"
+            className="rounded-3xl flex items-center justify-center font-bold transition-all duration-500 ease-in-out"
             style={{
               width: 384,
               height: 384,
@@ -137,9 +137,7 @@ export function AuthScreen() {
               background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
               opacity: lit ? 0.2 : 0,
               filter: 'blur(12px) saturate(1.3)',
-              transition: 'opacity 700ms ease-in-out, filter 700ms ease-in-out',
-              boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
-              color: '#0a0301',
+              transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
             }}
           >
             L
@@ -149,25 +147,25 @@ export function AuthScreen() {
 
       {/* Animated room illumination layer — warm indoor light when on */}
       <div
-        className="absolute inset-0 pointer-events-none z-0 transition-all duration-700 ease-in-out"
+        className="absolute inset-0 pointer-events-none z-0 transition-all duration-500 ease-in-out"
         style={{
           opacity: lit ? 1 : 0,
           background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)',
-          transition: 'opacity 700ms ease-in-out',
+          transition: 'opacity 500ms ease-in-out',
         }}
       />
       {/* Dark room baseline — visible when light is off */}
       <div
-        className="absolute inset-0 pointer-events-none z-0 transition-all duration-700 ease-in-out"
+        className="absolute inset-0 pointer-events-none z-0 transition-all duration-500 ease-in-out"
         style={{
           opacity: lit ? 0 : 1,
           background: 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
-          transition: 'opacity 700ms ease-in-out',
+          transition: 'opacity 500ms ease-in-out',
         }}
       />
       {/* Ambient volumetric glow */}
       <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-700 ease-in-out"
+        className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-500 ease-in-out"
         style={{
           width: 800,
           height: 700,
@@ -175,7 +173,7 @@ export function AuthScreen() {
           filter: 'blur(24px)',
           opacity: lit ? 1 : 0,
           transform: `translateX(-50%) scale(${lit ? 1 : 0.25})`,
-          transition: 'opacity 700ms ease-in-out, transform 700ms ease-in-out',
+          transition: 'opacity 500ms ease-in-out, transform 500ms ease-in-out',
         }}
       />
 
