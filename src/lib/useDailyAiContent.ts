@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export interface DailyAiContent {
   funny_bn: string;
@@ -88,28 +88,20 @@ export function useDailyAiContent(): { content: DailyAiContent; loading: boolean
         return;
       }
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/daily-ai-content`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${supabaseAnonKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const { data: aiData } = await supabase.functions.invoke('daily-ai-content', {});
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && (data.funny_bn || data.tip_bn)) {
-          const c = {
-            funny_bn: data.funny_bn,
-            funny_en: data.funny_en,
-            tip_bn: data.tip_bn,
-            tip_en: data.tip_en,
-          } as DailyAiContent;
-          setContent(c);
-          setLSCache(c);
-          setLoading(false);
-          return;
-        }
+      if (aiData && ((aiData as any).funny_bn || (aiData as any).tip_bn)) {
+        const d = aiData as any;
+        const c = {
+          funny_bn: d.funny_bn,
+          funny_en: d.funny_en,
+          tip_bn: d.tip_bn,
+          tip_en: d.tip_en,
+        } as DailyAiContent;
+        setContent(c);
+        setLSCache(c);
+        setLoading(false);
+        return;
       }
       setContent(STATIC_FALLBACK);
       setLSCache(STATIC_FALLBACK);

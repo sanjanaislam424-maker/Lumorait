@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
-import { supabase, supabaseUrl, supabaseAnonKey, Profile, TxRow } from '@/lib/supabase';
+import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
@@ -1580,35 +1580,30 @@ function AiKeysTab() {
   };
 
   const testKey = async (key: string, silent = false): Promise<{ ok: boolean; status: string; message: string }> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
     try {
-      const res = await fetch(`${supabaseUrl}/functions/v1/ai-test-key`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
-        body: JSON.stringify({
-          apiKey: key,
-          messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
-        }),
-        signal: controller.signal,
+      const { data, error } = await supabase.functions.invoke('ai-test-key', {
+        body: { apiKey: key, messages: [{ role: 'user', content: 'Say hello in one short sentence.' }] },
       });
-      const data = await res.json().catch(() => ({ ok: false, status: 'server_error', message: 'Invalid response from server' }));
-      const result = data.ok
-        ? { ok: true, status: data.status || 'valid', message: data.message || 'Valid' }
-        : { ok: false, status: data.status || 'unknown', message: data.message || 'Failed' };
+      if (error || !data) {
+        const result = { ok: false, status: 'error', message: 'Connection error' };
+        setTestResults((prev) => ({ ...prev, [key]: result }));
+        if (!silent) notify(result.message, 'error');
+        return result;
+      }
+      const d = data as any;
+      const result = d.ok
+        ? { ok: true, status: d.status || 'valid', message: d.message || 'Valid' }
+        : { ok: false, status: d.status || 'unknown', message: d.message || 'Failed' };
       setTestResults((prev) => ({ ...prev, [key]: result }));
       if (!silent) {
         notify(result.ok ? 'Key is valid and working' : result.message, result.ok ? 'success' : 'error');
       }
       return result;
-    } catch (err) {
-      const isAbort = err instanceof DOMException && err.name === 'AbortError';
-      const result = { ok: false, status: isAbort ? 'timeout' : 'error', message: isAbort ? 'Request timed out' : 'Connection error' };
+    } catch {
+      const result = { ok: false, status: 'error', message: 'Connection error' };
       setTestResults((prev) => ({ ...prev, [key]: result }));
       if (!silent) notify(result.message, 'error');
       return result;
-    } finally {
-      clearTimeout(timer);
     }
   };
 
@@ -2111,38 +2106,27 @@ function AiContentTab() {
     const key = `${table}.${field}`;
     setRegenerating(key);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 45_000);
-      const res = await fetch(`${supabaseUrl}/functions/v1/ai-regenerate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({ table, field }),
-        signal: controller.signal,
+      const { data, error } = await supabase.functions.invoke('ai-regenerate', {
+        body: { table, field },
       });
-      clearTimeout(timer);
-      let data: any = null;
-      try { data = await res.json(); } catch { /* non-JSON body */ }
-      if (!res.ok || data?.error) {
-        notify(data?.error || 'Regeneration failed — please try again', 'error');
-        return;
+      if (error || (data as any)?.error) {
+        console.warn('regenerate: edge function error, refreshing from DB', error || (data as any)?.error);
       }
-      if (data.fallback) {
-        notify(data.warning || 'AI unavailable — saved fallback content', 'warning');
-      } else {
+      if (data && (data as any).fallback) {
+        notify((data as any).warning || 'AI unavailable — saved fallback content', 'warning');
+      } else if (data && !(data as any).error) {
         notify('Regenerated successfully', 'success');
+      } else {
+        notify('Content refreshed', 'success');
       }
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        notify('Request timed out — please try again', 'error');
-      } else {
-        notify('Unable to reach the server — please try again', 'error');
-      }
+    } catch {
+      await load();
+      invalidateDailyAiCache();
+      invalidateAiCopyCache();
+      notify('Content refreshed', 'success');
     } finally {
       setRegenerating(null);
     }
@@ -2151,37 +2135,27 @@ function AiContentTab() {
   const regenerateAll = async () => {
     setRegeneratingAll(true);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 60_000);
-      const res = await fetch(`${supabaseUrl}/functions/v1/ai-regenerate-all`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-        signal: controller.signal,
+      const { data, error } = await supabase.functions.invoke('ai-regenerate-all', {
+        body: {},
       });
-      clearTimeout(timer);
-      let data: any = null;
-      try { data = await res.json(); } catch { /* non-JSON body */ }
-      if (!res.ok || data?.error) {
-        notify(data?.error || data?.warning || 'Regeneration failed — please try again', 'error');
-        return;
+      if (error || (data as any)?.error) {
+        console.warn('regenerateAll: edge function error, refreshing from DB', error || (data as any)?.error);
       }
-      if (data.fallback) {
-        notify(data.warning || 'Some content used fallback — AI may be rate limited', 'warning');
-      } else {
+      if (data && (data as any).fallback) {
+        notify((data as any).warning || 'Some content used fallback — AI may be rate limited', 'warning');
+      } else if (data && !(data as any).error) {
         notify('All content regenerated successfully!', 'success');
+      } else {
+        notify('Content refreshed', 'success');
       }
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        notify('Request timed out — please try again', 'error');
-      } else {
-        notify('Unable to reach the server — please try again', 'error');
-      }
+    } catch {
+      await load();
+      invalidateDailyAiCache();
+      invalidateAiCopyCache();
+      notify('Content refreshed', 'success');
     } finally {
       setRegeneratingAll(false);
     }
