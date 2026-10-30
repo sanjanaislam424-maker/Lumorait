@@ -54,7 +54,7 @@ function secondsUntil(isoTimestamp: string | null): number {
 }
 
 export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?: boolean; subject?: string }) {
-  const { t, profile, lang } = useApp();
+  const { t, profile, lang, aiTone } = useApp();
   const { notify } = useToast();
   const [open, setOpen] = useState(supportMode);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -256,6 +256,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
         anonKey: supabaseAnonKey,
         messages: history,
         sessionId: sid,
+        aiTone,
         onText: (delta) => typewriter.push(delta),
         onDone: async (savedId) => {
           await typewriter.drain();

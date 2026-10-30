@@ -135,10 +135,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { messages, sessionId } = await req.json();
+    const { messages, sessionId, aiTone } = await req.json();
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return jsonResponse({ error: "Messages required" }, 400);
     }
+
+    const toneInstructions: Record<string, string> = {
+      buddy: "You are the user's chill best friend — witty, warm, playful, a little sarcastic but never mean. You crack jokes over adda and drop life tips like a close buddy would.",
+      mentor: "You are a professional mentor — clear, thoughtful, and practical. You give structured, calm guidance with encouraging but grounded advice.",
+      coach: "You are a witty coach — punchy, energetic, and motivating with a clever twist. You push the user forward with humor and sharp insight.",
+    };
+    const toneSuffix = toneInstructions[aiTone as string] || toneInstructions.buddy;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -152,7 +159,8 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const apiKeys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
-    const systemPrompt: string = settings?.ai_system_prompt || "You are a helpful assistant.";
+    const basePrompt: string = settings?.ai_system_prompt || "You are a helpful assistant.";
+    const systemPrompt: string = `${basePrompt}\n\n${toneSuffix}`;
     const activeIndex: number = settings?.ai_active_key_index ?? 0;
 
     const allKeys = apiKeys.filter(Boolean);

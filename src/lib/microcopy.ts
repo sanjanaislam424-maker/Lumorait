@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import type { Lang } from '@/lib/i18n';
 
+export type AiTone = 'buddy' | 'mentor' | 'coach';
+
 const STATIC_FALLBACKS: Record<string, string> = {
   tasksHeader_bn: "কাজের তালিকা প্রস্তুত আছে, এবার একটু পরিশ্রম করলে উপার্জনও হবে।",
   tasksHeader_en: "Your task list is ready; a little effort can turn it into real earnings.",
@@ -209,11 +211,37 @@ const STATIC_PROMO_COPY = {
   ],
 };
 
+const TONE_PROMO_SUCCESS = {
+  mentor: [
+    { bn: 'কোড সফলভাবে প্রয়োগ করা হয়েছে; বোনাস কয়েন যোগ হয়েছে।', en: 'Code applied successfully; bonus coins have been added.' },
+  ],
+  coach: [
+    { bn: 'বুম! বোনাস কয়েন তোমার পকেটে — এবার গিয়ে কাজ ফাটাও!', en: 'Boom! Bonus coins are in your pocket — now go crush those tasks!' },
+    { bn: 'অপেক্ষা শেষ! বোনাস এসে গেছে, এখন পেছনে না ফিরে এগিয়ে যাও!', en: 'Wait is over! Bonus is here, now move forward without looking back!' },
+  ],
+};
+
+const TONE_TASK_EDIT = {
+  mentor: [
+    { bn: 'কাজটি সম্পাদনা করা হয়েছে; সবকিছু ঠিকঠাক আছে।', en: 'Task edited successfully; everything is in order.' },
+  ],
+  coach: [
+    { bn: 'এডিট সফল! এখন সোজা কাজে নেমে যাও — সময় নষ্ট নয়!', en: 'Edit done! Now dive straight into work — no time to waste!' },
+    { bn: 'কাজ আপডেট হয়েছে — এবার চট করে ফিনিশ লাইনে পৌঁছে যাও!', en: 'Task updated — now sprint to the finish line!' },
+  ],
+};
+
 function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function createMicrocopy(lang: Lang) {
+export function createMicrocopy(lang: Lang, tone: AiTone = 'buddy') {
+  const pickTone = <T,>(buddy: T[], mentor: T[], coach: T[]): T[] => {
+    if (tone === 'mentor') return mentor;
+    if (tone === 'coach') return coach;
+    return buddy;
+  };
+
   return {
     promoExpired: () => {
       const p = randomPick(STATIC_PROMO_COPY.promoExpired);
@@ -228,7 +256,11 @@ export function createMicrocopy(lang: Lang) {
       return lang === 'bn' ? p.bn : p.en;
     },
     promoSuccess: () => {
-      const p = randomPick(STATIC_PROMO_COPY.promoSuccess);
+      const p = randomPick(pickTone(
+        STATIC_PROMO_COPY.promoSuccess,
+        TONE_PROMO_SUCCESS.mentor,
+        TONE_PROMO_SUCCESS.coach,
+      ));
       return lang === 'bn' ? p.bn : p.en;
     },
     promoLimit: () => {
@@ -248,14 +280,22 @@ export function createMicrocopy(lang: Lang) {
       return lang === 'bn' ? p.bn : p.en;
     },
     taskEditSuccess: () => {
-      const p = randomPick(STATIC_PROMO_COPY.taskEditSuccess);
+      const p = randomPick(pickTone(
+        STATIC_PROMO_COPY.taskEditSuccess,
+        TONE_TASK_EDIT.mentor,
+        TONE_TASK_EDIT.coach,
+      ));
       return lang === 'bn' ? p.bn : p.en;
     },
     yourTasksFirst: () => pick(currentCopy, 'yourTasksFirst', lang),
     videoTutorialHeader: () => pick(currentCopy, 'videoTutorialHeader', lang),
     videoPanelSubtitle: () => pick(currentCopy, 'videoPanelSubtitle', lang),
     promotionSuccess: () => {
-      const p = randomPick(STATIC_PROMO_COPY.promotionSuccess);
+      const p = randomPick(pickTone(
+        STATIC_PROMO_COPY.promotionSuccess,
+        TONE_PROMO_SUCCESS.mentor,
+        TONE_PROMO_SUCCESS.coach,
+      ));
       return lang === 'bn' ? p.bn : p.en;
     },
     promotionEmpty: () => {

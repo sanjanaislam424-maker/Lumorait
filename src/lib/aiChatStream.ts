@@ -3,6 +3,7 @@ export interface StreamOptions {
   anonKey: string;
   messages: { role: string; content: string }[];
   sessionId: string | null;
+  aiTone?: string;
   onText: (delta: string) => void;
   onDone: (savedId: string | null) => Promise<void>;
 }
@@ -37,7 +38,7 @@ async function runAttempt(opts: StreamOptions, onFirstText: () => void): Promise
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${opts.anonKey}`,
       },
-      body: JSON.stringify({ messages: opts.messages, sessionId: opts.sessionId }),
+      body: JSON.stringify({ messages: opts.messages, sessionId: opts.sessionId, aiTone: opts.aiTone }),
       signal: controller.signal,
     });
     if (!res.ok || !res.body) return false;
