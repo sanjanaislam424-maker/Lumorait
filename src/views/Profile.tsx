@@ -49,7 +49,7 @@ export function ProfileView() {
       setKycStatus((kycData?.status as KycStatus) || 'none');
 
       const { data: subs } = await supabase
-        .from('submissions')
+        .from('task_submissions')
         .select('status')
         .eq('doer_id', profile.id);
       const completed = (subs || []).filter((s: any) => s.status === 'approved').length;

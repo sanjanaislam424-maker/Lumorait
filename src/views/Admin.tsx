@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
@@ -653,6 +653,7 @@ function DisputesTab() {
   const { t } = useApp();
   const { notify } = useToast();
   const [subs, setSubs] = useState<any[]>([]);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
 
   const load = async () => {
     const { data } = await supabase.from('task_submissions').select('*, tasks(title, platform), profiles(full_name)').in('status', ['challenged', 'pending']).order('created_at', { ascending: false });
@@ -660,8 +661,15 @@ function DisputesTab() {
   };
   useEffect(() => { load(); }, []);
 
-  const act = async (sub: any, status: string) => {
-    await supabase.from('task_submissions').update({ status, reviewed_at: new Date().toISOString() }).eq('id', sub.id);
+  const act = async (sub: any, status: 'approved' | 'rejected') => {
+    const rating = ratings[sub.id];
+    if (status === 'approved' && !rating) { notify('Rate the doer (1-5 stars) before approving', 'error'); return; }
+    const { error } = await supabase.rpc('review_task_submission', {
+      p_submission_id: sub.id,
+      p_status: status,
+      p_rating: status === 'approved' ? rating : null,
+    });
+    if (error) { notify(error.message, 'error'); return; }
     if (status === 'approved') {
       const { data: task } = await supabase.from('tasks').select('reward_coins, is_admin_task').eq('id', sub.task_id).maybeSingle();
       if (task) {
@@ -693,6 +701,14 @@ function DisputesTab() {
           </div>
           <p className="text-xs text-slate-400">{sub.notes}</p>
           {sub.proof_urls?.map((u: string, i: number) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-xs underline mr-2">Proof {i + 1}</a>)}
+          <div className="flex items-center gap-1 mt-2">
+            <span className="text-xs text-slate-500 mr-1">{t('ratingLabel')}:</span>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} type="button" onClick={() => setRatings((r) => ({ ...r, [sub.id]: n }))} aria-label={`${n} / 5`}>
+                <Star size={16} className={(ratings[sub.id] || 0) >= n ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
+              </button>
+            ))}
+          </div>
         </div>
       ))}
     </div>

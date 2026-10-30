@@ -4,6 +4,7 @@ import { AppProvider, useApp } from '@/lib/AppContext';
 import { ToastProvider } from '@/components/Toast';
 import { AuthScreen } from '@/components/AuthScreen';
 import { AppShell, View } from '@/components/AppShell';
+import { DeletionPendingModal } from '@/components/DeletionPendingModal';
 import { Dashboard } from '@/views/Dashboard';
 import { Tasks } from '@/views/Tasks';
 import { Wallet } from '@/views/Wallet';
@@ -64,6 +65,7 @@ function Main() {
           {view === 'support' && <SupportView />}
         </motion.div>
       </AnimatePresence>
+      {profile.deletion_requested_at && <DeletionPendingModal />}
     </AppShell>
   );
 }
