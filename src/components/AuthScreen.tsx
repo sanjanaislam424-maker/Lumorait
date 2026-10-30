@@ -122,8 +122,8 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
             style={{
               width: 384,
               height: 384,
-              opacity: lit ? 0.2 : 0,
-              filter: 'blur(12px) saturate(1.3)',
+              opacity: lit ? 0.25 : 0,
+              filter: 'blur(4px) saturate(1.3)',
               transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
               boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
             }}
@@ -136,8 +136,8 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
               height: 384,
               fontSize: 160,
               background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-              opacity: lit ? 0.2 : 0,
-              filter: 'blur(12px) saturate(1.3)',
+              opacity: lit ? 0.25 : 0,
+              filter: 'blur(4px) saturate(1.3)',
               transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
             }}
           >
