@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar, Sparkles, Calculator, Wallet as WalletIcon, Lightbulb } from 'lucide-react';
+import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar, Sparkles, Calculator, Wallet as WalletIcon, Lightbulb, Shield } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { WeatherHeader } from '@/components/WeatherHeader';
 import { Card, Button, CoinBadge, Modal } from '@/components/ui';
@@ -143,6 +143,22 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
         <QuickAction icon={<Trophy size={22} />} label={t('leaderboard')} onClick={() => setView('leaderboard')} />
         <QuickAction icon={<ShieldCheck size={22} />} label={t('verifyId')} onClick={() => setView('profile')} />
       </div>
+
+      {/* Admin Panel quick access */}
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={() => setView('admin')}
+        className="w-full mb-6 flex items-center gap-3 rounded-2xl p-4 transition-all bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/30 hover:border-amber-500/50"
+      >
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
+          <Shield size={20} className="text-slate-900" />
+        </div>
+        <div className="text-left flex-1">
+          <p className="text-sm font-bold text-amber-300">{t('adminPanel')}</p>
+          <p className="text-[10px] text-slate-400">Manage users, branding, settings, and more</p>
+        </div>
+        <span className="text-xs text-amber-400 font-medium">Open →</span>
+      </motion.button>
 
       {/* Referral promotional banner */}
       <motion.div
