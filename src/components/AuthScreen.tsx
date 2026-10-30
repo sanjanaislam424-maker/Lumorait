@@ -241,7 +241,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         {/* 3D Glassmorphic login card with tilt */}
         <AnimatePresence>
           {lit && (
-            <GlassCard3D>
+            <GlassCard3D lighting={lighting}>
               {/* Welcome micro-copy */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -651,7 +651,7 @@ function ResetPasswordModal({ open, onClose }: { open: boolean; onClose: () => v
 
 /* ============== 3D GLASSMORPHIC CARD WITH TILT ============== */
 
-function GlassCard3D({ children }: { children: React.ReactNode }) {
+function GlassCard3D({ children, lighting }: { children: React.ReactNode; lighting: LoginBranding }) {
   const ref = useRef<HTMLDivElement>(null);
   const rotX = useSpring(useMotionValue(0), { stiffness: 150, damping: 20 });
   const rotY = useSpring(useMotionValue(0), { stiffness: 150, damping: 20 });
