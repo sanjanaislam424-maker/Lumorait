@@ -54,17 +54,17 @@
   --neon-muted: #78716c;
 }
 
-/* Theme: Dark — high contrast deep black */
+/* Theme: Dark — solid deep black, crisp white text, vibrant accents */
 .theme-dark {
-  --neon-primary: #5eead4;
-  --neon-secondary: #60a5fa;
+  --neon-primary: #38bdf8;
+  --neon-secondary: #2563eb;
   --neon-accent: #22d3ee;
-  --neon-glow: rgba(94, 234, 212, 0.3);
-  --neon-bg: #020617;
-  --neon-card-bg: rgba(15, 23, 42, 0.82);
-  --neon-border: rgba(148, 163, 184, 0.25);
-  --neon-text: #f1f5f9;
-  --neon-muted: #94a3b8;
+  --neon-glow: rgba(56, 189, 248, 0.35);
+  --neon-bg: #000000;
+  --neon-card-bg: rgba(0, 0, 0, 0.9);
+  --neon-border: rgba(255, 255, 255, 0.12);
+  --neon-text: #ffffff;
+  --neon-muted: #9ca3af;
 }
 
 /* Theme: Light — clean professional white */
@@ -396,12 +396,48 @@ body {
   border-color: rgba(190, 24, 93, 0.2) !important;
 }
 
-/* Dark theme: boost muted text legibility */
+/* Dark theme: force all hardcoded grey Tailwind utilities to solid black */
+.theme-dark .bg-slate-700,
+.theme-dark .bg-slate-800,
+.theme-dark .bg-slate-800\/50,
+.theme-dark .bg-slate-800\/60,
+.theme-dark .bg-slate-800\/30,
+.theme-dark .bg-slate-900,
+.theme-dark .bg-slate-900\/30,
+.theme-dark .bg-slate-900\/50,
+.theme-dark .bg-slate-900\/60 {
+  background: #000000 !important;
+}
+
+/* Dark theme: force text-white to pure white (already white, but guarantee) */
+.theme-dark .text-white {
+  color: #ffffff !important;
+}
+
+/* Dark theme: muted text stays crisp and readable — never faint */
 .theme-dark .text-slate-400 {
-  color: #94a3b8 !important;
+  color: #9ca3af !important;
 }
 .theme-dark .text-slate-500 {
-  color: #64748b !important;
+  color: #6b7280 !important;
+}
+
+/* Dark theme: borders visible but subtle */
+.theme-dark .border-white\/5,
+.theme-dark .border-white\/10,
+.theme-dark .border-white\/20 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Dark theme: neon card gets solid black base with crisp border */
+.theme-dark .neon-card {
+  background: #000000 !important;
+  box-shadow: 0 0 20px var(--neon-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Dark theme: ghost buttons get solid black bg */
+.theme-dark .neon-btn-ghost {
+  background: #0a0a0a;
 }
 
 /* Ensure neon-text is never faint — bold weight fallback */
