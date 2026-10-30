@@ -10,6 +10,34 @@ const corsHeaders = {
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
 const TIMEOUT_MS = 30_000;
 
+// Bengali text uses ~3x more tokens than English per character.
+// Give ample room so Gemini never truncates mid-sentence.
+
+function isTruncated(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  // Ends with hanging comma — almost certainly cut mid-sentence
+  if (/[,،]$/u.test(trimmed)) return true;
+  // Ends with a Bengali incomplete conjunction or hanging particle
+  if(/[\u0985-\u09B9]$/u.test(trimmed) && /\b[\u0995\u09A6\u09A8\u09A4\u09B0\u09B8]$/u.test(trimmed)) return true;
+  // Ends with "..." or a cut-off indicator
+  if(/\.\.\.$/u.test(trimmed)) return true;
+  // Ends with a word fragment (single trailing Bengali consonant with no vowel sound)
+  const last3 = trimmed.slice(-3);
+  if(/[\u0995-\u09B9]$/u.test(last3) && !/[\u09BE-\u09CC\u09D7\.\!\?\u0964\u0965]$/u.test(trimmed)) {
+    // Only flag if it doesn't end with a terminal punctuation or Bengali daari
+    if(!/[\.\!\?\u0964\u0965]$/u.test(trimmed)) return true;
+  }
+  return false;
+}
+
+function isCompleteSentence(text: string, minWords: number = 4): boolean {
+  const trimmed = text.trim();
+  if (trimmed.split(/\s+/).length < minWords) return false;
+  if (isTruncated(trimmed)) return false;
+  return true;
+}
+
 // ---- Table: daily_ai_content ----
 const CONTENT_ITEMS: Record<string, { desc: string; maxChars: number; fallback: string }> = {
   funny_bn: {
@@ -106,7 +134,7 @@ Return ONLY the raw text string — no JSON, no markdown, no code fences, no quo
             headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 1.6, maxOutputTokens: 200 },
+              generationConfig: { temperature: 1.6, maxOutputTokens: 1024 },
             }),
             signal: controller.signal,
           },
@@ -117,6 +145,11 @@ Return ONLY the raw text string — no JSON, no markdown, no code fences, no quo
           continue;
         }
         const data = await res.json();
+        const finishReason = data?.candidates?.[0]?.finishReason;
+        if (finishReason === "MAX_TOKENS") {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} hit MAX_TOKENS (output truncated by token limit)`);
+          continue;
+        }
         const text = data?.candidates?.[0]?.content?.parts
           ?.map((p: { text?: string }) => p.text ?? "")
           .join("") || "";
@@ -129,7 +162,10 @@ Return ONLY the raw text string — no JSON, no markdown, no code fences, no quo
           console.error(`ai-regenerate: Gemini ${model} key#${k} text cleaned to empty`);
           continue;
         }
-        // Reject fragments: require at least 4 words for a complete sentence
+        if (isTruncated(cleaned)) {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} returned truncated text: "${cleaned.slice(-40)}"`);
+          continue;
+        }
         const wordCount = cleaned.split(/\s+/).length;
         if (wordCount < 4) {
           console.error(`ai-regenerate: Gemini ${model} key#${k} returned fragment (${wordCount} words): "${cleaned}"`);

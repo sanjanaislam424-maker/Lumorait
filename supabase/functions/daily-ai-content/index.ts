@@ -53,9 +53,19 @@ async function getAllKeys(supabaseClient: any): Promise<string[]> {
   return allKeys;
 }
 
+function isTruncated(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (/[,،]$/u.test(trimmed)) return true;
+  if (/\.\.\.$/u.test(trimmed)) return true;
+  if (!/[.!?\u0964\u0965]$/u.test(trimmed) && /[\u0995-\u09B9]$/u.test(trimmed)) return true;
+  return false;
+}
+
 function isCompleteSentence(text: string, minWords: number = 4): boolean {
   const words = text.trim().split(/\s+/);
   if (words.length < minWords) return false;
+  if (isTruncated(text.trim())) return false;
   return true;
 }
 
@@ -125,7 +135,7 @@ Make it fresh and different each time. Be creative, specific, and hilarious. No 
             headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 1.4, maxOutputTokens: 500 },
+              generationConfig: { temperature: 1.4, maxOutputTokens: 1200 },
             }),
             signal: controller.signal,
           },
@@ -136,6 +146,11 @@ Make it fresh and different each time. Be creative, specific, and hilarious. No 
           continue;
         }
         const data = await res.json();
+        const finishReason = data?.candidates?.[0]?.finishReason;
+        if (finishReason === "MAX_TOKENS") {
+          console.error(`daily-ai-content: Gemini ${model} key#${k} hit MAX_TOKENS (output truncated)`);
+          continue;
+        }
         const text = data?.candidates?.[0]?.content?.parts
           ?.map((p: { text?: string }) => p.text ?? "")
           .join("") || "";

@@ -29,6 +29,15 @@ const FIELDS = [
   "dashboard_alert", "task_available", "watch_tutorial",
 ];
 
+function isTruncated(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (/[,،]$/u.test(trimmed)) return true;
+  if (/\.\.\.$/u.test(trimmed)) return true;
+  if (!/[.!?\u0964\u0965]$/u.test(trimmed) && /[\u0995-\u09B9]$/u.test(trimmed)) return true;
+  return false;
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -103,7 +112,7 @@ Be creative, fresh, and different each time. No emoji.`;
             headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 1.5, maxOutputTokens: 800 },
+              generationConfig: { temperature: 1.5, maxOutputTokens: 1600 },
             }),
             signal: controller.signal,
           },
@@ -114,6 +123,11 @@ Be creative, fresh, and different each time. No emoji.`;
           continue;
         }
         const data = await res.json();
+        const finishReason = data?.candidates?.[0]?.finishReason;
+        if (finishReason === "MAX_TOKENS") {
+          console.error(`ai-ui-copy: Gemini ${model} key#${k} hit MAX_TOKENS (output truncated)`);
+          continue;
+        }
         const text = data?.candidates?.[0]?.content?.parts
           ?.map((p: { text?: string }) => p.text ?? "")
           .join("") || "";
@@ -127,7 +141,7 @@ Be creative, fresh, and different each time. No emoji.`;
         let allValid = true;
         for (const field of FIELDS) {
           const val = typeof parsed[field] === "string" ? parsed[field].trim() : "";
-          if (val && val.split(/\s+/).length >= 3) {
+          if (val && val.split(/\s+/).length >= 3 && !isTruncated(val)) {
             result[field] = val;
           } else {
             console.error(`ai-ui-copy: field '${field}' returned fragment: "${val}" — using fallback`);

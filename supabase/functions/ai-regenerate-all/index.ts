@@ -55,7 +55,19 @@ async function getAllKeys(supabase: any): Promise<string[]> {
 }
 
 function isCompleteSentence(text: string, minWords: number = 4): boolean {
-  return text.trim().split(/\s+/).length >= minWords;
+  const trimmed = text.trim();
+  if (trimmed.split(/\s+/).length < minWords) return false;
+  if (isTruncated(trimmed)) return false;
+  return true;
+}
+
+function isTruncated(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (/[,،]$/u.test(trimmed)) return true;
+  if (/\.\.\.$/u.test(trimmed)) return true;
+  if (!/[.!?\u0964\u0965]$/u.test(trimmed) && /[\u0995-\u09B9]$/u.test(trimmed)) return true;
+  return false;
 }
 
 function cleanText(raw: string): string {
@@ -91,6 +103,11 @@ async function callGemini(
           continue;
         }
         const data = await res.json();
+        const finishReason = data?.candidates?.[0]?.finishReason;
+        if (finishReason === "MAX_TOKENS") {
+          console.error(`ai-regenerate-all: Gemini ${model} key#${k} hit MAX_TOKENS (output truncated)`);
+          continue;
+        }
         const text = data?.candidates?.[0]?.content?.parts
           ?.map((p: { text?: string }) => p.text ?? "")
           .join("") || "";
@@ -150,7 +167,7 @@ Bad example (NEVER): "লাইক করো" (broken fragment)
 
 No emoji.`;
 
-  const raw = await callGemini(allKeys, prompt, 500, 1.4);
+  const raw = await callGemini(allKeys, prompt, 1200, 1.4);
   if (!raw) return { ...CONTENT_FALLBACK };
 
   try {
@@ -201,7 +218,7 @@ Bad example (NEVER): "Like koro" (broken fragment)
 
 No emoji.`;
 
-  const raw = await callGemini(allKeys, prompt, 800, 1.5);
+  const raw = await callGemini(allKeys, prompt, 1600, 1.5);
   if (!raw) return { ...UI_COPY_FALLBACK };
 
   try {
@@ -210,7 +227,7 @@ No emoji.`;
     const result: Record<string, string> = {};
     for (const field of UI_COPY_FIELDS) {
       const val = typeof parsed[field] === "string" ? parsed[field].trim() : "";
-      if (val && val.split(/\s+/).length >= 3) {
+      if (val && val.split(/\s+/).length >= 3 && !isTruncated(val)) {
         result[field] = val;
       } else {
         console.error(`ai-regenerate-all: UI copy field '${field}' is fragment, using fallback`);
