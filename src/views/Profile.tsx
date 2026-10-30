@@ -461,6 +461,17 @@ export function KycModal({ open, onClose, onDone, onNeedAppeal }: { open: boolea
   const [nidBack, setNidBack] = useState('');
   const [videoSelfie, setVideoSelfie] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploadingField, setUploadingField] = useState('');
+
+  const handleFileUpload = async (file: File, field: 'nidFront' | 'nidBack' | 'videoSelfie') => {
+    setUploadingField(field);
+    const { url, error } = await uploadBrandingImage(file, `kyc/${field}`);
+    setUploadingField('');
+    if (error || !url) { notify(t('kycUploadError'), 'error'); return; }
+    if (field === 'nidFront') setNidFront(url);
+    else if (field === 'nidBack') setNidBack(url);
+    else setVideoSelfie(url);
+  };
 
   const submit = async () => {
     if (!profile) return;
@@ -551,15 +562,45 @@ export function KycModal({ open, onClose, onDone, onNeedAppeal }: { open: boolea
         </div>
         <div>
           <label className="text-xs neon-muted block mb-1">{t('nidFront')}</label>
-          <input value={nidFront} onChange={(e) => setNidFront(e.target.value)} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 neon-text text-sm outline-none" />
+          {nidFront ? (
+            <div className="flex items-center gap-2">
+              <img src={nidFront} alt="" className="w-16 h-16 rounded-lg object-cover border border-white/10" />
+              <button onClick={() => setNidFront('')} className="text-xs text-red-400">Remove</button>
+            </div>
+          ) : (
+            <label className={`w-full flex items-center justify-center gap-2 bg-slate-700 border border-white/10 rounded-xl px-3 py-3 neon-text text-sm cursor-pointer transition hover:border-amber-500/50 ${uploadingField === 'nidFront' ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Upload size={16} /> {uploadingField === 'nidFront' ? t('kycUploading') : t('kycUploadImage')}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'nidFront'); }} />
+            </label>
+          )}
         </div>
         <div>
           <label className="text-xs neon-muted block mb-1">{t('nidBack')}</label>
-          <input value={nidBack} onChange={(e) => setNidBack(e.target.value)} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 neon-text text-sm outline-none" />
+          {nidBack ? (
+            <div className="flex items-center gap-2">
+              <img src={nidBack} alt="" className="w-16 h-16 rounded-lg object-cover border border-white/10" />
+              <button onClick={() => setNidBack('')} className="text-xs text-red-400">Remove</button>
+            </div>
+          ) : (
+            <label className={`w-full flex items-center justify-center gap-2 bg-slate-700 border border-white/10 rounded-xl px-3 py-3 neon-text text-sm cursor-pointer transition hover:border-amber-500/50 ${uploadingField === 'nidBack' ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Upload size={16} /> {uploadingField === 'nidBack' ? t('kycUploading') : t('kycUploadImage')}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'nidBack'); }} />
+            </label>
+          )}
         </div>
         <div>
           <label className="text-xs neon-muted block mb-1">{t('videoSelfie')}</label>
-          <input value={videoSelfie} onChange={(e) => setVideoSelfie(e.target.value)} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 neon-text text-sm outline-none" />
+          {videoSelfie ? (
+            <div className="flex items-center gap-2">
+              <video src={videoSelfie} className="w-16 h-16 rounded-lg object-cover border border-white/10" />
+              <button onClick={() => setVideoSelfie('')} className="text-xs text-red-400">Remove</button>
+            </div>
+          ) : (
+            <label className={`w-full flex items-center justify-center gap-2 bg-slate-700 border border-white/10 rounded-xl px-3 py-3 neon-text text-sm cursor-pointer transition hover:border-amber-500/50 ${uploadingField === 'videoSelfie' ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Upload size={16} /> {uploadingField === 'videoSelfie' ? t('kycUploading') : t('kycUploadVideo')}
+              <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'videoSelfie'); }} />
+            </label>
+          )}
           <p className="text-[10px] neon-muted mt-1">{t('videoSelfieHint')}</p>
         </div>
         <Button className="w-full" onClick={submit} disabled={busy}>{busy ? '...' : t('submit')}</Button>
