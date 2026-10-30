@@ -241,21 +241,38 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!row) {
-      return jsonResponse({ error: "No content row for today" }, 404);
+      // No row exists for today — insert fallback content so the app always has something
+      const fallbackRow = { content_date: today, ...Object.fromEntries(
+        Object.entries(CONTENT_ITEMS).map(([f, def]) => [f, def.fallback])
+      ) };
+      if (table === 'daily_ai_content') {
+        await supabase.from(table).insert(fallbackRow);
+      }
+      return jsonResponse({
+        field,
+        newValue: itemDef.fallback,
+        table,
+        fallback: true,
+        warning: "No content for today yet — saved fallback content",
+      });
     }
 
     const currentValue = (row as Record<string, string>)[field] || "";
 
     const allKeys = await getAllKeys(supabase);
     if (allKeys.length === 0) {
-      console.error("ai-regenerate: no Gemini API keys configured");
-      // Return fallback content instead of crashing
+      console.warn("ai-regenerate: no Gemini API keys configured — saving fallback content");
+      const fallbackValue = itemDef.fallback;
+      await supabase
+        .from(table)
+        .update({ [field]: fallbackValue, updated_at: new Date().toISOString() })
+        .eq("content_date", today);
       return jsonResponse({
         field,
-        newValue: itemDef.fallback,
+        newValue: fallbackValue,
         table,
         fallback: true,
-        warning: "No API keys configured — using static fallback",
+        warning: "No API keys configured — saved fallback content",
       });
     }
 
@@ -282,7 +299,7 @@ Deno.serve(async (req: Request) => {
         table,
         fallback: usedFallback,
         warning: usedFallback ? "AI failed, used fallback — but DB update failed too" : "DB update failed",
-      }, 500);
+      });
     }
 
     return jsonResponse({

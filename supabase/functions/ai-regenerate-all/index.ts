@@ -260,13 +260,9 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
 
     const allKeys = await getAllKeys(supabase);
-    if (allKeys.length === 0) {
-      console.error("ai-regenerate-all: no Gemini API keys configured");
-      return jsonResponse({
-        error: "No API keys configured",
-        fallback: true,
-        warning: "No Gemini API keys are configured. Add keys in the AI Keys tab.",
-      }, 503);
+    const hasKeys = allKeys.length > 0;
+    if (!hasKeys) {
+      console.warn("ai-regenerate-all: no Gemini API keys configured — saving fallback content to DB");
     }
 
     // Fetch recent content to avoid repetition
@@ -276,11 +272,13 @@ Deno.serve(async (req: Request) => {
       .order("content_date", { ascending: false })
       .limit(7);
 
-    // Regenerate both content sets in parallel
-    const [contentResult, uiCopyResult] = await Promise.all([
-      regenerateContentQuotes(allKeys, recentRows || []),
-      regenerateUICopy(allKeys),
-    ]);
+    // Regenerate both content sets in parallel (or use fallbacks if no keys)
+    const [contentResult, uiCopyResult] = hasKeys
+      ? await Promise.all([
+          regenerateContentQuotes(allKeys, recentRows || []),
+          regenerateUICopy(allKeys),
+        ])
+      : [{ ...CONTENT_FALLBACK }, { ...UI_COPY_FALLBACK }];
 
     let contentFallbackUsed = false;
     let uiCopyFallbackUsed = false;
@@ -331,10 +329,11 @@ Deno.serve(async (req: Request) => {
     // Check if UI copy used fallback
     uiCopyFallbackUsed = UI_COPY_FIELDS.every((f) => uiCopyResult[f] === UI_COPY_FALLBACK[f]);
 
-    const anyFallback = contentFallbackUsed || uiCopyFallbackUsed;
+    const anyFallback = contentFallbackUsed || uiCopyFallbackUsed || !hasKeys;
     const warnings: string[] = [];
-    if (contentFallbackUsed) warnings.push("Funny quotes/tips used fallback content");
-    if (uiCopyFallbackUsed) warnings.push("UI copy used fallback content");
+    if (!hasKeys) warnings.push("No Gemini API keys configured — saved fallback content");
+    else if (contentFallbackUsed) warnings.push("Funny quotes/tips used fallback content");
+    else if (uiCopyFallbackUsed) warnings.push("UI copy used fallback content");
 
     return jsonResponse({
       success: true,

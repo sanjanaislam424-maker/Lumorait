@@ -2111,6 +2111,8 @@ function AiContentTab() {
     const key = `${table}.${field}`;
     setRegenerating(key);
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45_000);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-regenerate`, {
         method: 'POST',
         headers: {
@@ -2118,10 +2120,13 @@ function AiContentTab() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({ table, field }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        notify(data.error || 'Regeneration failed', 'error');
+      clearTimeout(timer);
+      let data: any = null;
+      try { data = await res.json(); } catch { /* non-JSON body */ }
+      if (!res.ok || data?.error) {
+        notify(data?.error || 'Regeneration failed — please try again', 'error');
         return;
       }
       if (data.fallback) {
@@ -2132,8 +2137,12 @@ function AiContentTab() {
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
-    } catch {
-      notify('Connection error — please check your network', 'error');
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        notify('Request timed out — please try again', 'error');
+      } else {
+        notify('Unable to reach the server — please try again', 'error');
+      }
     } finally {
       setRegenerating(null);
     }
@@ -2142,16 +2151,21 @@ function AiContentTab() {
   const regenerateAll = async () => {
     setRegeneratingAll(true);
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60_000);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-regenerate-all`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        notify(data.error || data.warning || 'Regeneration failed', 'error');
+      clearTimeout(timer);
+      let data: any = null;
+      try { data = await res.json(); } catch { /* non-JSON body */ }
+      if (!res.ok || data?.error) {
+        notify(data?.error || data?.warning || 'Regeneration failed — please try again', 'error');
         return;
       }
       if (data.fallback) {
@@ -2162,8 +2176,12 @@ function AiContentTab() {
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
-    } catch {
-      notify('Connection error — please check your network', 'error');
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        notify('Request timed out — please try again', 'error');
+      } else {
+        notify('Unable to reach the server — please try again', 'error');
+      }
     } finally {
       setRegeneratingAll(false);
     }
