@@ -2095,8 +2095,8 @@ function AiContentTab() {
       supabase.from('daily_ai_content').select('*').eq('content_date', today).maybeSingle(),
       supabase.from('daily_ai_ui_copy').select('*').eq('content_date', today).maybeSingle(),
     ]);
-    setContentRow(contentRes.data as Record<string, string> | null);
-    setUiCopyRow(uiCopyRes.data as Record<string, string> | null);
+    if (contentRes.data) setContentRow(contentRes.data as Record<string, string>);
+    if (uiCopyRes.data) setUiCopyRow(uiCopyRes.data as Record<string, string>);
     setLoading(false);
   };
 
@@ -2109,20 +2109,34 @@ function AiContentTab() {
       const { data, error } = await supabase.functions.invoke('ai-regenerate', {
         body: { table, field },
       });
-      if (error || (data as any)?.error) {
-        console.warn('regenerate: edge function error, refreshing from DB', error || (data as any)?.error);
+      if (error) {
+        console.error('regenerate: invoke error', error);
       }
-      if (data && (data as any).fallback) {
-        notify((data as any).warning || 'AI unavailable — saved fallback content', 'warning');
-      } else if (data && !(data as any).error) {
+      const d = data as any;
+      if (d?.error) {
+        console.error('regenerate: edge function returned error', d.error);
+      }
+      // Optimistically update local state with the returned value
+      if (d?.newValue) {
+        if (table === 'daily_ai_content') {
+          setContentRow((prev) => prev ? { ...prev, [field]: d.newValue } : { content_date: new Date().toISOString().split('T')[0], [field]: d.newValue });
+        } else {
+          setUiCopyRow((prev) => prev ? { ...prev, [field]: d.newValue } : { content_date: new Date().toISOString().split('T')[0], [field]: d.newValue });
+        }
+      }
+      if (d?.fallback) {
+        notify(d.warning || 'AI unavailable — saved fallback content', 'warning');
+      } else if (d?.newValue) {
         notify('Regenerated successfully', 'success');
       } else {
         notify('Content refreshed', 'success');
       }
+      // Force a fresh DB re-read to sync the actual state
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
-    } catch {
+    } catch (err) {
+      console.error('regenerate: unexpected error', err);
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
@@ -2138,20 +2152,33 @@ function AiContentTab() {
       const { data, error } = await supabase.functions.invoke('ai-regenerate-all', {
         body: {},
       });
-      if (error || (data as any)?.error) {
-        console.warn('regenerateAll: edge function error, refreshing from DB', error || (data as any)?.error);
+      if (error) {
+        console.error('regenerateAll: invoke error', error);
       }
-      if (data && (data as any).fallback) {
-        notify((data as any).warning || 'Some content used fallback — AI may be rate limited', 'warning');
-      } else if (data && !(data as any).error) {
+      const d = data as any;
+      if (d?.error) {
+        console.error('regenerateAll: edge function returned error', d.error);
+      }
+      // Optimistically update local state with returned values
+      if (d?.content) {
+        setContentRow((prev) => prev ? { ...prev, ...d.content } : { content_date: new Date().toISOString().split('T')[0], ...d.content });
+      }
+      if (d?.uiCopy) {
+        setUiCopyRow((prev) => prev ? { ...prev, ...d.uiCopy } : { content_date: new Date().toISOString().split('T')[0], ...d.uiCopy });
+      }
+      if (d?.fallback) {
+        notify(d.warning || 'Some content used fallback — AI may be rate limited', 'warning');
+      } else if (d?.success) {
         notify('All content regenerated successfully!', 'success');
       } else {
         notify('Content refreshed', 'success');
       }
+      // Force a fresh DB re-read to sync the actual state
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
-    } catch {
+    } catch (err) {
+      console.error('regenerateAll: unexpected error', err);
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
