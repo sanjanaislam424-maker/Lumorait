@@ -47,6 +47,7 @@ export type Profile = {
   notify_tasks: boolean;
   notify_payments: boolean;
   notify_promo: boolean;
+  level_reward_claimed: number;
   created_at: string;
 };
 

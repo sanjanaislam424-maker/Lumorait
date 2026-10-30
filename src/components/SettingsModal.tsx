@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, Check, Globe2, Lock, Monitor, Moon, Palette, Shield, Sparkles, Sun, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bell, Check, Globe2, Lock, Monitor, Moon, Palette, Shield, Sparkles, Sun, Trash2, User as UserIcon } from 'lucide-react';
 import { Modal } from './ui';
 import { useApp, type AiTone, type ThemeMode, themes } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from './Toast';
 import type { Lang } from '@/lib/i18n';
 
-type SettingsTab = 'menu' | 'language' | 'theme' | 'aiTone' | 'security' | 'notifications' | 'account';
+type SettingsTab = 'menu' | 'profile' | 'language' | 'theme' | 'aiTone' | 'security' | 'notifications' | 'account';
 
 const toneOptions: { id: AiTone; title: 'toneBuddy' | 'toneMentor' | 'toneCoach'; description: 'toneBuddyDesc' | 'toneMentorDesc' | 'toneCoachDesc'; icon: typeof Sparkles }[] = [
   { id: 'buddy', title: 'toneBuddy', description: 'toneBuddyDesc', icon: Sparkles },
@@ -22,7 +22,7 @@ const customThemeLabels: Record<'cyber' | 'matrix' | 'solar', { bn: string; en: 
   solar: { bn: 'সোলার ফ্লেয়ার', en: 'Solar Flare' },
 };
 
-export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsModal({ open, onClose, onNavigateProfile }: { open: boolean; onClose: () => void; onNavigateProfile?: () => void }) {
   const { t, lang, setLang, themeMode, setThemeMode, aiTone, setAiTone, themeConfig, profile, refreshProfile, signOut } = useApp();
   const { notify } = useToast();
 
@@ -48,6 +48,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   if (!profile) return null;
 
   const menuItems: { id: SettingsTab; icon: typeof Globe2; label: string; sublabel: string }[] = [
+    { id: 'profile', icon: UserIcon, label: t('settingsProfile'), sublabel: t('settingsKyc') },
     { id: 'language', icon: Globe2, label: t('settingsLanguage'), sublabel: lang === 'bn' ? 'বাংলা' : 'English' },
     { id: 'theme', icon: Palette, label: t('settingsTheme'), sublabel: lang === 'bn' ? '৬টি থিম' : '6 themes' },
     { id: 'aiTone', icon: Sparkles, label: t('settingsAiTone'), sublabel: aiTone === 'buddy' ? t('toneBuddy') : aiTone === 'mentor' ? t('toneMentor') : t('toneCoach') },
@@ -86,7 +87,8 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     notify(t('passwordChanged'), 'success');
   };
 
-  const saveNotifs = async (updated: typeof notif) => {
+  const saveNotifs = async (key: keyof typeof notif, nextVal: boolean) => {
+    const updated = { ...notif, [key]: nextVal };
     setNotif(updated);
     await supabase.from('profiles').update({
       notify_tasks: updated.tasks,
@@ -94,7 +96,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
       notify_promo: updated.promo,
     }).eq('id', profile.id);
     await refreshProfile();
-    notify(t('notifSaved'), 'success');
+    notify(nextVal ? t('notifToggledOn') : t('notifToggledOff'), nextVal ? 'success' : 'info');
   };
 
   const modeOptions: { id: ThemeMode; label: string; description: string; icon: typeof Monitor }[] = [
@@ -125,7 +127,10 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} onClick={() => setTab(item.id)} className="w-full flex items-center gap-3 rounded-xl p-4 text-left transition neon-btn-ghost">
+                <button key={item.id} onClick={() => {
+                  if (item.id === 'profile' && onNavigateProfile) { onNavigateProfile(); onClose(); return; }
+                  setTab(item.id);
+                }} className="w-full flex items-center gap-3 rounded-xl p-4 text-left transition neon-btn-ghost">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${themeConfig.primary}15`, border: `1px solid ${themeConfig.border}` }}>
                     <Icon size={20} style={{ color: themeConfig.primary }} />
                   </div>
@@ -258,7 +263,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               {notifOptions.map((option) => {
                 const active = notif[option.key];
                 return (
-                  <button key={option.key} onClick={() => saveNotifs({ ...notif, [option.key]: !active })} className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition neon-btn-ghost">
+                  <button key={option.key} onClick={() => saveNotifs(option.key, !active)} className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition neon-btn-ghost">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: active ? `${themeConfig.primary}20` : 'rgba(100,116,139,0.1)' }}>
                       <Bell size={18} style={{ color: active ? themeConfig.primary : themeConfig.muted }} />
                     </div>

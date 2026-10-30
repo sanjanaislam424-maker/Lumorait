@@ -218,7 +218,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
         </div>
       </nav>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onNavigateProfile={() => { setView('profile'); setDrawerOpen(false); }} />
 
       {/* Notifications modal */}
       <Modal open={notifOpen} onClose={() => setNotifOpen(false)} title={t('notifications')}>

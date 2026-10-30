@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target } from 'lucide-react';
+import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { ChatWidget } from '@/components/ChatWidget';
+import { uploadBrandingImage } from '@/lib/upload';
 
 const badgeIcons: Record<string, React.ReactNode> = {
   Award: <Award size={16} />, Crown: <Crown size={16} />, Flame: <Flame size={16} />, Coins: <Coins size={16} />, TrendingUp: <TrendingUp size={16} />, Zap: <Zap size={16} />, Footprints: <Footprints size={16} />, Star: <Star size={16} />, Target: <Target size={16} />,
@@ -29,6 +30,7 @@ export function ProfileView() {
   const [supportOpen, setSupportOpen] = useState(false);
   const [appealOpen, setAppealOpen] = useState(false);
   const [stats, setStats] = useState({ tasksCompleted: 0, totalEarned: 0 });
+  const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -63,6 +65,7 @@ export function ProfileView() {
 
   const xpForNextLevel = profile.level * 1000;
   const xpProgress = Math.min(100, (profile.xp_points / xpForNextLevel) * 100);
+  const canClaimLevel = xpProgress >= 100 && profile.level_reward_claimed < profile.level;
 
   const saveProfile = async () => {
     await supabase.from('profiles').update({
@@ -72,6 +75,24 @@ export function ProfileView() {
     }).eq('id', profile.id);
     await refreshProfile();
     notify(t('profileUpdated'), 'success');
+  };
+
+  const claimLevelReward = async () => {
+    if (!canClaimLevel) return;
+    setClaiming(true);
+    const reward = profile.level * 100;
+    await supabase.from('profiles').update({
+      lumora_coins: profile.lumora_coins + reward,
+      level: profile.level + 1,
+      xp_points: profile.xp_points - xpForNextLevel,
+      level_reward_claimed: profile.level,
+    }).eq('id', profile.id);
+    await supabase.from('transactions').insert({
+      user_id: profile.id, type: 'reward', amount: reward, status: 'completed', note: `Level ${profile.level} up reward`,
+    });
+    await refreshProfile();
+    notify(t('levelUpClaimed') + ` +${reward} ${t('lumoraCoins')}`, 'success');
+    setClaiming(false);
   };
 
   const deleteAccount = async () => {
@@ -197,7 +218,12 @@ export function ProfileView() {
             style={{ width: `${xpProgress}%`, background: `linear-gradient(90deg, ${themeConfig.primary}, ${themeConfig.secondary})` }}
           />
         </div>
-        <p className="text-xs neon-muted mt-1.5">{xpForNextLevel - profile.xp_points} {t('xpNextLevel')}</p>
+        <p className="text-xs neon-muted mt-1.5">{canClaimLevel ? '' : `${xpForNextLevel - profile.xp_points} ${t('xpNextLevel')}`}</p>
+        {canClaimLevel && (
+          <button onClick={claimLevelReward} disabled={claiming} className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition neon-btn-primary text-sm disabled:opacity-50">
+            <Gift size={18} /> {claiming ? '...' : t('claimLevelReward')} ({profile.level * 100} {t('lumoraCoins')})
+          </button>
+        )}
       </Card>
 
       {/* ===== Activity Stats ===== */}
