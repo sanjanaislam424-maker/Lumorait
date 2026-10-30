@@ -7,6 +7,7 @@ import { supabase, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
+import { AuthScreen } from '@/components/AuthScreen';
 import { uploadBrandingImage } from '@/lib/upload';
 import { invalidateAiCopyCache } from '@/lib/microcopy';
 import { invalidateDailyAiCache } from '@/lib/useDailyAiContent';
@@ -126,165 +127,6 @@ export function Admin() {
       {activeTab === 'badges' && <BadgesTab />}
       {activeTab === 'ai_content' && <AiContentTab />}
       {activeTab === 'branding' && <BrandingTab />}
-    </div>
-  );
-}
-
-function BrandingTab() {
-  const { t, logoUrl, refreshLogo, themeConfig } = useApp();
-  const { notify } = useToast();
-  const [uploading, setUploading] = useState(false);
-  const [previewLit, setPreviewLit] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const { url, error } = await uploadBrandingImage(file, 'logo');
-      if (error || !url) { notify(error || 'Upload failed', 'error'); return; }
-      await supabase.from('app_settings').update({ app_logo_url: url }).eq('id', 1);
-      await refreshLogo();
-      notify(t('saved'), 'success');
-    } finally { setUploading(false); }
-  };
-
-  const removeLogo = async () => {
-    await supabase.from('app_settings').update({ app_logo_url: null }).eq('id', 1);
-    await refreshLogo();
-    notify(t('saved'), 'success');
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Logo Upload Controls */}
-      <Card>
-        <div className="flex items-center gap-2 mb-3">
-          <ImageIcon size={18} className="text-amber-400" />
-          <h3 className="font-semibold text-white">{t('logoBranding')}</h3>
-        </div>
-        <p className="text-xs text-slate-400 mb-3">{t('logoBrandingDesc')}</p>
-        <div className="flex items-center gap-4 mb-3">
-          <div className="shrink-0">
-            {logoUrl ? (
-              <img src={logoUrl} alt="App Logo" className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
-            ) : (
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold bg-gradient-to-br from-amber-500 to-orange-600 text-slate-900">L</div>
-            )}
-          </div>
-          <div className="flex-1">
-            <p className="text-xs text-slate-400 mb-2">{logoUrl ? t('currentLogo') : t('noLogoUploaded')}</p>
-            <div className="flex gap-2">
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-              <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                {uploading ? <><ImageIcon size={14} /> {t('uploading')}</> : <><Upload size={14} /> {t('uploadLogo')}</>}
-              </Button>
-              {logoUrl && (
-                <Button variant="danger" className="text-xs px-3 py-2" onClick={removeLogo}><Trash2 size={14} /></Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Live Login Page Lighting Preview */}
-      <Card>
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={18} className="text-amber-400" />
-          <h3 className="font-semibold text-white">Login Page Preview</h3>
-        </div>
-        <p className="text-xs text-slate-400 mb-3">Toggle the light to preview how the login page looks with the current logo as a glowing wall watermark behind the glass card.</p>
-
-        {/* Light toggle switch */}
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => setPreviewLit((v) => !v)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all duration-500"
-            style={{
-              background: previewLit ? 'linear-gradient(135deg, rgba(251,191,36,0.9), rgba(245,158,11,0.9))' : 'rgba(30,41,59,0.6)',
-              color: previewLit ? '#0a0301' : '#94a3b8',
-            }}
-          >
-            {previewLit ? 'Light ON' : 'Light OFF'}
-          </button>
-        </div>
-
-        {/* Mini login preview stage */}
-        <div
-          className="relative rounded-2xl overflow-hidden transition-all duration-700 ease-in-out"
-          style={{ height: 360, perspective: '800px' }}
-        >
-          {/* Background layers */}
-          <div className="absolute inset-0 transition-all duration-700 ease-in-out" style={{
-            opacity: previewLit ? 1 : 0,
-            background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)',
-            transition: 'opacity 700ms ease-in-out',
-          }} />
-          <div className="absolute inset-0 transition-all duration-700 ease-in-out" style={{
-            opacity: previewLit ? 0 : 1,
-            background: 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
-            transition: 'opacity 700ms ease-in-out',
-          }} />
-          {/* Ambient glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-700 ease-in-out" style={{
-            width: 400, height: 350,
-            background: 'radial-gradient(ellipse, rgba(251,191,36,0.16) 0%, rgba(251,140,0,0.06) 30%, transparent 65%)',
-            filter: 'blur(24px)',
-            opacity: previewLit ? 1 : 0,
-            transform: `translateX(-50%) scale(${previewLit ? 1 : 0.25})`,
-            transition: 'opacity 700ms ease-in-out, transform 700ms ease-in-out',
-          }} />
-
-          {/* Wall logo watermark */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none transition-all duration-700 ease-in-out" style={{ opacity: previewLit ? 1 : 0 }}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="" className="rounded-3xl object-cover transition-all duration-700 ease-in-out" style={{
-                width: 240, height: 240, opacity: previewLit ? 0.2 : 0,
-                filter: 'blur(12px) saturate(1.3)',
-                boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
-                transition: 'opacity 700ms ease-in-out, filter 700ms ease-in-out',
-              }} />
-            ) : (
-              <div className="rounded-3xl flex items-center justify-center font-bold transition-all duration-700 ease-in-out" style={{
-                width: 240, height: 240, fontSize: 100,
-                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                opacity: previewLit ? 0.2 : 0, filter: 'blur(12px) saturate(1.3)',
-                boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
-                color: '#0a0301', transition: 'opacity 700ms ease-in-out, filter 700ms ease-in-out',
-              }}>L</div>
-            )}
-          </div>
-
-          {/* Mini glass card — mirrors the real login card glassmorphism */}
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="w-56 rounded-2xl p-4 backdrop-blur-xl bg-white/10 dark:bg-black/25 transition-all duration-700 ease-in-out" style={{
-              border: '1px solid rgba(251,191,36,0.18)',
-              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 30px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
-              opacity: previewLit ? 1 : 0.4,
-              transition: 'opacity 700ms ease-in-out',
-            }}>
-              <div className="flex flex-col items-center gap-2">
-                <Logo size={40} rounded="rounded-xl" />
-                <p className="text-sm font-bold" style={{
-                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fb923c)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                }}>Lumora IT</p>
-                <div className="w-full h-8 rounded-lg" style={{ background: 'rgba(8,12,24,0.6)', border: '1px solid rgba(255,255,255,0.08)' }} />
-                <div className="w-full h-8 rounded-lg" style={{ background: 'rgba(8,12,24,0.6)', border: '1px solid rgba(255,255,255,0.08)' }} />
-                <div className="w-full h-9 rounded-xl flex items-center justify-center text-xs font-semibold" style={{
-                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                  color: '#0a0301',
-                }}>{t('login')}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-[10px] text-slate-500 mt-3 text-center">
-          This preview mirrors the real login page. The logo uploads here are live and instantly reflect across the entire app.
-        </p>
-      </Card>
     </div>
   );
 }
@@ -858,7 +700,7 @@ function DisputesTab() {
 }
 
 function SettingsTab() {
-  const { t, refreshLogo, logoUrl } = useApp();
+  const { t, refreshLogo } = useApp();
   const { notify } = useToast();
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -977,96 +819,16 @@ function SettingsTab() {
       </div>
     </Card>
 
-    {/* Live Login Page Lighting Preview */}
+    {/* Live Login Page Preview */}
     <Card>
       <div className="flex items-center gap-2 mb-3">
         <Sparkles size={18} className="text-amber-400" />
-        <h3 className="font-semibold text-white">Login Page Lighting Preview</h3>
+        <h3 className="font-semibold text-white">Login Page Preview</h3>
       </div>
-      <p className="text-xs text-slate-400 mb-3">Toggle the light to preview how the login page looks with the current logo as a glowing wall watermark behind the glass card.</p>
-
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={() => setPreviewLit((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all duration-500"
-          style={{
-            background: previewLit ? 'linear-gradient(135deg, rgba(251,191,36,0.9), rgba(245,158,11,0.9))' : 'rgba(30,41,59,0.6)',
-            color: previewLit ? '#0a0301' : '#94a3b8',
-          }}
-        >
-          {previewLit ? 'Light ON' : 'Light OFF'}
-        </button>
+      <p className="text-xs text-slate-400 mb-3">This is the real login page. Pull the cord to switch the light on and see the logo wall behind the card. Sign-in is disabled in this preview.</p>
+      <div className="relative rounded-2xl overflow-hidden border border-white/10" style={{ height: 720 }}>
+        <AuthScreen embedded />
       </div>
-
-      <div
-        className="relative rounded-2xl overflow-hidden transition-all duration-500 ease-in-out"
-        style={{ height: 360, perspective: '800px' }}
-      >
-        <div className="absolute inset-0 transition-all duration-500 ease-in-out" style={{
-          opacity: previewLit ? 1 : 0,
-          background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)',
-          transition: 'opacity 500ms ease-in-out',
-        }} />
-        <div className="absolute inset-0 transition-all duration-500 ease-in-out" style={{
-          opacity: previewLit ? 0 : 1,
-          background: 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
-          transition: 'opacity 500ms ease-in-out',
-        }} />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-500 ease-in-out" style={{
-          width: 400, height: 350,
-          background: 'radial-gradient(ellipse, rgba(251,191,36,0.16) 0%, rgba(251,140,0,0.06) 30%, transparent 65%)',
-          filter: 'blur(24px)',
-          opacity: previewLit ? 1 : 0,
-          transform: `translateX(-50%) scale(${previewLit ? 1 : 0.25})`,
-          transition: 'opacity 500ms ease-in-out, transform 500ms ease-in-out',
-        }} />
-
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none transition-all duration-500 ease-in-out" style={{ opacity: previewLit ? 1 : 0 }}>
-          {logoUrl ? (
-            <img src={logoUrl} alt="" className="rounded-3xl object-cover transition-all duration-500 ease-in-out" style={{
-              width: 240, height: 240, opacity: previewLit ? 0.2 : 0,
-              filter: 'blur(12px) saturate(1.3)',
-              boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
-              transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
-            }} />
-          ) : (
-            <div className="rounded-3xl flex items-center justify-center font-bold transition-all duration-500 ease-in-out" style={{
-              width: 240, height: 240, fontSize: 100,
-              background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-              opacity: previewLit ? 0.2 : 0, filter: 'blur(12px) saturate(1.3)',
-              boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
-              color: '#0a0301', transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
-            }}>L</div>
-          )}
-        </div>
-
-        <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="w-56 rounded-2xl p-4 backdrop-blur-xl bg-white/10 dark:bg-black/25 transition-all duration-500 ease-in-out" style={{
-            border: '1px solid rgba(251,191,36,0.18)',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 30px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
-            opacity: previewLit ? 1 : 0.4,
-            transition: 'opacity 500ms ease-in-out',
-          }}>
-            <div className="flex flex-col items-center gap-2">
-              <Logo size={40} rounded="rounded-xl" />
-              <p className="text-sm font-bold" style={{
-                background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fb923c)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              }}>Lumora IT</p>
-              <div className="w-full h-8 rounded-lg" style={{ background: 'rgba(8,12,24,0.6)', border: '1px solid rgba(255,255,255,0.08)' }} />
-              <div className="w-full h-8 rounded-lg" style={{ background: 'rgba(8,12,24,0.6)', border: '1px solid rgba(255,255,255,0.08)' }} />
-              <div className="w-full h-9 rounded-xl flex items-center justify-center text-xs font-semibold" style={{
-                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                color: '#0a0301',
-              }}>{t('login')}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <p className="text-[10px] text-slate-500 mt-3 text-center">
-        This preview mirrors the real login page. The logo uploads here are live and instantly reflect across the entire app.
-      </p>
     </Card>
 
     {/* Promotion Tier Pricing */}

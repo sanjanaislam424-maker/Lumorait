@@ -6,7 +6,7 @@ import { useApp } from '@/lib/AppContext';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 
-export function AuthScreen() {
+export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
   const { t, lang, setLang, logoUrl } = useApp();
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
@@ -37,6 +37,7 @@ export function AuthScreen() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (embedded) return;
     setError('');
     if (!acceptTerms && mode === 'signup') {
       notify(t('termsToast'), 'error');
@@ -103,7 +104,7 @@ export function AuthScreen() {
 
   return (
     <div
-      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      className={`relative flex items-center justify-center p-4 overflow-hidden ${embedded ? 'h-full w-full' : 'min-h-screen'}`}
       style={{
         perspective: '1200px',
       }}
@@ -485,8 +486,8 @@ export function AuthScreen() {
         )}
       </AnimatePresence>
 
-      <ResetPasswordModal open={resetOpen} onClose={() => setResetOpen(false)} />
-      <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />
+      {!embedded && <ResetPasswordModal open={resetOpen} onClose={() => setResetOpen(false)} />}
+      {!embedded && <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />}
     </div>
   );
 }
