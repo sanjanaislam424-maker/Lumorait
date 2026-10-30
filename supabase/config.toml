@@ -25,3 +25,7 @@ entrypoint = "./functions/ai-regenerate/index.ts"
 [functions.ai-regenerate-all]
 verify_jwt = false
 entrypoint = "./functions/ai-regenerate-all/index.ts"
+
+[functions.delete-user-account]
+verify_jwt = true
+entrypoint = "./functions/delete-user-account/index.ts"

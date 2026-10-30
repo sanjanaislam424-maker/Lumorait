@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift } from 'lucide-react';
+import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift, Lock } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -31,6 +31,10 @@ export function ProfileView() {
   const [appealOpen, setAppealOpen] = useState(false);
   const [stats, setStats] = useState({ tasksCompleted: 0, totalEarned: 0 });
   const [claiming, setClaiming] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePwd, setDeletePwd] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -67,11 +71,21 @@ export function ProfileView() {
   const xpProgress = Math.min(100, (profile.xp_points / xpForNextLevel) * 100);
   const canClaimLevel = xpProgress >= 100 && profile.level_reward_claimed < profile.level;
 
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarUploading(true);
+    const { url, error } = await uploadBrandingImage(file, 'avatars');
+    setAvatarUploading(false);
+    if (error || !url) { notify(t('avatarUploadError'), 'error'); return; }
+    setAvatarUrl(url);
+    await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id);
+    await refreshProfile();
+    notify(t('profileUpdated'), 'success');
+  };
+
   const saveProfile = async () => {
     await supabase.from('profiles').update({
       full_name: name,
       bio,
-      avatar_url: avatarUrl,
     }).eq('id', profile.id);
     await refreshProfile();
     notify(t('profileUpdated'), 'success');
@@ -95,23 +109,43 @@ export function ProfileView() {
     setClaiming(false);
   };
 
-  const deleteAccount = async () => {
-    if (!confirm(t('confirmDelete'))) return;
-    const { data: verifs } = await supabase
-      .from('id_verifications')
-      .select('id_number')
-      .eq('user_id', profile.id)
-      .eq('id_type', 'nid')
-      .not('id_number', 'is', null);
-    if (verifs && verifs.length > 0) {
-      for (const v of verifs) {
-        if (v.id_number) {
-          await supabase.from('deleted_account_nids').insert({ nid_number: v.id_number, original_user_id: profile.id });
-        }
-      }
-    }
-    await supabase.from('profiles').delete().eq('id', profile.id);
-    await signOut();
+  const requestDeletion = async () => {
+    if (!deletePwd.trim()) return;
+    setDeleteBusy(true);
+    try {
+      const isEmail = profile.phone?.includes('@');
+      const email = isEmail ? profile.phone! : `${profile.phone?.replace(/\D/g, '') || ''}@lumora.app`;
+      const { error: pwdErr } = await supabase.auth.signInWithPassword({ email, password: deletePwd });
+      if (pwdErr) { notify(t('deleteAccountWrongPwd'), 'error'); setDeleteBusy(false); return; }
+      await supabase.from('profiles').update({ deletion_requested_at: new Date().toISOString() }).eq('id', profile.id);
+      await refreshProfile();
+      setDeleteModalOpen(false);
+      setDeletePwd('');
+      notify(t('deletionRequested') + ' 30 ' + t('daysLeft'), 'info');
+    } finally { setDeleteBusy(false); }
+  };
+
+  const cancelDeletion = async () => {
+    await supabase.from('profiles').update({ deletion_requested_at: null }).eq('id', profile.id);
+    await refreshProfile();
+    notify(t('deletionCancelSuccess'), 'success');
+  };
+
+  const proceedDeletion = async () => {
+    setDeleteBusy(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) { setDeleteBusy(false); return; }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user-account`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        notify(t('deletionProceedConfirm'), 'info');
+        await signOut();
+      } else { notify(t('avatarUploadError'), 'error'); }
+    } finally { setDeleteBusy(false); }
   };
 
   const kycBadge = () => {
@@ -172,7 +206,19 @@ export function ProfileView() {
           </div>
           <div>
             <label className="text-xs neon-muted block mb-1">{t('avatarUpload')}</label>
-            <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder={t('avatarUrlPlaceholder')} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 neon-text text-sm outline-none focus:border-amber-500/50" />
+            <div className="flex items-center gap-3">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2" style={{ borderColor: themeConfig.primary }} />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center">
+                  <UserIcon size={24} className="text-slate-500" />
+                </div>
+              )}
+              <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 border border-white/10 neon-text text-sm cursor-pointer transition hover:border-amber-500/50 ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Upload size={16} /> {avatarUploading ? t('avatarUploading') : t('avatarUploadBtn')}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); }} />
+              </label>
+            </div>
           </div>
           <div>
             <label className="text-xs neon-muted block mb-1">{t('bioLabel')}</label>
@@ -205,7 +251,27 @@ export function ProfileView() {
         </div>
       </Card>
 
-      {/* ===== Level Progress Bar ===== */}
+      {/* ===== Deletion Pending Banner ===== */}
+      {profile.deletion_requested_at && (
+        <Card className="border-red-500/30 bg-red-500/10">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} className="text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-300 text-sm">{t('deletionPendingTitle')}</h3>
+              <p className="text-xs text-red-300/80 mt-1">
+                {t('deletionRequested')} {Math.max(0, 30 - Math.floor((Date.now() - new Date(profile.deletion_requested_at).getTime()) / 86400000))} {t('daysLeft')}
+              </p>
+              <p className="text-xs neon-muted mt-1">{t('deletionPendingMsg')}</p>
+              <div className="flex gap-2 mt-3">
+                <Button className="text-xs" onClick={cancelDeletion}>{t('deletionCancel')}</Button>
+                <Button variant="danger" className="text-xs" onClick={proceedDeletion} disabled={deleteBusy}>{deleteBusy ? '...' : t('deletionProceed')}</Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ===== Level & Rating Progress Bar ===== */}
       <Card>
         <div className="flex items-center gap-2 mb-3">
           <Star size={18} style={{ color: themeConfig.primary }} />
@@ -224,6 +290,11 @@ export function ProfileView() {
             <Gift size={18} /> {claiming ? '...' : t('claimLevelReward')} ({profile.level * 100} {t('lumoraCoins')})
           </button>
         )}
+        <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
+          <span className="neon-muted">{t('avgRating')}: <span className="neon-text font-bold">{Number(profile.avg_rating || 0).toFixed(1)} / 5</span></span>
+          <span className="neon-muted">{t('tasksCompletedLabel')}: <span className="neon-text font-bold">{profile.total_tasks_completed || 0}</span></span>
+        </div>
+        <p className="text-[10px] neon-muted mt-1.5">{t('levelBasedOnRating')}</p>
       </Card>
 
       {/* ===== Activity Stats ===== */}
@@ -266,12 +337,33 @@ export function ProfileView() {
           <LogOut size={18} /> {t('navLogout')}
         </button>
         <button
-          onClick={deleteAccount}
+          onClick={() => setDeleteModalOpen(true)}
           className="flex items-center gap-2 w-full bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-red-300 text-sm transition hover:bg-red-500/15"
         >
           <Trash2 size={18} /> {t('deleteAccount')}
         </button>
       </div>
+
+      {/* ===== Delete Account Modal ===== */}
+      <Modal open={deleteModalOpen} onClose={() => { setDeleteModalOpen(false); setDeletePwd(''); }} title={t('deleteAccountTitle')}>
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+            <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300">{t('deleteAccountConfirm')}</p>
+          </div>
+          <div>
+            <label className="text-xs neon-muted block mb-1">{t('deleteAccountPassword')}</label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="password" value={deletePwd} onChange={(e) => setDeletePwd(e.target.value)} className="w-full bg-slate-700 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 neon-text text-sm outline-none focus:border-red-500/50" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={() => { setDeleteModalOpen(false); setDeletePwd(''); }}>{t('cancel')}</Button>
+            <Button variant="danger" className="flex-1" onClick={requestDeletion} disabled={deleteBusy || !deletePwd.trim()}>{deleteBusy ? '...' : t('deleteAccount')}</Button>
+          </div>
+        </div>
+      </Modal>
 
       <KycModal
         open={kycOpen}
