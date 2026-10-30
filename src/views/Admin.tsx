@@ -8,6 +8,8 @@ import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 import { AuthScreen } from '@/components/AuthScreen';
+import { LoginLightingControls } from '@/components/LoginLightingControls';
+import { LoginBranding } from '@/lib/loginBranding';
 import { uploadBrandingImage } from '@/lib/upload';
 import { invalidateAiCopyCache } from '@/lib/microcopy';
 import { invalidateDailyAiCache } from '@/lib/useDailyAiContent';
@@ -716,7 +718,7 @@ function DisputesTab() {
 }
 
 function SettingsTab() {
-  const { t, refreshLogo } = useApp();
+  const { t, refreshLogo, loginBranding } = useApp();
   const { notify } = useToast();
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -726,6 +728,33 @@ function SettingsTab() {
   const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate_after_lock_free: 0, daily_rate_after_lock_pro: 0, daily_rate_after_lock_vip: 0 });
   const [superEvt, setSuperEvt] = useState<any>(null);
   const [superForm, setSuperForm] = useState({ is_active: false, activation_at: '', winner_limit: 10, reward_coins: 1000 });
+  const [lighting, setLighting] = useState<LoginBranding>(loginBranding);
+  const lightingDirty = useRef(false);
+
+  useEffect(() => {
+    if (!lightingDirty.current) setLighting(loginBranding);
+  }, [loginBranding]);
+
+  useEffect(() => {
+    if (!lightingDirty.current) return;
+    const timer = setTimeout(async () => {
+      const { error } = await supabase.from('app_settings').update({
+        login_logo_opacity: lighting.logoOpacity,
+        login_logo_blur: lighting.logoBlur,
+        login_card_opacity: lighting.cardOpacity,
+        login_card_blur: lighting.cardBlur,
+      }).eq('id', 1);
+      if (error) { notify(error.message, 'error'); return; }
+      lightingDirty.current = false;
+      await refreshLogo();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [lighting]);
+
+  const updateLighting = (patch: Partial<LoginBranding>) => {
+    lightingDirty.current = true;
+    setLighting((prev) => ({ ...prev, ...patch }));
+  };
 
   useEffect(() => {
     (async () => {
@@ -835,6 +864,10 @@ function SettingsTab() {
       </div>
     </Card>
 
+    <Card>
+      <LoginLightingControls value={lighting} onChange={updateLighting} />
+    </Card>
+
     {/* Live Login Page Preview */}
     <Card>
       <div className="flex items-center gap-2 mb-3">
@@ -843,7 +876,7 @@ function SettingsTab() {
       </div>
       <p className="text-xs text-slate-400 mb-3">This is the real login page. Pull the cord to switch the light on and see the logo wall behind the card. Sign-in is disabled in this preview.</p>
       <div className="relative rounded-2xl overflow-hidden border border-white/10" style={{ height: 720 }}>
-        <AuthScreen embedded />
+        <AuthScreen embedded branding={lighting} />
       </div>
     </Card>
 

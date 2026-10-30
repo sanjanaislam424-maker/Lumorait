@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode, useC
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, Profile } from './supabase';
 import { Lang, t as translate, DictKey } from './i18n';
+import { DEFAULT_LOGIN_BRANDING, LoginBranding, parseLoginBranding } from './loginBranding';
 
 export type Theme = 'cyber' | 'matrix' | 'solar' | 'light' | 'dark';
 export type ThemeMode = 'system' | Theme;
@@ -129,6 +130,7 @@ type AppState = {
   themeConfig: ThemeConfig;
   aiTone: AiTone;
   logoUrl: string | null;
+  loginBranding: LoginBranding;
   refreshLogo: () => Promise<void>;
   setLang: (l: Lang) => void;
   setThemeMode: (tm: ThemeMode) => void;
@@ -152,6 +154,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => resolveTheme(localStorage.getItem('lumora_theme')));
   const [aiTone, setAiToneState] = useState<AiTone>(() => resolveAiTone(localStorage.getItem('lumora_ai_tone')));
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [loginBranding, setLoginBranding] = useState<LoginBranding>(DEFAULT_LOGIN_BRANDING);
 
   // Resolve actual theme from mode + system preference
   useEffect(() => {
@@ -219,32 +222,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setThemeMode = (tm: ThemeMode) => setThemeModeState(tm);
   const setAiTone = (tone: AiTone) => setAiToneState(tone);
 
-  const fetchLogo = useCallback(async () => {
-    const { data, error } = await supabase.rpc('get_public_logo_url');
-    if (error) { setLogoUrl(null); return; }
-    setLogoUrl(typeof data === 'string' && data ? data : null);
+  const fetchBranding = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_public_login_branding');
+    if (error) { setLogoUrl(null); setLoginBranding(DEFAULT_LOGIN_BRANDING); return; }
+    const parsed = parseLoginBranding(data);
+    setLogoUrl(parsed.logoUrl);
+    setLoginBranding(parsed.branding);
   }, []);
 
   const logoChannelRef = useRef<RealtimeChannel | null>(null);
 
-  useEffect(() => { fetchLogo(); }, [fetchLogo]);
+  useEffect(() => { fetchBranding(); }, [fetchBranding]);
 
   useEffect(() => {
     const channel = supabase
       .channel('branding-logo', { config: { broadcast: { self: true } } })
-      .on('broadcast', { event: 'logo_changed' }, () => { fetchLogo(); })
+      .on('broadcast', { event: 'logo_changed' }, () => { fetchBranding(); })
       .subscribe();
     logoChannelRef.current = channel;
     return () => {
       logoChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [fetchLogo]);
+  }, [fetchBranding]);
 
   const refreshLogo = useCallback(async () => {
-    await fetchLogo();
+    await fetchBranding();
     await logoChannelRef.current?.send({ type: 'broadcast', event: 'logo_changed', payload: {} });
-  }, [fetchLogo]);
+  }, [fetchBranding]);
 
   // Dynamically update browser favicon whenever the logo changes
   useEffect(() => {
@@ -312,7 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, refreshLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, refreshLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );

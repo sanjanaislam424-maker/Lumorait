@@ -5,9 +5,12 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
+import { LoginBranding, logoBlurPx } from '@/lib/loginBranding';
 
-export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
-  const { t, lang, setLang, logoUrl } = useApp();
+export function AuthScreen({ embedded = false, branding }: { embedded?: boolean; branding?: LoginBranding }) {
+  const ctx = useApp();
+  const { t, lang, setLang, logoUrl } = ctx;
+  const lighting = branding ?? ctx.loginBranding;
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -112,14 +115,14 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
       {/* Background wall logo: full-bleed, fully opaque when lit, hidden when off */}
       <div
         className="absolute inset-0 z-[1] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
-        style={{ opacity: lit ? 1 : 0 }}
+        style={{ opacity: lit ? lighting.logoOpacity / 100 : 0 }}
       >
         {logoUrl ? (
           <img
             src={logoUrl}
             alt=""
             className="w-full h-full object-cover"
-            style={{ filter: 'blur(1px) saturate(1.15)' }}
+            style={{ filter: `blur(${logoBlurPx(lighting.logoBlur)}px) saturate(1.15)`, transition: 'filter 300ms ease-in-out' }}
           />
         ) : (
           <div
@@ -127,7 +130,8 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
             style={{
               fontSize: 'min(60vh, 480px)',
               background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-              filter: 'blur(1px) saturate(1.15)',
+              filter: `blur(${logoBlurPx(lighting.logoBlur)}px) saturate(1.15)`,
+              transition: 'filter 300ms ease-in-out',
             }}
           >
             L
@@ -688,8 +692,11 @@ function GlassCard3D({ children }: { children: React.ReactNode }) {
         ref={ref}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className="relative rounded-3xl p-6 overflow-hidden backdrop-blur-xl bg-white/10 dark:bg-black/25"
+        className="relative rounded-3xl p-6 overflow-hidden"
         style={{
+          backgroundColor: `rgba(2,6,23,${lighting.cardOpacity / 100})`,
+          backdropFilter: `blur(${lighting.cardBlur}px)`,
+          WebkitBackdropFilter: `blur(${lighting.cardBlur}px)`,
           border: '1px solid rgba(251,191,36,0.18)',
           boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 30px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
           transformStyle: 'preserve-3d',
