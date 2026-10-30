@@ -7,7 +7,7 @@
     },
     "ai-regenerate": {
       "hasChanged": false,
-      "hash": "062c6505feb37b82cf0f1bcbe98359d6de250a62f17f432ccc2df99f6a5474f7"
+      "hash": "3bd2af9feaf1b79e9b1f73374e9bfdce87fe1050dfbc2c26d0ca062a5e26db43"
     },
     "ai-test-key": {
       "hasChanged": false,
@@ -15,15 +15,19 @@
     },
     "ai-ui-copy": {
       "hasChanged": false,
-      "hash": "ac487d657f70749b7288f7d9dd9a3e7cfad5aa14a577d213bacb17ab450281da"
+      "hash": "b98226e25d6e2edc87e5c69e177c75ae6d045268a1079b4b2d24e4bc748889c7"
     },
     "daily-ai-content": {
       "hasChanged": false,
-      "hash": "8f5e7e128800d8b2878b8aed7143da7efe7217f32b5c25ba46b5af76b8121ec3"
+      "hash": "41b880de0366ebb0b8b2961651ee89aeae19e7802490a5b7c471716b632daa30"
     },
     "process-promotion-charges": {
       "hasChanged": false,
       "hash": "637c9994edbb1441c6b1a090bb74fec131f0bbcbc60a257d14db373ba52b60aa"
+    },
+    "ai-regenerate-all": {
+      "hasChanged": false,
+      "hash": "4f392fb5cd41115c3ed375bf3ec6aa57d3cd9af469e1d0d5fb05e29e2effc25f"
     }
   }
 }

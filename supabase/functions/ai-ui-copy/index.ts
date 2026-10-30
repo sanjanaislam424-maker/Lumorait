@@ -59,24 +59,35 @@ async function generateUICopy(supabase: any): Promise<Record<string, string> | n
   const prompt = `You are the witty, sarcastic, funny assistant for "Lumora IT", a Bangladeshi micro-task and SMM app.
 Generate 10 short UI copy lines in BANGLISH (Bangla written in English script mixed with Bangla words — casual, best-friend tone, hilarious, sarcastic).
 
+CRITICAL QUALITY RULES:
+- Each line MUST be a COMPLETE, grammatically correct sentence that expresses a full thought.
+- NEVER output 1-2 word broken phrases or contextless fragments like "Like koro", "Troll er", "Micro task kore borolok".
+- Each line must be readable, meaningful, and form a full humorous or actionable thought from start to finish.
+- A good sentence has a subject, a verb, and a clear punchline or takeaway.
+
 Return ONLY valid JSON, no markdown, no code fences. Format:
 {
-  "tasks_header": "funny header for the tasks page, max 80 chars",
-  "loading_tasks": "funny loading message, max 70 chars",
-  "category_empty": "funny message when no tasks in a category, max 80 chars",
-  "your_tasks_first": "funny label for user's own tasks shown first, max 60 chars",
-  "video_tutorial_header": "funny header for video tutorial section, max 90 chars",
-  "video_panel_subtitle": "funny subtitle under the video tutorial, max 90 chars",
-  "daily_tip": "funny practical social media growth tip, max 120 chars",
-  "dashboard_alert": "funny alert reminding to do check-in, max 90 chars",
-  "task_available": "funny message when a new task is available, max 80 chars",
-  "watch_tutorial": "funny call-to-action to watch a tutorial, max 90 chars"
+  "tasks_header": "funny complete header sentence for the tasks page, max 80 chars",
+  "loading_tasks": "funny complete loading message sentence, max 70 chars",
+  "category_empty": "funny complete message when no tasks in a category, max 80 chars",
+  "your_tasks_first": "funny complete label sentence for user's own tasks shown first, max 60 chars",
+  "video_tutorial_header": "funny complete header sentence for video tutorial section, max 90 chars",
+  "video_panel_subtitle": "funny complete subtitle sentence under the video tutorial, max 90 chars",
+  "daily_tip": "funny complete practical social media growth tip sentence, max 120 chars",
+  "dashboard_alert": "funny complete alert sentence reminding to do check-in, max 90 chars",
+  "task_available": "funny complete message when a new task is available, max 80 chars",
+  "watch_tutorial": "funny complete call-to-action sentence to watch a tutorial, max 90 chars"
 }
 
-Examples of the tone:
+Good examples (complete sentences):
 - "Shob parbo bhabe bose theko na, bolo to ektukhani tutorial ta dekhe ashbe?"
 - "Arey moshay! Kaj apnar jonno opekkha korche, ektu haat chalao!"
 - "Ajker tippony: Chat-e ghumash na, kaj shesh kore baki ghumum."
+
+BAD examples (NEVER do this — these are broken fragments):
+- "Like koro" (too short, no context)
+- "Troll er" (not a sentence)
+- "Micro task kore borolok" (incomplete thought)
 
 Be creative, fresh, and different each time. No emoji.`;
 
@@ -113,10 +124,16 @@ Be creative, fresh, and different each time. No emoji.`;
         const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleaned);
         const result: Record<string, string> = {};
+        let allValid = true;
         for (const field of FIELDS) {
-          result[field] = typeof parsed[field] === "string" && parsed[field].trim()
-            ? parsed[field].trim()
-            : FALLBACK[field];
+          const val = typeof parsed[field] === "string" ? parsed[field].trim() : "";
+          if (val && val.split(/\s+/).length >= 3) {
+            result[field] = val;
+          } else {
+            console.error(`ai-ui-copy: field '${field}' returned fragment: "${val}" — using fallback`);
+            result[field] = FALLBACK[field];
+            allValid = false;
+          }
         }
         return result;
       } catch (err) {

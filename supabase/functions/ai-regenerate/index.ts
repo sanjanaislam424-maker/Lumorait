@@ -80,8 +80,17 @@ Generate ONE replacement line of content. Be extremely funny, witty, and sarcast
 Description: ${desc}
 Max ${maxChars} characters.
 
+CRITICAL QUALITY RULES:
+- The output MUST be a COMPLETE, grammatically correct sentence that expresses a full thought.
+- NEVER output 1-2 word broken phrases or contextless fragments like "লাইক করো", "ট্রল পোস্টের", "মাইক্রো টাস্ক করে বড়লোক".
+- The sentence must be readable, meaningful, and form a full humorous or actionable thought from start to finish.
+- A good sentence has a subject, a verb, and a clear punchline or takeaway.
+
 Current value (do NOT repeat this, generate something completely different):
 "${currentValue}"
+
+Good example: "ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে — সে জানে তুমি কখন অনলাইন আসবে!"
+Bad example (NEVER do this): "লাইক করো" (broken fragment, no context)
 
 Return ONLY the raw text string — no JSON, no markdown, no code fences, no quotes around it. Just the text.`;
 
@@ -118,6 +127,12 @@ Return ONLY the raw text string — no JSON, no markdown, no code fences, no quo
         const cleaned = text.replace(/```[a-z]*/g, "").replace(/```/g, "").replace(/^["']|["']$/g, "").trim();
         if (!cleaned) {
           console.error(`ai-regenerate: Gemini ${model} key#${k} text cleaned to empty`);
+          continue;
+        }
+        // Reject fragments: require at least 4 words for a complete sentence
+        const wordCount = cleaned.split(/\s+/).length;
+        if (wordCount < 4) {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} returned fragment (${wordCount} words): "${cleaned}"`);
           continue;
         }
         return cleaned.slice(0, maxChars + 20);

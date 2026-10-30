@@ -2070,6 +2070,7 @@ function AiContentTab() {
   const [uiCopyRow, setUiCopyRow] = useState<Record<string, string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [langView, setLangView] = useState<'bn' | 'en'>('bn');
 
   const CONTENT_FIELDS: { key: string; labelBn: string; labelEn: string }[] = [
@@ -2138,6 +2139,36 @@ function AiContentTab() {
     }
   };
 
+  const regenerateAll = async () => {
+    setRegeneratingAll(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-regenerate-all`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        notify(data.error || data.warning || 'Regeneration failed', 'error');
+        return;
+      }
+      if (data.fallback) {
+        notify(data.warning || 'Some content used fallback — AI may be rate limited', 'warning');
+      } else {
+        notify('All content regenerated successfully!', 'success');
+      }
+      await load();
+      invalidateDailyAiCache();
+      invalidateAiCopyCache();
+    } catch {
+      notify('Connection error — please check your network', 'error');
+    } finally {
+      setRegeneratingAll(false);
+    }
+  };
+
   const isFieldForLang = (field: string, lang: 'bn' | 'en'): boolean => {
     if (lang === 'bn') return field.endsWith('_bn');
     return field.endsWith('_en');
@@ -2155,12 +2186,22 @@ function AiContentTab() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={18} className="text-amber-400" />
-          <h3 className="font-semibold text-white">AI Generated Content Management</h3>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Sparkles size={18} className="text-amber-400" />
+            <h3 className="font-semibold text-white">AI Generated Content Management</h3>
+          </div>
+          <Button
+            className="text-xs px-3 py-2 flex items-center gap-2 shrink-0"
+            disabled={regeneratingAll || loading}
+            onClick={regenerateAll}
+          >
+            {regeneratingAll ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {regeneratingAll ? 'Regenerating All...' : 'Regenerate All Contents'}
+          </Button>
         </div>
         <p className="text-xs text-slate-400 mb-3">
-          View and regenerate today's AI-generated content. Click "Regenerate" on any item to fetch a fresh alternative via Gemini API. All users will see the updated content immediately.
+          View and regenerate today's AI-generated content. Click "Regenerate" on any item for a single refresh, or use "Regenerate All Contents" to refresh everything at once.
         </p>
 
         <div className="flex gap-2 mb-4">

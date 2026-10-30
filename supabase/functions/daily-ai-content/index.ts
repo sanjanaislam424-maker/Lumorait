@@ -37,11 +37,37 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
+const TIMEOUT_MS = 30_000;
+
+async function getAllKeys(supabaseClient: any): Promise<string[]> {
+  const { data: settings } = await supabaseClient
+    .from("app_settings")
+    .select("gemini_api_keys, ai_active_key_index")
+    .eq("id", 1)
+    .maybeSingle();
+  const keys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
+  const allKeys = keys.filter(Boolean);
+  const envKey = Deno.env.get("GEMINI_API_KEY");
+  if (envKey && !allKeys.includes(envKey)) allKeys.push(envKey);
+  return allKeys;
+}
+
+function isCompleteSentence(text: string, minWords: number = 4): boolean {
+  const words = text.trim().split(/\s+/);
+  if (words.length < minWords) return false;
+  return true;
+}
+
 async function generateWithAI(
+  supabaseClient: any,
   recentFunnyBn: string[], recentFunnyEn: string[], recentTipBn: string[], recentTipEn: string[],
 ): Promise<{ funny_bn: string; funny_en: string; tip_bn: string; tip_en: string } | null> {
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) return null;
+  const allKeys = await getAllKeys(supabaseClient);
+  if (allKeys.length === 0) {
+    console.error("daily-ai-content: no Gemini API keys configured");
+    return null;
+  }
 
   const avoidList = [
     ...recentFunnyBn.map((s) => `"${s}"`),
@@ -60,46 +86,90 @@ Generate exactly 4 lines of content. Be extremely funny, witty, and sarcastic �
 The Bengali lines MUST be in PURE Bengali script (বাংলা হরফ), NOT Banglish.
 The English lines MUST be in witty, engaging English.
 ${doNotRepeat}
+CRITICAL QUALITY RULES:
+- Each line MUST be a COMPLETE, grammatically correct sentence that expresses a full thought.
+- NEVER output 1-2 word broken phrases or contextless fragments like "লাইক করো", "ট্রল পোস্টের", "মাইক্রো টাস্ক করে বড়লোক".
+- Each line must be readable, meaningful, and form a full humorous or actionable thought from start to finish.
+- A good sentence has a subject, a verb, and a clear punchline or takeaway.
+
 Return ONLY valid JSON, no markdown, no code fences.
 
 Format:
 {
-  "funny_bn": "A witty, sarcastic 1-line funny truth about social media algorithms, viral marketing, freelancing, or micro-tasks in PURE Bengali script, casual best-friend tone, max 120 chars",
-  "funny_en": "The same funny line in witty English, max 100 chars",
-  "tip_bn": "A practical, actionable social media growth tip in PURE Bengali script, with a funny sarcastic twist, max 150 chars",
-  "tip_en": "The same tip in witty English with a sarcastic twist, max 120 chars"
+  "funny_bn": "A complete, witty, sarcastic 1-line funny truth about social media algorithms, viral marketing, freelancing, or micro-tasks in PURE Bengali script, casual best-friend tone, max 120 chars. Must be a full sentence.",
+  "funny_en": "The same funny line in witty English, max 100 chars. Must be a full complete sentence.",
+  "tip_bn": "A practical, actionable social media growth tip in PURE Bengali script, with a funny sarcastic twist, max 150 chars. Must be a complete sentence with clear advice.",
+  "tip_en": "The same tip in witty English with a sarcastic twist, max 120 chars. Must be a complete sentence with clear advice."
 }
 
-Example tone for Bengali: "ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে!"
-Example tone for English: "Facebook's algorithm knows your ex better than you!"
+Good examples (complete sentences):
+- Bengali: "ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে — সে জানে তুমি কখন অনলাইন আসবে!"
+- English: "Facebook's algorithm knows your ex better than you — it knows when you'll come online!"
+
+BAD examples (NEVER do this — these are broken fragments):
+- "লাইক করো" (too short, no context)
+- "ট্রল পোস্টের" (not a sentence)
+- "মাইক্রো টাস্ক করে বড়লোক" (incomplete thought)
 
 Make it fresh and different each time. Be creative, specific, and hilarious. No emoji.`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 1.4, maxOutputTokens: 500 },
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
-    const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleaned);
-    if (parsed.funny_bn && parsed.funny_en && parsed.tip_bn && parsed.tip_en) {
-      return parsed;
+  for (let k = 0; k < allKeys.length; k++) {
+    for (const model of GEMINI_MODELS) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 1.4, maxOutputTokens: 500 },
+            }),
+            signal: controller.signal,
+          },
+        );
+        if (!res.ok) {
+          const errBody = await res.text();
+          console.error(`daily-ai-content: Gemini ${model} key#${k} failed (${res.status}): ${errBody.slice(0, 300)}`);
+          continue;
+        }
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts
+          ?.map((p: { text?: string }) => p.text ?? "")
+          .join("") || "";
+        if (!text) {
+          console.error(`daily-ai-content: Gemini ${model} key#${k} returned empty reply`);
+          continue;
+        }
+        const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (
+          parsed.funny_bn && parsed.funny_en && parsed.tip_bn && parsed.tip_en &&
+          isCompleteSentence(parsed.funny_bn) && isCompleteSentence(parsed.funny_en) &&
+          isCompleteSentence(parsed.tip_bn) && isCompleteSentence(parsed.tip_en)
+        ) {
+          return parsed;
+        }
+        console.error(`daily-ai-content: Gemini ${model} key#${k} returned incomplete content (fragments detected), trying next`);
+        continue;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.error(`daily-ai-content: Gemini ${model} key#${k} timed out after ${TIMEOUT_MS}ms`);
+        } else if (err instanceof SyntaxError) {
+          console.error(`daily-ai-content: Gemini ${model} key#${k} returned invalid JSON:`, err);
+        } else {
+          console.error(`daily-ai-content: Gemini ${model} key#${k} error:`, err);
+        }
+        continue;
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    return null;
-  } catch {
-    return null;
   }
+  console.error("daily-ai-content: All keys and models exhausted, using static fallback");
+  return null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -141,7 +211,7 @@ Deno.serve(async (req: Request) => {
     const recentTipEn = (recentRows ?? []).map((r) => r.tip_en).filter(Boolean);
 
     // Try AI generation, fall back to static content
-    const aiResult = await generateWithAI(recentFunnyBn, recentFunnyEn, recentTipBn, recentTipEn);
+    const aiResult = await generateWithAI(supabase, recentFunnyBn, recentFunnyEn, recentTipBn, recentTipEn);
     const content = aiResult ?? {
       funny_bn: pick(FALLBACK_FUNNY_BN),
       funny_en: pick(FALLBACK_FUNNY_EN),
