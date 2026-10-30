@@ -172,7 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Apply theme CSS classes
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-cyber', 'theme-matrix', 'theme-solar', 'theme-light');
+    root.classList.remove('theme-cyber', 'theme-matrix', 'theme-solar', 'theme-light', 'theme-dark');
     root.classList.add(`theme-${theme}`);
     root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
     localStorage.setItem('lumora_theme', theme);

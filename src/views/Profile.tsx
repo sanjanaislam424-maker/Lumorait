@@ -323,7 +323,7 @@ function BadgeInfo({ icon, text, color }: { icon: React.ReactNode; text: string;
   );
 }
 
-function KycModal({ open, onClose, onDone, onNeedAppeal }: { open: boolean; onClose: () => void; onDone: () => void; onNeedAppeal: () => void }) {
+export function KycModal({ open, onClose, onDone, onNeedAppeal }: { open: boolean; onClose: () => void; onDone: () => void; onNeedAppeal: () => void }) {
   const { t, profile, refreshProfile } = useApp();
   const { notify } = useToast();
   const [idNumber, setIdNumber] = useState('');
@@ -443,7 +443,7 @@ function KycModal({ open, onClose, onDone, onNeedAppeal }: { open: boolean; onCl
   );
 }
 
-function AppealModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+export function AppealModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const { t, profile } = useApp();
   const { notify } = useToast();
   const [nidNumber, setNidNumber] = useState('');

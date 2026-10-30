@@ -54,6 +54,32 @@
   --neon-muted: #78716c;
 }
 
+/* Theme: Dark — high contrast deep black */
+.theme-dark {
+  --neon-primary: #38bdf8;
+  --neon-secondary: #2563eb;
+  --neon-accent: #22d3ee;
+  --neon-glow: rgba(56, 189, 248, 0.32);
+  --neon-bg: #020617;
+  --neon-card-bg: rgba(15, 23, 42, 0.72);
+  --neon-border: rgba(148, 163, 184, 0.22);
+  --neon-text: #e2e8f0;
+  --neon-muted: #94a3b8;
+}
+
+/* Theme: Light — clean professional white */
+.theme-light {
+  --neon-primary: #0369a1;
+  --neon-secondary: #2563eb;
+  --neon-accent: #0891b2;
+  --neon-glow: rgba(3, 105, 161, 0.18);
+  --neon-bg: #f8fafc;
+  --neon-card-bg: rgba(255, 255, 255, 0.82);
+  --neon-border: rgba(3, 105, 161, 0.2);
+  --neon-text: #0f172a;
+  --neon-muted: #475569;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -175,16 +201,93 @@ body {
   background: rgb(239 68 68);
 }
 
+/* ============================================================
+   LIGHT THEME OVERRIDES
+   The app uses hardcoded dark Tailwind utilities everywhere.
+   Under .theme-light we remap them to readable light surfaces
+   and dark text so the light theme is fully legible.
+   ============================================================ */
+
+/* Text colors → dark text on light background */
 .theme-light .text-white {
-  color: var(--neon-text) !important;
+  color: #0f172a !important;
+}
+.theme-light .text-slate-100,
+.theme-light .text-slate-200 {
+  color: #1e293b !important;
+}
+.theme-light .text-slate-300,
+.theme-light .text-slate-400 {
+  color: #334155 !important;
+}
+.theme-light .text-slate-500,
+.theme-light .text-slate-600 {
+  color: #475569 !important;
 }
 
-.theme-light .text-slate-400,
-.theme-light .text-slate-500 {
-  color: var(--neon-muted) !important;
-}
-
+/* Dark backgrounds → light surfaces */
+.theme-light .bg-slate-700,
+.theme-light .bg-slate-800,
 .theme-light .bg-slate-800\/50,
-.theme-light .bg-slate-900\/50 {
-  background: rgba(255, 255, 255, 0.52) !important;
+.theme-light .bg-slate-800\/60,
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-900\/30,
+.theme-light .bg-slate-900\/50,
+.theme-light .bg-slate-900\/60 {
+  background: rgba(241, 245, 249, 0.9) !important;
+}
+
+/* Dark transparent backgrounds */
+.theme-light .bg-black\/70,
+.theme-light .bg-black\/60 {
+  background: rgba(15, 23, 42, 0.65) !important;
+}
+
+/* Border colors → subtle dark borders on light */
+.theme-light .border-white\/5,
+.theme-light .border-white\/10,
+.theme-light .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Input fields: dark text on light input bg */
+.theme-light input,
+.theme-light textarea,
+.theme-light select {
+  color: #0f172a !important;
+  background-color: rgba(241, 245, 249, 0.95) !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Modal backdrop stays dark for focus */
+.theme-light .bg-black\/70 {
+  background: rgba(15, 23, 42, 0.55) !important;
+}
+
+/* Neon card: lighter shadow for light theme */
+.theme-light .neon-card {
+  box-shadow: 0 2px 20px rgba(3, 105, 161, 0.12), inset 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+/* Neon glow text: lighter shadow for light theme */
+.theme-light .neon-glow-text {
+  text-shadow: none;
+}
+
+/* Buttons in light theme */
+.theme-light .neon-btn-primary {
+  color: #fff;
+}
+.theme-light .neon-btn-ghost {
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+}
+
+/* Particles: subtle in light theme */
+.theme-light .neon-particle {
+  opacity: 0.15;
 }
