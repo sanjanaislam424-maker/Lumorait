@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode, useCallback } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, Profile } from './supabase';
 import { Lang, t as translate, DictKey } from './i18n';
 
@@ -219,11 +220,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setAiTone = (tone: AiTone) => setAiToneState(tone);
 
   const fetchLogo = useCallback(async () => {
-    const { data } = await supabase.from('app_settings').select('app_logo_url').eq('id', 1).maybeSingle();
-    setLogoUrl(data?.app_logo_url ?? null);
+    const { data, error } = await supabase.rpc('get_public_logo_url');
+    if (error) { setLogoUrl(null); return; }
+    setLogoUrl(typeof data === 'string' && data ? data : null);
   }, []);
 
+  const logoChannelRef = useRef<RealtimeChannel | null>(null);
+
   useEffect(() => { fetchLogo(); }, [fetchLogo]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('branding-logo', { config: { broadcast: { self: true } } })
+      .on('broadcast', { event: 'logo_changed' }, () => { fetchLogo(); })
+      .subscribe();
+    logoChannelRef.current = channel;
+    return () => {
+      logoChannelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLogo]);
+
+  const refreshLogo = useCallback(async () => {
+    await fetchLogo();
+    await logoChannelRef.current?.send({ type: 'broadcast', event: 'logo_changed', payload: {} });
+  }, [fetchLogo]);
 
   // Dynamically update browser favicon whenever the logo changes
   useEffect(() => {
@@ -291,7 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, refreshLogo: fetchLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, refreshLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );
