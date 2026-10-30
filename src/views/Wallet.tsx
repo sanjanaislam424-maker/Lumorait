@@ -9,7 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { supabase, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
-import { microcopy } from '@/lib/microcopy';
+import { createMicrocopy } from '@/lib/microcopy';
 
 const ADMIN_NUMBER_KEYS: Record<string, string> = {
   bKash: 'admin_bkash_number',
@@ -26,6 +26,7 @@ async function fetchAdminNumber(method: string): Promise<string | null> {
 
 export function Wallet() {
   const { t, profile, refreshProfile, lang } = useApp();
+  const microcopy = createMicrocopy(lang);
   const { notify } = useToast();
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [depOpen, setDepOpen] = useState(false);

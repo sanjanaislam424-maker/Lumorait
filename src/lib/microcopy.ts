@@ -1,16 +1,27 @@
 import { supabase } from '@/lib/supabase';
+import type { Lang } from '@/lib/i18n';
 
 const STATIC_FALLBACKS: Record<string, string> = {
-  tasksHeader: "Kaj er palla ora kore, apni boshe chaye khao moshay!",
-  loadingTasks: "Kaj ane barita hocche moshay, ektu dhoyro doro!",
-  categoryEmpty: "Ekhon kaj nai mama, cha-biskut khaiya asho!",
-  yourTasksFirst: "Apnar kaj sobar upore, rajar moto bosun!",
-  videoTutorialHeader: "Shob parbo bhabe bose theko na, ektukhani tutorial dekhe ashbe?",
-  videoPanelSubtitle: "Dui minit video, baki jiboner jonno kaj shikhe nao!",
-  dailyTip: "Ajker tippony: Chat-e ghumash na, kaj shesh kore baki ghumum.",
-  dashboardAlert: "Arey moshay! Check-in kore coins nibe na? Koshto kore kamaiben!",
-  taskAvailable: "Arey moshay! Kaj apnar jonno opekkha korche, ektu haat chalao!",
-  watchTutorial: "Shob parbo bhabe bose theko na, bolo to ektukhani tutorial ta dekhe ashbe?",
+  tasksHeader_bn: "কাজের তালিকা প্রস্তুত আছে, এবার একটু পরিশ্রম করলে উপার্জনও হবে।",
+  tasksHeader_en: "Your task list is ready; a little effort can turn it into real earnings.",
+  loadingTasks_bn: "কাজগুলো আসছে, একটু অপেক্ষা করুন; ধৈর্যও এক ধরনের দক্ষতা।",
+  loadingTasks_en: "Your tasks are loading; patience is a useful skill too.",
+  categoryEmpty_bn: "এই বিভাগে এখন কোনো কাজ নেই; অন্য বিভাগটি দেখে নিন।",
+  categoryEmpty_en: "There are no tasks in this category right now; try another one.",
+  yourTasksFirst_bn: "আপনার কাজগুলো সবার আগে দেখানো হচ্ছে, যাতে সুযোগ হাতছাড়া না হয়।",
+  yourTasksFirst_en: "Your tasks appear first so you never miss an opportunity.",
+  videoTutorialHeader_bn: "কাজ শুরু করার আগে ছোট টিউটোরিয়ালটি দেখে নিন।",
+  videoTutorialHeader_en: "Watch the short tutorial before you start the task.",
+  videoPanelSubtitle_bn: "দুই মিনিটের নির্দেশনা আপনার কাজটি সঠিকভাবে শেষ করতে সাহায্য করবে।",
+  videoPanelSubtitle_en: "A two-minute guide can help you complete the task correctly.",
+  dailyTip_bn: "প্রতিদিন নির্দিষ্ট সময়ে মানসম্মত পোস্ট করুন; অনিয়মিত প্রচারে অ্যালগরিদমও বিভ্রান্ত হয়।",
+  dailyTip_en: "Post quality content consistently; irregular promotion confuses the algorithm too.",
+  dashboardAlert_bn: "আজকের চেক-ইনটি সম্পন্ন করুন, কারণ ছোট অভ্যাসই বড় ফল তৈরি করে।",
+  dashboardAlert_en: "Complete today's check-in because small habits create meaningful results.",
+  taskAvailable_bn: "আপনার জন্য নতুন কাজ অপেক্ষা করছে; সুযোগটি কাজে লাগান।",
+  taskAvailable_en: "A new task is waiting for you; make the opportunity count.",
+  watchTutorial_bn: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।",
+  watchTutorial_en: "Watch the tutorial and start the task with confidence.",
 };
 
 const DB_FIELD_MAP: Record<string, string> = {
@@ -86,13 +97,19 @@ async function fetchDailyCopy(): Promise<Record<string, string>> {
 
       if (dbRow) {
         for (const [jsKey, dbKey] of Object.entries(DB_FIELD_MAP)) {
-          copy[jsKey] = (dbRow as Record<string, string>)[dbKey] || STATIC_FALLBACKS[jsKey];
+          const bnKey = `${dbKey}_bn`;
+          const enKey = `${dbKey}_en`;
+          const dbRecord = dbRow as Record<string, string>;
+          copy[`${jsKey}_bn`] = dbRecord[bnKey] || STATIC_FALLBACKS[`${jsKey}_bn`];
+          copy[`${jsKey}_en`] = dbRecord[enKey] || STATIC_FALLBACKS[`${jsKey}_en`];
         }
       } else {
         const { data } = await supabase.functions.invoke('ai-ui-copy', {});
         if (data) {
+          const d = data as Record<string, string>;
           for (const [jsKey, dbKey] of Object.entries(DB_FIELD_MAP)) {
-            copy[jsKey] = (data as Record<string, string>)[dbKey] || STATIC_FALLBACKS[jsKey];
+            copy[`${jsKey}_bn`] = d[`${dbKey}_bn`] || STATIC_FALLBACKS[`${jsKey}_bn`];
+            copy[`${jsKey}_en`] = d[`${dbKey}_en`] || STATIC_FALLBACKS[`${jsKey}_en`];
           }
         } else {
           copy = { ...STATIC_FALLBACKS };
@@ -129,91 +146,131 @@ export function invalidateAiCopyCache() {
   initAiCopy();
 }
 
+function pick(copy: Record<string, string>, key: string, lang: Lang): string {
+  const langKey = `${key}_${lang}`;
+  return currentCopy[langKey] ?? copy[langKey] ?? STATIC_FALLBACKS[langKey] ?? STATIC_FALLBACKS[`${key}_${lang === 'bn' ? 'en' : 'bn'}`];
+}
+
 const STATIC_PROMO_COPY = {
   promoExpired: [
-    'Khelar shomoy shesh, mama! Promo code er moyad paren hoye gese!',
-    'Arey ostad, bas chere diche! Eto derite aile kaj hoy? Moyad shesh!',
-    'Deadline shesh mama! Time moto na aile bonus ki batase ure jabe?',
+    { bn: 'প্রমো কোডের মেয়াদ শেষ হয়ে গেছে; আগামীবার আরও দ্রুত হোন।', en: 'This promo code has expired; be faster next time.' },
+    { bn: 'মেয়াদ শেষ! সময়মতো না এলে বোনাস বাতাসে উড়ে যায়।', en: 'Deadline passed! Bonuses fly away if you arrive late.' },
+    { bn: 'সময় ফুরিয়েছে; পরবর্তী প্রমো কোডের জন্য প্রস্তুত থাকুন।', en: 'Time is up; stay ready for the next promo code.' },
   ],
   promoUsed: [
-    'Arey ostad! Eita to ami agei mere disi! Ek maghe ki ar shito jay?',
-    'Eki gase barbar it marele am por na mama! Already neso!',
-    'Lover ekta sima ache mama! Ekbar bonus paiso na? Abart try maro keno?',
+    { bn: 'এই কোডটি আগেই ব্যবহার করা হয়েছে; একটি নতুন কোড চেষ্টা করুন।', en: 'This code was already used; try a different one.' },
+    { bn: 'একই কোড দুবার কাজে লাগানো যায় না; নতুনটি খুঁজুন।', en: 'You cannot use the same code twice; find a new one.' },
+    { bn: 'বোনাস ইতিমধ্যেই গ্রহণ করা হয়েছে; পরবর্তী সুযোগের জন্য অপেক্ষা করুন।', en: 'Bonus already claimed; wait for the next opportunity.' },
   ],
   promoInvalid: [
-    'Vul code bosaiya fakira chal dio na ostad! Thik code ta valo kore dekhao!',
-    'Arey mama, eita to khamir moto fule uth na! Thik code dao!',
-    'Ekkere vul code diso? Choshma pore abar dekhao ostad!',
+    { bn: 'ভুল কোড দিয়ে বিভ্রান্ত করবেন না; সঠিক কোডটি যাচাই করুন।', en: 'Do not confuse with a wrong code; verify the correct one.' },
+    { bn: 'এই কোডটি বাতিল; আবার সঠিকভাবে চেষ্টা করুন।', en: 'This code is invalid; try again with the correct one.' },
+    { bn: 'কোডটি মিলছে না; আরেকবার যত্ন সহকারে দেখুন।', en: 'The code does not match; check carefully once more.' },
   ],
   promoSuccess: [
-    'Sabash ostad! Kella fate! Account e bonus coin dhuke gese, ekhon party dao!',
-    'Bah bah! Mamar bhagyo aj chomotkar! Bonus coin ashe gese — party!',
-    'Kella fate ostad! Poket bhari holo, ekhon ektu jomji khao!',
+    { bn: 'সাবাশ! বোনাস কয়েন আপনার অ্যাকাউন্টে যুক্ত হয়েছে।', en: 'Well done! Bonus coins have been added to your account.' },
+    { bn: 'অভিনন্দন! বোনাস কয়েন সফলভাবে প্রদান করা হয়েছে।', en: 'Congratulations! Bonus coins have been credited successfully.' },
+    { bn: 'কাজে লেগে যান; বোনাস পকেটে চলে এসেছে।', en: 'Get to work; the bonus has landed in your pocket.' },
   ],
   promoLimit: [
-    'Khelar shomoy shesh, mama! Moyad pare gese. Poribar ekta fast hote hobe!',
-    'Sit full mama! Sob ticket beche gese! Poribar age aso!',
-    'Deri korle hoy mama! Stock shesh! Next time fast ho!',
+    { bn: 'প্রমো কোডের সীমা শেষ; আগামীবার আরও দ্রুত হোন।', en: 'This promo code has reached its limit; be faster next time.' },
+    { bn: 'সব টিকিট বিক্রি হয়ে গেছে; পরবর্তীবার আগে আসুন।', en: 'All tickets are sold out; come earlier next time.' },
+    { bn: 'স্টক ফুরিয়েছে; পরবর্তী সুযোগে আবার চেষ্টা করুন।', en: 'Stock is exhausted; try again on the next opportunity.' },
   ],
   promoInactive: [
-    'Ei promo code ta ekhon ghumache mama! Pore abart try koro!',
-    'Code ta ekhon break nicche ostad! Ektu pore asho!',
-    'Ei promo ekhon off mama! Chalu hole ami dak dimu!',
+    { bn: 'এই প্রমো কোডটি এখন নিষ্ক্রিয়; পরে আবার চেষ্টা করুন।', en: 'This promo code is currently inactive; try again later.' },
+    { bn: 'কোডটি বর্তমানে বন্ধ আছে; কিছুক্ষণ পর ফিরে আসুন।', en: 'The code is currently disabled; come back in a while.' },
+    { bn: 'প্রমোটি এখন চালু নেই; সক্রিয় হলে জানিয়ে দেওয়া হবে।', en: 'The promo is not active now; you will be notified when it resumes.' },
   ],
   promotionSuccess: [
-    'Kaj promote hoye gese mama! Tomar kaj sobar chokhe porbe!',
-    'Boost mara kamal ostad! Ekhn tomar kaj ekdom tope thakbe!',
-    'Promotion successful! Kaj pin kora — sobai dekhbe aga aga!',
+    { bn: 'কাজটি সফলভাবে প্রচার করা হয়েছে; এখন সবাই এটি দেখতে পাবে।', en: 'Your task has been promoted successfully; everyone will see it now.' },
+    { bn: 'বুস্ট সফল! আপনার কাজ এখন সবার শীর্ষে অবস্থান করছে।', en: 'Boost successful! Your task now appears at the top for everyone.' },
+    { bn: 'প্রচার সম্পন্ন; সুযোগটি এখন আরও বেশি মানুষের কাছে পৌঁছাবে।', en: 'Promotion complete; the opportunity will reach more people now.' },
   ],
   promotionEmpty: [
-    'Promote kora kaj nai ekhon! Tomar kaj promote koro, sobar upore thako!',
-    'Keu ekhono boost mare nai! Prothom how mama, kaj promote koro!',
-    'Promoted kaj faka! Taratari nije kaj boost koro!',
+    { bn: 'এখন কোনো প্রচারিত কাজ নেই; নিজের কাজ প্রচার করুন।', en: 'No promoted tasks right now; promote your own task.' },
+    { bn: 'কেউ এখনো বুস্ট করেনি; প্রথম হয়ে যান।', en: 'No one has boosted yet; be the first.' },
+    { bn: 'প্রচারিত কাজের তালিকা খালি; দ্রুত নিজের কাজ বুস্ট করুন।', en: 'The promoted tasks list is empty; boost your task quickly.' },
   ],
   notEnoughPromoCoins: [
-    'Promotion er jonno coin kom mama! Ektu kamaw koro, tarpor boost maro!',
-    'Coin kom ache ostad! Promotion er age poket bhari koro!',
-    'Promote korte gele coin lage mama! Age kichu kaj koro!',
+    { bn: 'প্রচারের জন্য পর্যাপ্ত কয়েন নেই; আরও কাজ সম্পন্ন করুন।', en: 'Not enough coins for promotion; complete more tasks first.' },
+    { bn: 'কয়েন কম আছে; প্রচারের আগে ব্যালেন্স বাড়ান।', en: 'Coins are low; increase your balance before promoting.' },
+    { bn: 'প্রচার করতে কয়েন প্রয়োজন; প্রথমে কিছু কাজ করুন।', en: 'Promotion requires coins; do some tasks first.' },
   ],
   errorGeneric: [
-    'Arey mama, eibar ektu jhamela hoise! Ektu pore abart try koro!',
-    'Kichu ekta golmal hoise ostad! Refresh diya abar dekho!',
-    'Net ektu mond mama! Cha khaiya asho, totkhane thik hoibo!',
+    { bn: 'কিছু একটা সমস্যা হয়েছে; কিছুক্ষণ পর আবার চেষ্টা করুন।', en: 'Something went wrong; please try again in a moment.' },
+    { bn: 'সাময়িক ব্যাঘাত; রিফ্রেশ করে আবার দেখুন।', en: 'A temporary issue; refresh and try again.' },
+    { bn: 'নেটওয়ার্কে সমস্যা; কিছুক্ষণ পর আবার চেষ্টা করুন।', en: 'Network issue; please try again shortly.' },
   ],
   taskEditSuccess: [
-    'Kaj edit hoye gese mama! Ekhn sob thikthak, chaliye dao!',
-    'Edit kamal ostad! Kaj ta ekhon jhakkas!',
-    'Hushiar! Kaj update hoise, ekhon ready ho!',
+    { bn: 'কাজটি সম্পাদনা করা হয়েছে; সব এখন ঠিকঠাক।', en: 'Task edited successfully; everything is in order now.' },
+    { bn: 'সম্পাদনা সফল! কাজটি আপডেট হয়েছে।', en: 'Edit successful! The task has been updated.' },
+    { bn: 'কাজ আপডেট হয়েছে; এখন প্রস্তুত হোন।', en: 'Task updated; get ready now.' },
   ],
 };
 
-function randomPick(arr: string[]): string {
+function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export const microcopy = {
-  promoExpired: () => randomPick(STATIC_PROMO_COPY.promoExpired),
-  promoUsed: () => randomPick(STATIC_PROMO_COPY.promoUsed),
-  promoInvalid: () => randomPick(STATIC_PROMO_COPY.promoInvalid),
-  promoSuccess: () => randomPick(STATIC_PROMO_COPY.promoSuccess),
-  promoLimit: () => randomPick(STATIC_PROMO_COPY.promoLimit),
-  promoInactive: () => randomPick(STATIC_PROMO_COPY.promoInactive),
-  tasksHeader: () => currentCopy.tasksHeader ?? STATIC_FALLBACKS.tasksHeader,
-  tasksCounter: (n: number) => `${n} ${currentCopy.taskAvailable ?? STATIC_FALLBACKS.taskAvailable}`,
-  categoryEmpty: () => currentCopy.categoryEmpty ?? STATIC_FALLBACKS.categoryEmpty,
-  loadingTasks: () => currentCopy.loadingTasks ?? STATIC_FALLBACKS.loadingTasks,
-  errorGeneric: () => randomPick(STATIC_PROMO_COPY.errorGeneric),
-  taskEditSuccess: () => randomPick(STATIC_PROMO_COPY.taskEditSuccess),
-  yourTasksFirst: () => currentCopy.yourTasksFirst ?? STATIC_FALLBACKS.yourTasksFirst,
-  videoTutorialHeader: () => currentCopy.videoTutorialHeader ?? STATIC_FALLBACKS.videoTutorialHeader,
-  videoPanelSubtitle: () => currentCopy.videoPanelSubtitle ?? STATIC_FALLBACKS.videoPanelSubtitle,
-  promotionSuccess: () => randomPick(STATIC_PROMO_COPY.promotionSuccess),
-  promotionEmpty: () => randomPick(STATIC_PROMO_COPY.promotionEmpty),
-  notEnoughPromoCoins: () => randomPick(STATIC_PROMO_COPY.notEnoughPromoCoins),
-  dailyTip: () => currentCopy.dailyTip ?? STATIC_FALLBACKS.dailyTip,
-  dashboardAlert: () => currentCopy.dashboardAlert ?? STATIC_FALLBACKS.dashboardAlert,
-  watchTutorial: () => currentCopy.watchTutorial ?? STATIC_FALLBACKS.watchTutorial,
-};
+export function createMicrocopy(lang: Lang) {
+  return {
+    promoExpired: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promoExpired);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    promoUsed: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promoUsed);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    promoInvalid: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promoInvalid);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    promoSuccess: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promoSuccess);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    promoLimit: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promoLimit);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    promoInactive: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promoInactive);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    tasksHeader: () => pick(currentCopy, 'tasksHeader', lang),
+    tasksCounter: (n: number) => `${n} ${pick(currentCopy, 'taskAvailable', lang)}`,
+    categoryEmpty: () => pick(currentCopy, 'categoryEmpty', lang),
+    loadingTasks: () => pick(currentCopy, 'loadingTasks', lang),
+    errorGeneric: () => {
+      const p = randomPick(STATIC_PROMO_COPY.errorGeneric);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    taskEditSuccess: () => {
+      const p = randomPick(STATIC_PROMO_COPY.taskEditSuccess);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    yourTasksFirst: () => pick(currentCopy, 'yourTasksFirst', lang),
+    videoTutorialHeader: () => pick(currentCopy, 'videoTutorialHeader', lang),
+    videoPanelSubtitle: () => pick(currentCopy, 'videoPanelSubtitle', lang),
+    promotionSuccess: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promotionSuccess);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    promotionEmpty: () => {
+      const p = randomPick(STATIC_PROMO_COPY.promotionEmpty);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    notEnoughPromoCoins: () => {
+      const p = randomPick(STATIC_PROMO_COPY.notEnoughPromoCoins);
+      return lang === 'bn' ? p.bn : p.en;
+    },
+    dailyTip: () => pick(currentCopy, 'dailyTip', lang),
+    dashboardAlert: () => pick(currentCopy, 'dashboardAlert', lang),
+    watchTutorial: () => pick(currentCopy, 'watchTutorial', lang),
+  };
+}
 
 export { fetchDailyCopy };
 export type { CopyKey };
