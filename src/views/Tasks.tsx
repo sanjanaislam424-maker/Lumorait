@@ -108,8 +108,8 @@ function tierLabel(t: (k: any) => string, tier: string | null | undefined): stri
 }
 
 export function Tasks() {
-  const { t, profile, refreshProfile, lang } = useApp();
-  const microcopy = createMicrocopy(lang);
+  const { t, profile, refreshProfile, lang, aiTone } = useApp();
+  const microcopy = createMicrocopy(lang, aiTone);
   const { notify } = useToast();
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -520,8 +520,8 @@ function TaskCard({ task, onAccept, onChat, isOwner, isPromoted, onEdit }: { tas
 }
 
 function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClose: () => void; onSave: (task: TaskRow) => void }) {
-  const { t, profile, refreshProfile, lang } = useApp();
-  const microcopy = createMicrocopy(lang);
+  const { t, profile, refreshProfile, lang, aiTone } = useApp();
+  const microcopy = createMicrocopy(lang, aiTone);
   const { notify } = useToast();
   const [form, setForm] = useState({ title: '', description: '', target_url: '', reward_coins: 10, slots: 1 });
   const [promotionTiers, setPromotionTiers] = useState<{ duration_days: number; label: string; free_cost?: number; pro_cost?: number; vip_cost?: number; coin_cost?: number; daily_rate?: number; daily_rate_after_lock?: number; daily_rate_after_lock_free?: number; daily_rate_after_lock_pro?: number; daily_rate_after_lock_vip?: number }[]>([]);
@@ -734,8 +734,8 @@ function EditTaskModal({ task, onClose, onSave }: { task: TaskRow | null; onClos
 }
 
 function CreateTaskForm({ onDone }: { onDone: () => void }) {
-  const { t, profile, refreshProfile, lang } = useApp();
-  const microcopy = createMicrocopy(lang);
+  const { t, profile, refreshProfile, lang, aiTone } = useApp();
+  const microcopy = createMicrocopy(lang, aiTone);
   const { notify } = useToast();
   const [form, setForm] = useState({ platform: 'facebook', title: '', description: '', target_url: '', reward: 25, slots: 1, daily_slot_limit: '' });
   const [busy, setBusy] = useState(false);
