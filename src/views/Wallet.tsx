@@ -25,8 +25,8 @@ async function fetchAdminNumber(method: string): Promise<string | null> {
 }
 
 export function Wallet() {
-  const { t, profile, refreshProfile, lang } = useApp();
-  const microcopy = createMicrocopy(lang);
+  const { t, profile, refreshProfile, lang, aiTone } = useApp();
+  const microcopy = createMicrocopy(lang, aiTone);
   const { notify } = useToast();
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [depOpen, setDepOpen] = useState(false);
