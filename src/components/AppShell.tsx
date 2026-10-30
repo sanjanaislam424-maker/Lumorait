@@ -1,25 +1,26 @@
 import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, ListChecks, Wallet, Gift, Trophy, User as UserIcon,
-  Shield, LogOut, Languages, Bell, RefreshCw, Palette, Menu, X,
+  LayoutDashboard, ListChecks, Wallet, Gift, Trophy,
+  Shield, LogOut, Bell, RefreshCw, Menu, X,
   ArrowLeftRight, Sparkles, Crown, Bot, Settings as SettingsIcon, MessageCircle,
 } from 'lucide-react';
-import { useApp, Theme } from '@/lib/AppContext';
+import { useApp } from '@/lib/AppContext';
 import { Modal, Button, NeonParticles } from './ui';
 import { Logo } from './Logo';
 import { supabase } from '@/lib/supabase';
 import { ChatWidget } from './ChatWidget';
+import { SettingsModal } from './SettingsModal';
 
 export type View =
   | 'dashboard' | 'tasks' | 'wallet' | 'spin' | 'leaderboard'
   | 'profile' | 'admin' | 'buyconvert' | 'membership' | 'refer' | 'support';
 
 export function AppShell({ view, setView, children }: { view: View; setView: (v: View) => void; children: ReactNode }) {
-  const { t, profile, lang, theme, themeConfig, setLang, setTheme, signOut } = useApp();
+  const { t, profile, lang, themeConfig, signOut } = useApp();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState<{ id: string; title: string; body: string }[]>([]);
-  const [themeOpen, setThemeOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const navItems: { key: View; icon: ReactNode; label: string }[] = [
@@ -32,7 +33,6 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
     { key: 'profile', icon: <Shield size={20} />, label: t('navKyc') },
     { key: 'membership', icon: <Crown size={20} />, label: t('navMembership') },
     { key: 'leaderboard', icon: <Trophy size={20} />, label: t('leaderboard') },
-    { key: 'profile', icon: <UserIcon size={20} />, label: t('navSettings') },
     // DEV: Always-visible Admin Panel entry for testing. Remove before going live.
     { key: 'admin', icon: <Shield size={20} />, label: t('adminPanel') },
   ];
@@ -49,7 +49,6 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
     { key: 'profile', icon: <Shield size={20} />, label: t('navKyc') },
     { key: 'membership', icon: <Crown size={20} />, label: t('navMembership') },
     { key: 'leaderboard', icon: <Trophy size={20} />, label: t('leaderboard') },
-    { key: 'profile', icon: <SettingsIcon size={20} />, label: t('navSettings') },
   ];
 
   // DEV: Always show Admin Panel link for testing. Remove before going live.
@@ -62,12 +61,6 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
   };
 
   const quickReload = () => window.location.reload();
-
-  const themeOptions: { id: Theme; label: string; colors: string[] }[] = [
-    { id: 'cyber', label: lang === 'bn' ? 'সাইবারপাঙ্ক' : 'Cyberpunk', colors: ['#22d3ee', '#3b82f6', '#06b6d4'] },
-    { id: 'matrix', label: lang === 'bn' ? 'ম্যাট্রিক্স' : 'Matrix', colors: ['#22c55e', '#16a34a', '#4ade80'] },
-    { id: 'solar', label: lang === 'bn' ? 'সোলার ফ্লেয়ার' : 'Solar Flare', colors: ['#fbbf24', '#f59e0b', '#fb923c'] },
-  ];
 
   const handleNav = (v: View) => {
     setView(v);
@@ -97,9 +90,8 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
           <div className="flex items-center gap-1">
             <button onClick={quickReload} className="p-2 rounded-lg hover:bg-white/10 transition" style={{ color: themeConfig.muted }} title={t('quickReload')}><RefreshCw size={18} /></button>
             <button onClick={openNotifs} className="p-2 rounded-lg hover:bg-white/10 transition relative" style={{ color: themeConfig.muted }}><Bell size={18} /></button>
-            <button onClick={() => setLang(lang === 'en' ? 'bn' : 'en')} className="p-2 rounded-lg hover:bg-white/10 transition" style={{ color: themeConfig.muted }}><Languages size={18} /></button>
-            <button onClick={() => setThemeOpen(true)} className="p-2 rounded-lg hover:bg-white/10 transition" style={{ color: themeConfig.muted }} title={t('themeSwitch')}>
-              <Palette size={18} />
+            <button onClick={() => setSettingsOpen(true)} className="p-2 rounded-lg hover:bg-white/10 transition" style={{ color: themeConfig.muted }} title={t('settingsTitle')}>
+              <SettingsIcon size={18} />
             </button>
           </div>
         </div>
@@ -168,6 +160,15 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
                   );
                 })}
 
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition"
+                  style={{ color: themeConfig.muted }}
+                >
+                  <SettingsIcon size={20} />
+                  <span className="text-sm font-medium">{t('navSettings')}</span>
+                </button>
+
                 {/* Logout */}
                 <button
                   onClick={() => { setDrawerOpen(false); signOut(); }}
@@ -217,26 +218,7 @@ export function AppShell({ view, setView, children }: { view: View; setView: (v:
         </div>
       </nav>
 
-      {/* Theme picker modal */}
-      <Modal open={themeOpen} onClose={() => setThemeOpen(false)} title={t('themeSwitch')}>
-        <div className="space-y-3">
-          {themeOptions.map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => { setTheme(opt.id); setThemeOpen(false); }}
-              className="w-full flex items-center justify-between p-4 rounded-xl transition neon-btn-ghost"
-              style={theme === opt.id ? { borderColor: themeConfig.primary, boxShadow: `0 0 15px ${themeConfig.glow}` } : {}}
-            >
-              <span className="font-medium neon-text">{opt.label}</span>
-              <div className="flex gap-1.5">
-                {opt.colors.map((c) => (
-                  <div key={c} className="w-6 h-6 rounded-full" style={{ background: c, boxShadow: `0 0 8px ${c}` }} />
-                ))}
-              </div>
-            </button>
-          ))}
-        </div>
-      </Modal>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {/* Notifications modal */}
       <Modal open={notifOpen} onClose={() => setNotifOpen(false)} title={t('notifications')}>

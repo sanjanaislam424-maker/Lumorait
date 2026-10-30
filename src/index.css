@@ -174,3 +174,17 @@ body {
 .neon-btn-danger:hover {
   background: rgb(239 68 68);
 }
+
+.theme-light .text-white {
+  color: var(--neon-text) !important;
+}
+
+.theme-light .text-slate-400,
+.theme-light .text-slate-500 {
+  color: var(--neon-muted) !important;
+}
+
+.theme-light .bg-slate-800\/50,
+.theme-light .bg-slate-900\/50 {
+  background: rgba(255, 255, 255, 0.52) !important;
+}

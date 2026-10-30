@@ -2,7 +2,12 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { supabase, Profile } from './supabase';
 import { Lang, t as translate, DictKey } from './i18n';
 
-export type Theme = 'cyber' | 'matrix' | 'solar';
+export type Theme = 'cyber' | 'matrix' | 'solar' | 'light' | 'dark';
+export type ThemeMode = 'system' | Theme;
+
+export type AiTone = 'buddy' | 'mentor' | 'coach';
+
+export const aiToneKeys: AiTone[] = ['buddy', 'mentor', 'coach'];
 
 export type ThemeConfig = {
   id: Theme;
@@ -20,10 +25,19 @@ export type ThemeConfig = {
   muted: string;
 };
 
-export const themeKeys: Theme[] = ['cyber', 'matrix', 'solar'];
+export const themeKeys: Theme[] = ['cyber', 'matrix', 'solar', 'light', 'dark'];
 
 function resolveTheme(raw: string | null): Theme {
   return raw && themeKeys.includes(raw as Theme) ? (raw as Theme) : 'cyber';
+}
+
+function resolveThemeMode(raw: string | null): ThemeMode {
+  if (raw === 'system') return 'system';
+  return resolveTheme(raw);
+}
+
+function resolveAiTone(raw: string | null): AiTone {
+  return raw && aiToneKeys.includes(raw as AiTone) ? (raw as AiTone) : 'buddy';
 }
 
 export const themes: Record<Theme, ThemeConfig> = {
@@ -72,6 +86,36 @@ export const themes: Record<Theme, ThemeConfig> = {
     text: '#fef3c7',
     muted: '#78716c',
   },
+  dark: {
+    id: 'dark',
+    name: 'Dark',
+    nameBn: 'ডার্ক',
+    primary: '#38bdf8',
+    secondary: '#2563eb',
+    accent: '#22d3ee',
+    glow: 'rgba(56, 189, 248, 0.32)',
+    bg: '#020617',
+    bgGradient: 'linear-gradient(180deg, #020617 0%, #0f172a 50%, #020617 100%)',
+    cardBg: 'rgba(15, 23, 42, 0.72)',
+    border: 'rgba(148, 163, 184, 0.22)',
+    text: '#e2e8f0',
+    muted: '#94a3b8',
+  },
+  light: {
+    id: 'light',
+    name: 'Light',
+    nameBn: 'লাইট',
+    primary: '#0369a1',
+    secondary: '#2563eb',
+    accent: '#0891b2',
+    glow: 'rgba(3, 105, 161, 0.18)',
+    bg: '#f8fafc',
+    bgGradient: 'linear-gradient(180deg, #f8fafc 0%, #e0f2fe 55%, #f8fafc 100%)',
+    cardBg: 'rgba(255, 255, 255, 0.82)',
+    border: 'rgba(3, 105, 161, 0.2)',
+    text: '#0f172a',
+    muted: '#475569',
+  },
 };
 
 type AppState = {
@@ -80,11 +124,14 @@ type AppState = {
   loading: boolean;
   lang: Lang;
   theme: Theme;
+  themeMode: ThemeMode;
   themeConfig: ThemeConfig;
+  aiTone: AiTone;
   logoUrl: string | null;
   refreshLogo: () => Promise<void>;
   setLang: (l: Lang) => void;
-  setTheme: (th: Theme) => void;
+  setThemeMode: (tm: ThemeMode) => void;
+  setAiTone: (tone: AiTone) => void;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   t: (key: DictKey) => string;
@@ -96,31 +143,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AppState['session']>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lang, setLangState] = useState<Lang>('bn');
+  const [lang, setLangState] = useState<Lang>(() => {
+    const saved = localStorage.getItem('lumora_lang');
+    return saved === 'en' || saved === 'bn' ? saved : 'bn';
+  });
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => resolveThemeMode(localStorage.getItem('lumora_theme_mode')));
   const [theme, setThemeState] = useState<Theme>(() => resolveTheme(localStorage.getItem('lumora_theme')));
+  const [aiTone, setAiToneState] = useState<AiTone>(() => resolveAiTone(localStorage.getItem('lumora_ai_tone')));
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
+  // Resolve actual theme from mode + system preference
+  useEffect(() => {
+    if (themeMode !== 'system') {
+      setThemeState(themeMode);
+      return;
+    }
+
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const apply = () => {
+      const resolved: Theme = mq.matches ? 'light' : 'dark';
+      setThemeState(resolved);
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [themeMode]);
+
+  // Apply theme CSS classes
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-cyber', 'theme-matrix', 'theme-solar');
+    root.classList.remove('theme-cyber', 'theme-matrix', 'theme-solar', 'theme-light');
     root.classList.add(`theme-${theme}`);
+    root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
     localStorage.setItem('lumora_theme', theme);
-  }, [theme]);
+    localStorage.setItem('lumora_theme_mode', themeMode);
+  }, [theme, themeMode]);
 
   useEffect(() => {
     localStorage.setItem('lumora_lang', lang);
   }, [lang]);
 
-  const setLang = (l: Lang) => setLangState(l);
-  const setTheme = (th: Theme) => setThemeState(th);
+  useEffect(() => {
+    localStorage.setItem('lumora_ai_tone', aiTone);
+  }, [aiTone]);
 
-  const fetchLogo = useCallback(async () => {
-    const { data } = await supabase.from('app_settings').select('app_logo_url').eq('id', 1).maybeSingle();
-    setLogoUrl(data?.app_logo_url ?? null);
-  }, []);
+  // Sync aiTone to database when profile is available
+  useEffect(() => {
+    if (!session) return;
+    supabase.from('profiles').update({ ai_tone: aiTone }).eq('id', session.user.id).then(() => {});
+  }, [aiTone, session]);
 
-  useEffect(() => { fetchLogo(); }, [fetchLogo]);
-
+  // Load aiTone from database on profile fetch
   const fetchProfile = useCallback(async (uid: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
     if (!data) {
@@ -128,13 +201,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: uid,
         lumora_coins: 200,
         referral_code: 'LUM' + uid.slice(0, 6).toUpperCase(),
+        ai_tone: aiTone,
       });
       const { data: fresh } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
       setProfile(fresh as Profile);
     } else {
       setProfile(data as Profile);
+      const dbTone = (data as any).ai_tone as string | undefined;
+      if (dbTone && (dbTone === 'buddy' || dbTone === 'mentor' || dbTone === 'coach') && dbTone !== aiTone) {
+        setAiToneState(dbTone);
+      }
     }
+  }, [aiTone]);
+
+  const setLang = (l: Lang) => setLangState(l);
+  const setThemeMode = (tm: ThemeMode) => setThemeModeState(tm);
+  const setAiTone = (tone: AiTone) => setAiToneState(tone);
+
+  const fetchLogo = useCallback(async () => {
+    const { data } = await supabase.from('app_settings').select('app_logo_url').eq('id', 1).maybeSingle();
+    setLogoUrl(data?.app_logo_url ?? null);
   }, []);
+
+  useEffect(() => { fetchLogo(); }, [fetchLogo]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -189,7 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeConfig: themes[theme] ?? themes.cyber, logoUrl, refreshLogo: fetchLogo, setLang, setTheme, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, refreshLogo: fetchLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );
