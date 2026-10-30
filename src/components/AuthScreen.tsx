@@ -7,7 +7,7 @@ import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 
 export function AuthScreen() {
-  const { t, lang, setLang } = useApp();
+  const { t, lang, setLang, logoUrl } = useApp();
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -108,6 +108,50 @@ export function AuthScreen() {
         perspective: '1200px',
       }}
     >
+      {/* Blurred logo watermark — revealed when light is on */}
+      <AnimatePresence>
+        {lit && (
+          <motion.div
+            className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none"
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ duration: 0.5, ease: 'ease-in-out' }}
+          >
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt=""
+                className="rounded-3xl object-cover"
+                style={{
+                  width: 280,
+                  height: 280,
+                  opacity: 0.12,
+                  filter: 'blur(40px) saturate(1.3)',
+                  boxShadow: '0 0 120px rgba(251,191,36,0.25)',
+                }}
+              />
+            ) : (
+              <div
+                className="rounded-3xl flex items-center justify-center font-bold"
+                style={{
+                  width: 280,
+                  height: 280,
+                  fontSize: 120,
+                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                  opacity: 0.12,
+                  filter: 'blur(40px) saturate(1.3)',
+                  boxShadow: '0 0 120px rgba(251,191,36,0.25)',
+                  color: '#0a0301',
+                }}
+              >
+                L
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Animated room illumination layer */}
       <motion.div
         className="absolute inset-0 pointer-events-none z-0"

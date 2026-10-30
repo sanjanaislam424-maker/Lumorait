@@ -225,6 +225,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { fetchLogo(); }, [fetchLogo]);
 
+  // Dynamically update browser favicon whenever the logo changes
+  useEffect(() => {
+    const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+    if (!link) return;
+    if (logoUrl) {
+      link.href = logoUrl;
+      link.type = 'image/png';
+    } else {
+      link.href = '/vite.svg';
+      link.type = 'image/svg+xml';
+    }
+  }, [logoUrl]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
