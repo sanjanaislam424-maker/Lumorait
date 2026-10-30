@@ -41,6 +41,12 @@ export type Profile = {
   admin_permissions: Record<string, boolean> | null;
   ai_tone: 'buddy' | 'mentor' | 'coach';
   is_super_admin: boolean;
+  bio: string | null;
+  level: number;
+  xp_points: number;
+  notify_tasks: boolean;
+  notify_payments: boolean;
+  notify_promo: boolean;
   created_at: string;
 };
 
