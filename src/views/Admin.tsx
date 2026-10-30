@@ -2076,16 +2076,16 @@ function AiContentTab() {
   ];
 
   const UI_COPY_FIELDS: { key: string; labelBn: string; labelEn: string }[] = [
-    { key: 'tasks_header', labelBn: 'Tasks Header', labelEn: 'Tasks Header' },
-    { key: 'loading_tasks', labelBn: 'Loading Tasks', labelEn: 'Loading Tasks' },
-    { key: 'category_empty', labelBn: 'Category Empty', labelEn: 'Category Empty' },
-    { key: 'your_tasks_first', labelBn: 'Your Tasks First', labelEn: 'Your Tasks First' },
-    { key: 'video_tutorial_header', labelBn: 'Video Tutorial Header', labelEn: 'Video Tutorial Header' },
-    { key: 'video_panel_subtitle', labelBn: 'Video Panel Subtitle', labelEn: 'Video Panel Subtitle' },
-    { key: 'daily_tip', labelBn: 'Daily Tip', labelEn: 'Daily Tip' },
-    { key: 'dashboard_alert', labelBn: 'Dashboard Alert', labelEn: 'Dashboard Alert' },
-    { key: 'task_available', labelBn: 'Task Available', labelEn: 'Task Available' },
-    { key: 'watch_tutorial', labelBn: 'Watch Tutorial', labelEn: 'Watch Tutorial' },
+    { key: 'tasks_header', labelBn: 'টাস্ক হেডার', labelEn: 'Tasks Header' },
+    { key: 'loading_tasks', labelBn: 'লোডিং মেসেজ', labelEn: 'Loading Tasks' },
+    { key: 'category_empty', labelBn: 'ক্যাটাগরি খালি', labelEn: 'Category Empty' },
+    { key: 'your_tasks_first', labelBn: 'আপনার কাজ প্রথমে', labelEn: 'Your Tasks First' },
+    { key: 'video_tutorial_header', labelBn: 'ভিডিও টিউটোরিয়াল হেডার', labelEn: 'Video Tutorial Header' },
+    { key: 'video_panel_subtitle', labelBn: 'ভিডিও প্যানেল সাবটাইটেল', labelEn: 'Video Panel Subtitle' },
+    { key: 'daily_tip', labelBn: 'দৈনিক টিপস', labelEn: 'Daily Tip' },
+    { key: 'dashboard_alert', labelBn: 'ড্যাশবোর্ড অ্যালার্ট', labelEn: 'Dashboard Alert' },
+    { key: 'task_available', labelBn: 'নতুন কাজ উপলব্ধ', labelEn: 'Task Available' },
+    { key: 'watch_tutorial', labelBn: 'টিউটোরিয়াল দেখুন', labelEn: 'Watch Tutorial' },
   ];
 
   const load = async () => {
@@ -2279,22 +2279,23 @@ function AiContentTab() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles size={14} className="text-cyan-400" />
-                <h4 className="text-sm font-semibold text-cyan-300">Task Alerts & Tutorial Prompts (Banglish)</h4>
+                <h4 className="text-sm font-semibold text-cyan-300">Task Alerts &amp; Tutorial Prompts (Bilingual)</h4>
               </div>
               <div className="space-y-2">
                 {UI_COPY_FIELDS.map((f) => {
-                  const value = uiCopyRow?.[f.key] || '—';
-                  const regenKey = `daily_ai_ui_copy.${f.key}`;
+                  const fieldKey = `${f.key}_${langView}`;
+                  const value = uiCopyRow?.[fieldKey] || '—';
+                  const regenKey = `daily_ai_ui_copy.${fieldKey}`;
                   const isRegenerating = regenerating === regenKey;
                   return (
                     <div key={f.key} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
                       <div className="flex items-start justify-between gap-3 mb-1">
-                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">{f.labelEn}</p>
+                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">{langView === 'bn' ? f.labelBn : f.labelEn}</p>
                         <Button
                           variant="ghost"
                           className="text-xs px-2 py-1 shrink-0 flex items-center gap-1"
                           disabled={isRegenerating}
-                          onClick={() => regenerate('daily_ai_ui_copy', f.key)}
+                          onClick={() => regenerate('daily_ai_ui_copy', fieldKey)}
                         >
                           {isRegenerating ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                           {isRegenerating ? 'Regenerating...' : 'Regenerate'}

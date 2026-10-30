@@ -585,7 +585,8 @@ function WithdrawModal({ open, onClose, onDone, balance }: { open: boolean; onCl
 }
 
 function RedeemCodeBox({ onRedeemed }: { onRedeemed: () => void }) {
-  const { t, profile } = useApp();
+  const { t, profile, lang } = useApp();
+  const microcopy = createMicrocopy(lang);
   const { notify } = useToast();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
