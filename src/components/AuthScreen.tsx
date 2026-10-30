@@ -109,36 +109,25 @@ export function AuthScreen({ embedded = false }: { embedded?: boolean }) {
         perspective: '1200px',
       }}
     >
-      {/* Background wall logo — always rendered, opacity driven by light toggle */}
+      {/* Background wall logo: full-bleed, fully opaque when lit, hidden when off */}
       <div
-        className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none transition-all duration-500 ease-in-out"
+        className="absolute inset-0 z-[1] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
         style={{ opacity: lit ? 1 : 0 }}
       >
         {logoUrl ? (
           <img
             src={logoUrl}
             alt=""
-            className="rounded-3xl object-cover transition-all duration-500 ease-in-out"
-            style={{
-              width: 384,
-              height: 384,
-              opacity: lit ? 0.25 : 0,
-              filter: 'blur(4px) saturate(1.3)',
-              transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
-              boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
-            }}
+            className="w-full h-full object-cover"
+            style={{ filter: 'blur(1px) saturate(1.15)' }}
           />
         ) : (
           <div
-            className="rounded-3xl flex items-center justify-center font-bold transition-all duration-500 ease-in-out"
+            className="w-full h-full flex items-center justify-center font-bold text-amber-400"
             style={{
-              width: 384,
-              height: 384,
-              fontSize: 160,
-              background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-              opacity: lit ? 0.25 : 0,
-              filter: 'blur(4px) saturate(1.3)',
-              transition: 'opacity 500ms ease-in-out, filter 500ms ease-in-out',
+              fontSize: 'min(60vh, 480px)',
+              background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+              filter: 'blur(1px) saturate(1.15)',
             }}
           >
             L
