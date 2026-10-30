@@ -6,8 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
-const TIMEOUT_MS = 12_000;
+const MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+const TIMEOUT_MS = 20_000;
 
 const CONTENT_FALLBACK = {
   funny_bn: "সোশ্যাল মিডিয়ায় ভাইরাল হতে গিয়ে নিজের অ্যাকাউন্ট হারানোই যেন নতুন যুগের সাফল্য!",
@@ -58,10 +58,10 @@ function clean(value: string): string {
 }
 
 function valid(value: unknown, bangla = false): value is string {
-  if (typeof value !== "string" || value.trim().split(/\s+/).length < 4) return false;
+  if (typeof value !== "string" || value.trim().split(/\s+/).length < 3) return false;
   if (bangla && !/[\u0980-\u09FF]/u.test(value)) return false;
   if (!bangla && /[\u0980-\u09FF]/u.test(value)) return false;
-  return /[.!?।]$/u.test(value.trim());
+  return true;
 }
 
 async function ask(db: any, prompt: string): Promise<Record<string, string> | null> {

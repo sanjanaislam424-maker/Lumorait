@@ -2116,7 +2116,7 @@ function AiContentTab() {
       if (d?.error) {
         console.error('regenerate: edge function returned error', d.error);
       }
-      // Optimistically update local state with the returned value
+      // Immediately update local state with the returned value for instant UI
       if (d?.newValue) {
         if (table === 'daily_ai_content') {
           setContentRow((prev) => prev ? { ...prev, [field]: d.newValue } : { content_date: new Date().toISOString().split('T')[0], [field]: d.newValue });
@@ -2131,15 +2131,16 @@ function AiContentTab() {
       } else {
         notify('Content refreshed', 'success');
       }
-      // Force a fresh DB re-read to sync the actual state
-      await load();
+      // Invalidate all caches so the rest of the app picks up the new text
       invalidateDailyAiCache();
       invalidateAiCopyCache();
+      // Re-read from DB to confirm and sync the actual state
+      await load();
     } catch (err) {
       console.error('regenerate: unexpected error', err);
-      await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
+      await load();
       notify('Content refreshed', 'success');
     } finally {
       setRegenerating(null);

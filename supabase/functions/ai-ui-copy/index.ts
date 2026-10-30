@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
+const MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
 const TIMEOUT_MS = 12_000;
 
 const FALLBACK: Record<string, string> = {
