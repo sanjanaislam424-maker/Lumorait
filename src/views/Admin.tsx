@@ -2123,12 +2123,16 @@ function AiContentTab() {
         notify(data.error || 'Regeneration failed', 'error');
         return;
       }
-      notify('Regenerated successfully', 'success');
+      if (data.fallback) {
+        notify(data.warning || 'AI unavailable — saved fallback content', 'warning');
+      } else {
+        notify('Regenerated successfully', 'success');
+      }
       await load();
       invalidateDailyAiCache();
       invalidateAiCopyCache();
     } catch {
-      notify('Connection error', 'error');
+      notify('Connection error — please check your network', 'error');
     } finally {
       setRegenerating(null);
     }

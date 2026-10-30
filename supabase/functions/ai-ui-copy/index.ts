@@ -7,6 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
+const TIMEOUT_MS = 30_000;
+
 const FALLBACK: Record<string, string> = {
   tasks_header: "Kaj er palla ora kore, apni boshe chaye khao moshay!",
   loading_tasks: "Kaj ane barita hocche moshay, ektu dhoyro doro!",
@@ -26,26 +29,32 @@ const FIELDS = [
   "dashboard_alert", "task_available", "watch_tutorial",
 ];
 
-async function generateUICopy(): Promise<Record<string, string> | null> {
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
-  let apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) {
-    const { data: settings } = await supabase
-      .from("app_settings")
-      .select("gemini_api_keys, ai_active_key_index")
-      .eq("id", 1)
-      .maybeSingle();
-    const keys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
-    if (keys.length > 0) {
-      const idx = settings?.ai_active_key_index ?? 0;
-      apiKey = keys[idx % keys.length];
-    }
+async function getAllKeys(supabase: any): Promise<string[]> {
+  const { data: settings } = await supabase
+    .from("app_settings")
+    .select("gemini_api_keys, ai_active_key_index")
+    .eq("id", 1)
+    .maybeSingle();
+  const keys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
+  const allKeys = keys.filter(Boolean);
+  const envKey = Deno.env.get("GEMINI_API_KEY");
+  if (envKey && !allKeys.includes(envKey)) allKeys.push(envKey);
+  return allKeys;
+}
+
+async function generateUICopy(supabase: any): Promise<Record<string, string> | null> {
+  const allKeys = await getAllKeys(supabase);
+  if (allKeys.length === 0) {
+    console.error("ai-ui-copy: no Gemini API keys configured");
+    return null;
   }
-  if (!apiKey) return null;
 
   const prompt = `You are the witty, sarcastic, funny assistant for "Lumora IT", a Bangladeshi micro-task and SMM app.
 Generate 10 short UI copy lines in BANGLISH (Bangla written in English script mixed with Bangla words — casual, best-friend tone, hilarious, sarcastic).
@@ -71,32 +80,61 @@ Examples of the tone:
 
 Be creative, fresh, and different each time. No emoji.`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 1.5, maxOutputTokens: 800 },
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
-    const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleaned);
-    const result: Record<string, string> = {};
-    for (const field of FIELDS) {
-      result[field] = typeof parsed[field] === "string" && parsed[field].trim() ? parsed[field].trim() : FALLBACK[field];
+  for (let k = 0; k < allKeys.length; k++) {
+    for (const model of GEMINI_MODELS) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 1.5, maxOutputTokens: 800 },
+            }),
+            signal: controller.signal,
+          },
+        );
+        if (!res.ok) {
+          const errBody = await res.text();
+          console.error(`ai-ui-copy: Gemini ${model} key#${k} failed (${res.status}): ${errBody.slice(0, 300)}`);
+          continue;
+        }
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts
+          ?.map((p: { text?: string }) => p.text ?? "")
+          .join("") || "";
+        if (!text) {
+          console.error(`ai-ui-copy: Gemini ${model} key#${k} returned empty reply`);
+          continue;
+        }
+        const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        const result: Record<string, string> = {};
+        for (const field of FIELDS) {
+          result[field] = typeof parsed[field] === "string" && parsed[field].trim()
+            ? parsed[field].trim()
+            : FALLBACK[field];
+        }
+        return result;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.error(`ai-ui-copy: Gemini ${model} key#${k} timed out after ${TIMEOUT_MS}ms`);
+        } else if (err instanceof SyntaxError) {
+          console.error(`ai-ui-copy: Gemini ${model} key#${k} returned invalid JSON:`, err);
+        } else {
+          console.error(`ai-ui-copy: Gemini ${model} key#${k} error:`, err);
+        }
+        continue;
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    return result;
-  } catch {
-    return null;
   }
+  console.error("ai-ui-copy: All keys and models exhausted, using static fallback");
+  return null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -119,12 +157,10 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (existing) {
-      return new Response(JSON.stringify(existing), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(existing);
     }
 
-    const aiResult = await generateUICopy();
+    const aiResult = await generateUICopy(supabase);
     const content = aiResult ?? FALLBACK;
 
     const insertRow = {
@@ -139,28 +175,21 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (error) {
+      console.error("ai-ui-copy: insert failed, trying re-read:", error);
       const { data: fallback } = await supabase
         .from("daily_ai_ui_copy")
         .select("*")
         .eq("content_date", today)
         .maybeSingle();
       if (fallback) {
-        return new Response(JSON.stringify(fallback), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse(fallback);
       }
-      return new Response(JSON.stringify(content), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(content);
     }
 
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(data);
   } catch (err) {
-    return new Response(JSON.stringify({ ...FALLBACK, error: String(err).slice(0, 200) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("ai-ui-copy: unhandled error:", err);
+    return jsonResponse({ ...FALLBACK, error: String(err).slice(0, 200) }, 500);
   }
 });

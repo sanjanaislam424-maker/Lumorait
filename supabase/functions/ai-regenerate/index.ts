@@ -7,51 +7,69 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
+const TIMEOUT_MS = 30_000;
+
 // ---- Table: daily_ai_content ----
-// Fields: funny_bn, funny_en, tip_bn, tip_en
-const CONTENT_ITEMS: Record<string, { desc: string; maxChars: number }> = {
-  funny_bn: { desc: "A witty, sarcastic 1-line funny truth about social media, freelancing, or micro-tasks in PURE Bengali script (বাংলা হরফ), NOT Banglish. Casual best-friend tone.", maxChars: 120 },
-  funny_en: { desc: "The same funny line in witty, engaging English. Casual best-friend tone.", maxChars: 100 },
-  tip_bn: { desc: "A practical, actionable social media growth tip in PURE Bengali script (বাংলা হরফ), NOT Banglish. With a funny sarcastic twist.", maxChars: 150 },
-  tip_en: { desc: "The same tip in witty English with a sarcastic twist.", maxChars: 120 },
+const CONTENT_ITEMS: Record<string, { desc: string; maxChars: number; fallback: string }> = {
+  funny_bn: {
+    desc: "A witty, sarcastic 1-line funny truth about social media, freelancing, or micro-tasks in PURE Bengali script (বাংলা হরফ), NOT Banglish. Casual best-friend tone.",
+    maxChars: 120,
+    fallback: "সোশ্যাল মিডিয়ায় ভাইরাল হতে গিয়ে নিজের অ্যাকাউন্ট হ্যাক খাওয়া — এটাই আসল ফ্রিল্যান্সিং সাফল্য!",
+  },
+  funny_en: {
+    desc: "The same funny line in witty, engaging English. Casual best-friend tone.",
+    maxChars: 100,
+    fallback: "Going viral is easy — just post something embarrassing and watch your career disappear!",
+  },
+  tip_bn: {
+    desc: "A practical, actionable social media growth tip in PURE Bengali script (বাংলা হরফ), NOT Banglish. With a funny sarcastic twist.",
+    maxChars: 150,
+    fallback: "প্রতিদিন পোস্ট করো, কিন্তু কপি-পেস্ট করলে ফলোয়ার শুধু আয়নায় দেখবে — আসল কন্টেন্ট দাও!",
+  },
+  tip_en: {
+    desc: "The same tip in witty English with a sarcastic twist.",
+    maxChars: 120,
+    fallback: "Post daily, but if you copy-paste, your followers will only exist in your mirror. Be original!",
+  },
 };
 
 // ---- Table: daily_ai_ui_copy ----
-// Banglish UI copy fields
-const UI_COPY_ITEMS: Record<string, { desc: string; maxChars: number }> = {
-  tasks_header: { desc: "Funny header for the tasks page in BANGLISH (Bangla in English script). Casual, sarcastic, best-friend tone.", maxChars: 80 },
-  loading_tasks: { desc: "Funny loading message for the tasks page in BANGLISH.", maxChars: 70 },
-  category_empty: { desc: "Funny message when no tasks in a category in BANGLISH.", maxChars: 80 },
-  your_tasks_first: { desc: "Funny label for user's own tasks shown first in BANGLISH.", maxChars: 60 },
-  video_tutorial_header: { desc: "Funny header for video tutorial section in BANGLISH.", maxChars: 90 },
-  video_panel_subtitle: { desc: "Funny subtitle under the video tutorial in BANGLISH.", maxChars: 90 },
-  daily_tip: { desc: "Funny practical social media growth tip in BANGLISH.", maxChars: 120 },
-  dashboard_alert: { desc: "Funny alert reminding to do check-in in BANGLISH.", maxChars: 90 },
-  task_available: { desc: "Funny message when a new task is available in BANGLISH.", maxChars: 80 },
-  watch_tutorial: { desc: "Funny call-to-action to watch a tutorial in BANGLISH.", maxChars: 90 },
+const UI_COPY_ITEMS: Record<string, { desc: string; maxChars: number; fallback: string }> = {
+  tasks_header: { desc: "Funny header for the tasks page in BANGLISH.", maxChars: 80, fallback: "Kaj er palla ora kore, apni boshe chaye khao moshay!" },
+  loading_tasks: { desc: "Funny loading message for the tasks page in BANGLISH.", maxChars: 70, fallback: "Kaj ane barita hocche moshay, ektu dhoyro doro!" },
+  category_empty: { desc: "Funny message when no tasks in a category in BANGLISH.", maxChars: 80, fallback: "Ekhon kaj nai mama, cha-biskut khaiya asho!" },
+  your_tasks_first: { desc: "Funny label for user's own tasks shown first in BANGLISH.", maxChars: 60, fallback: "Apnar kaj sobar upore, rajar moto bosun!" },
+  video_tutorial_header: { desc: "Funny header for video tutorial section in BANGLISH.", maxChars: 90, fallback: "Shob parbo bhabe bose theko na, ektukhani tutorial dekhe ashbe?" },
+  video_panel_subtitle: { desc: "Funny subtitle under the video tutorial in BANGLISH.", maxChars: 90, fallback: "Dui minit video, baki jiboner jonno kaj shikhe nao!" },
+  daily_tip: { desc: "Funny practical social media growth tip in BANGLISH.", maxChars: 120, fallback: "Ajker tippony: Chat-e ghumash na, kaj shesh kore baki ghumum." },
+  dashboard_alert: { desc: "Funny alert reminding to do check-in in BANGLISH.", maxChars: 90, fallback: "Arey moshay! Check-in kore coins nibe na? Koshto kore kamaiben!" },
+  task_available: { desc: "Funny message when a new task is available in BANGLISH.", maxChars: 80, fallback: "Arey moshay! Kaj apnar jonno opekkha korche, ektu haat chalao!" },
+  watch_tutorial: { desc: "Funny call-to-action to watch a tutorial in BANGLISH.", maxChars: 90, fallback: "Shob parbo bhabe bose theko na, bolo to ektukhani tutorial ta dekhe ashbe?" },
 };
 
-async function getApiKey(supabase: any): Promise<string | null> {
-  let apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) {
-    const { data: settings } = await supabase
-      .from("app_settings")
-      .select("gemini_api_keys, ai_active_key_index")
-      .eq("id", 1)
-      .maybeSingle();
-    const keys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
-    if (keys.length > 0) {
-      const idx = settings?.ai_active_key_index ?? 0;
-      apiKey = keys[idx % keys.length];
-    }
-  }
-  return apiKey;
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function getAllKeys(supabase: any): Promise<string[]> {
+  const { data: settings } = await supabase
+    .from("app_settings")
+    .select("gemini_api_keys, ai_active_key_index")
+    .eq("id", 1)
+    .maybeSingle();
+  const keys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
+  const allKeys = keys.filter(Boolean);
+  const envKey = Deno.env.get("GEMINI_API_KEY");
+  if (envKey && !allKeys.includes(envKey)) allKeys.push(envKey);
+  return allKeys;
 }
 
 async function regenerateItem(
-  apiKey: string,
-  tableName: string,
-  fieldName: string,
+  allKeys: string[],
   desc: string,
   maxChars: number,
   currentValue: string,
@@ -67,28 +85,56 @@ Current value (do NOT repeat this, generate something completely different):
 
 Return ONLY the raw text string — no JSON, no markdown, no code fences, no quotes around it. Just the text.`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 1.6, maxOutputTokens: 200 },
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
-    const cleaned = text.replace(/```[a-z]*/g, "").replace(/```/g, "").replace(/^["']|["']$/g, "").trim();
-    if (!cleaned || cleaned.length > maxChars + 20) return null;
-    return cleaned;
-  } catch {
-    return null;
+  for (let k = 0; k < allKeys.length; k++) {
+    for (const model of GEMINI_MODELS) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 1.6, maxOutputTokens: 200 },
+            }),
+            signal: controller.signal,
+          },
+        );
+        if (!res.ok) {
+          const errBody = await res.text();
+          console.error(`ai-regenerate: Gemini ${model} key#${k} failed (${res.status}): ${errBody.slice(0, 300)}`);
+          continue;
+        }
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts
+          ?.map((p: { text?: string }) => p.text ?? "")
+          .join("") || "";
+        if (!text) {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} returned empty reply`);
+          continue;
+        }
+        const cleaned = text.replace(/```[a-z]*/g, "").replace(/```/g, "").replace(/^["']|["']$/g, "").trim();
+        if (!cleaned) {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} text cleaned to empty`);
+          continue;
+        }
+        return cleaned.slice(0, maxChars + 20);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} timed out after ${TIMEOUT_MS}ms`);
+        } else {
+          console.error(`ai-regenerate: Gemini ${model} key#${k} error:`, err);
+        }
+        continue;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
   }
+  console.error("ai-regenerate: All keys and models exhausted");
+  return null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -97,12 +143,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "POST only" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "POST only" }, 405);
   }
 
+  let table = "";
+  let field = "";
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -110,89 +155,94 @@ Deno.serve(async (req: Request) => {
     );
 
     const body = await req.json();
-    const { table, field } = body as { table: string; field: string };
+    table = body.table;
+    field = body.field;
 
     if (!table || !field) {
-      return new Response(JSON.stringify({ error: "Missing 'table' or 'field'" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Missing 'table' or 'field'" }, 400);
     }
 
     // Validate table and field
-    let itemDef: { desc: string; maxChars: number } | undefined;
+    let itemDef: { desc: string; maxChars: number; fallback: string } | undefined;
     if (table === "daily_ai_content") {
       itemDef = CONTENT_ITEMS[field];
     } else if (table === "daily_ai_ui_copy") {
       itemDef = UI_COPY_ITEMS[field];
     } else {
-      return new Response(JSON.stringify({ error: "Invalid table" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Invalid table" }, 400);
     }
 
     if (!itemDef) {
-      return new Response(JSON.stringify({ error: `Invalid field '${field}' for table '${table}'` }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: `Invalid field '${field}' for table '${table}'` }, 400);
     }
 
     const today = new Date().toISOString().split("T")[0];
 
-    // Fetch current row
-    const { data: row } = await supabase
+    const { data: row, error: rowError } = await supabase
       .from(table)
       .select("*")
       .eq("content_date", today)
       .maybeSingle();
 
+    if (rowError) {
+      console.error(`ai-regenerate: could not fetch today's row from ${table}:`, rowError);
+      return jsonResponse({ error: "Database read failed" }, 500);
+    }
+
     if (!row) {
-      return new Response(JSON.stringify({ error: "No content row for today" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "No content row for today" }, 404);
     }
 
     const currentValue = (row as Record<string, string>)[field] || "";
 
-    const apiKey = await getApiKey(supabase);
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "No Gemini API key configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const allKeys = await getAllKeys(supabase);
+    if (allKeys.length === 0) {
+      console.error("ai-regenerate: no Gemini API keys configured");
+      // Return fallback content instead of crashing
+      return jsonResponse({
+        field,
+        newValue: itemDef.fallback,
+        table,
+        fallback: true,
+        warning: "No API keys configured — using static fallback",
       });
     }
 
-    const newValue = await regenerateItem(apiKey, table, field, itemDef.desc, itemDef.maxChars, currentValue);
-    if (!newValue) {
-      return new Response(JSON.stringify({ error: "AI generation failed" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const newValue = await regenerateItem(allKeys, itemDef.desc, itemDef.maxChars, currentValue);
+
+    const finalValue = newValue || itemDef.fallback;
+    const usedFallback = newValue === null;
+
+    if (usedFallback) {
+      console.warn(`ai-regenerate: AI generation failed for ${table}.${field}, using fallback content`);
     }
 
-    // Update the database row
+    // Update the database row with service role (bypasses RLS)
     const { error: updateError } = await supabase
       .from(table)
-      .update({ [field]: newValue, updated_at: new Date().toISOString() })
+      .update({ [field]: finalValue, updated_at: new Date().toISOString() })
       .eq("content_date", today);
 
     if (updateError) {
-      return new Response(JSON.stringify({ error: updateError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error(`ai-regenerate: DB update failed for ${table}.${field}:`, updateError);
+      return jsonResponse({
+        field,
+        newValue: finalValue,
+        table,
+        fallback: usedFallback,
+        warning: usedFallback ? "AI failed, used fallback — but DB update failed too" : "DB update failed",
+      }, 500);
     }
 
-    return new Response(JSON.stringify({ field, newValue, table }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return jsonResponse({
+      field,
+      newValue: finalValue,
+      table,
+      fallback: usedFallback,
+      ...(usedFallback ? { warning: "AI generation failed — saved static fallback content instead" } : {}),
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err).slice(0, 200) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("ai-regenerate: unhandled error:", err);
+    return jsonResponse({ error: `Server error: ${String(err).slice(0, 200)}` }, 500);
   }
 });
