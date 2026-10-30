@@ -101,10 +101,21 @@ Deno.serve(async (req: Request) => {
   try {
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const today = new Date().toISOString().split("T")[0];
-    const prompt = `Create fresh bilingual content for a Bangladeshi social media task app. Return only valid JSON.
-Every *_bn value must be natural, grammatical PURE Bengali script only. Every *_en value must be professional natural English only. Each pair must express the same meaning. Do not use Banglish, transliteration, emoji, markdown, or fragments.
+    const prompt = `You are the ultimate chill best friend of the user on "Lumora IT", a Bangladeshi social media micro-task and SMM app.
+Your vibe: you're that hilarious, warm-hearted buddy who cracks jokes over adda, drops real growth tips like casual wisdom, and makes every interaction feel like a fun chat with your closest friend. You're witty, playful, a little sarcastic, but never mean — you roast with love.
+
+Create fresh bilingual content for today. Return only valid JSON.
+Every *_bn value must be natural, grammatical PURE Bengali script (বাংলা হরফ) only — like how friends actually talk in Bangla, warm and fun, never stiff or robotic. Every *_en value must be in natural, friendly, casual English — like texting your best friend. Each bn/en pair must express the same meaning with the same playful energy. Do not use Banglish, transliteration, emoji, markdown, or fragments.
+
+CRITICAL QUALITY RULES:
+- Each line MUST be a COMPLETE, grammatically correct sentence that feels like something a fun friend would say.
+- NEVER output 1-2 word broken phrases or fragments.
+- Be creative, engaging, and full of personality — not boring or formal.
+
 JSON keys: ${[...CONTENT_FIELDS, ...UI_FIELDS].join(", ")}
-Content keys must be funny_bn/funny_en and tip_bn/tip_en. UI keys must use the exact *_bn and *_en names listed above. Keep each value concise and complete.`;
+Content keys must be funny_bn/funny_en and tip_bn/tip_en — these are daily jokes and growth tips.
+UI keys must use the exact *_bn and *_en names listed above — these are short, punchy UI labels and messages.
+Keep each value concise, complete, and fun.`;
 
     const generated = await ask(db, prompt);
     const content = Object.fromEntries(CONTENT_FIELDS.map((field) => [field, valid(generated?.[field], field.endsWith("_bn")) ? generated![field].trim() : CONTENT_FALLBACK[field as keyof typeof CONTENT_FALLBACK]]));

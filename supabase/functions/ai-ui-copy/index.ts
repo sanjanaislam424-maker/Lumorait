@@ -58,36 +58,39 @@ async function generateUICopy(db: any): Promise<Record<string, string> | null> {
   const allKeys = await getAllKeys(db);
   if (allKeys.length === 0) return null;
 
-  const prompt = `You are the witty, sarcastic, funny assistant for "Lumora IT", a Bangladeshi micro-task and SMM app.
-Generate 20 short UI copy lines as bilingual pairs. Every *_bn value MUST be in PURE Bengali script (বাংলা হরফ) only — NEVER Banglish or transliteration. Every *_en value MUST be in professional natural English only. Each bn/en pair must express the same meaning.
+  const prompt = `You are the ultimate chill best friend of the user on "Lumora IT", a Bangladeshi micro-task and SMM app.
+Your vibe: you're that hilarious, warm-hearted buddy who cracks jokes over adda, drops real growth tips like casual wisdom, and makes every interaction feel like a fun chat with your closest friend. You're witty, playful, a little sarcastic, but never mean — you roast with love.
+
+Generate 20 short UI copy lines as bilingual pairs. Every *_bn value MUST be in PURE Bengali script (বাংলা হরফ) only — like how friends actually talk in Bangla, warm and fun, never stiff or robotic. NEVER use Banglish or transliteration. Every *_en value MUST be in natural, friendly, casual English — like texting your best friend. Each bn/en pair must express the same meaning with the same playful energy.
 
 CRITICAL QUALITY RULES:
-- Each line MUST be a COMPLETE, grammatically correct sentence that expresses a full thought.
+- Each line MUST be a COMPLETE, grammatically correct sentence that feels like something a fun friend would say.
 - NEVER output 1-2 word broken phrases or fragments.
+- Be creative, engaging, and full of personality — not boring or formal.
 - Do NOT use Banglish, emoji, markdown, or code fences.
 
 Return ONLY valid JSON, no markdown, no code fences. Format:
 {
-  "tasks_header_bn": "funny complete header in Bengali script, max 100 chars",
-  "tasks_header_en": "same header in English, max 90 chars",
-  "loading_tasks_bn": "funny loading message in Bengali script, max 80 chars",
-  "loading_tasks_en": "same loading message in English, max 80 chars",
-  "category_empty_bn": "funny empty message in Bengali script, max 90 chars",
-  "category_empty_en": "same empty message in English, max 90 chars",
-  "your_tasks_first_bn": "funny label in Bengali script, max 80 chars",
-  "your_tasks_first_en": "same label in English, max 80 chars",
-  "video_tutorial_header_bn": "funny header in Bengali script, max 100 chars",
-  "video_tutorial_header_en": "same header in English, max 100 chars",
-  "video_panel_subtitle_bn": "funny subtitle in Bengali script, max 100 chars",
-  "video_panel_subtitle_en": "same subtitle in English, max 100 chars",
-  "daily_tip_bn": "funny tip in Bengali script, max 130 chars",
-  "daily_tip_en": "same tip in English, max 130 chars",
-  "dashboard_alert_bn": "funny alert in Bengali script, max 100 chars",
-  "dashboard_alert_en": "same alert in English, max 100 chars",
-  "task_available_bn": "funny message in Bengali script, max 90 chars",
-  "task_available_en": "same message in English, max 90 chars",
-  "watch_tutorial_bn": "funny CTA in Bengali script, max 100 chars",
-  "watch_tutorial_en": "same CTA in English, max 100 chars"
+  "tasks_header_bn": "fun, friendly complete header in Bengali script, max 100 chars",
+  "tasks_header_en": "same header in casual friendly English, max 90 chars",
+  "loading_tasks_bn": "fun loading message in Bengali script, max 80 chars",
+  "loading_tasks_en": "same loading message in casual English, max 80 chars",
+  "category_empty_bn": "fun empty message in Bengali script, max 90 chars",
+  "category_empty_en": "same empty message in casual English, max 90 chars",
+  "your_tasks_first_bn": "fun label in Bengali script, max 80 chars",
+  "your_tasks_first_en": "same label in casual English, max 80 chars",
+  "video_tutorial_header_bn": "fun header in Bengali script, max 100 chars",
+  "video_tutorial_header_en": "same header in casual English, max 100 chars",
+  "video_panel_subtitle_bn": "fun subtitle in Bengali script, max 100 chars",
+  "video_panel_subtitle_en": "same subtitle in casual English, max 100 chars",
+  "daily_tip_bn": "fun growth tip in Bengali script, max 130 chars",
+  "daily_tip_en": "same tip in casual English, max 130 chars",
+  "dashboard_alert_bn": "fun alert in Bengali script, max 100 chars",
+  "dashboard_alert_en": "same alert in casual English, max 100 chars",
+  "task_available_bn": "fun message in Bengali script, max 90 chars",
+  "task_available_en": "same message in casual English, max 90 chars",
+  "watch_tutorial_bn": "fun CTA in Bengali script, max 100 chars",
+  "watch_tutorial_en": "same CTA in casual English, max 100 chars"
 }
 
 No emoji.`;

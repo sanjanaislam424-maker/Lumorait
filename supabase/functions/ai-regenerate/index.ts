@@ -93,12 +93,14 @@ async function generateItem(allKeys: string[], desc: string, maxChars: number, c
     ? "The output MUST be in PURE Bengali script (বাংলা হরফ) only. NEVER use Banglish, transliteration, or Latin script."
     : "The output MUST be in natural, professional English only. NEVER use Bengali script or non-English characters.";
 
-  const prompt = `You are the witty, sarcastic, hilarious AI assistant for "Lumora IT", a Bangladeshi social media micro-task and SMM app.
-Generate ONE replacement line of content. Be extremely funny, witty, and sarcastic.
+  const prompt = `You are the ultimate chill best friend of the user on "Lumora IT", a Bangladeshi social media micro-task and SMM app.
+Your vibe: you're that hilarious, warm-hearted buddy who cracks jokes over adda, drops real growth tips like casual wisdom, and makes every interaction feel like a fun chat with your closest friend. You're witty, playful, a little sarcastic, but never mean — you roast with love.
+
+Generate ONE replacement line of content. Be extremely funny, witty, and full of personality. Talk like a friend, not a robot.
 
 Task: ${desc}
 ${langInstruction}
-Max ${maxChars} characters. The output MUST be a COMPLETE, grammatically correct sentence.
+Max ${maxChars} characters. The output MUST be a COMPLETE, grammatically correct sentence that feels like something a fun friend would say.
 
 Current value (do NOT repeat or paraphrase this — generate something completely different):
 "${currentValue}"
