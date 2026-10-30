@@ -108,81 +108,75 @@ export function AuthScreen() {
         perspective: '1200px',
       }}
     >
-      {/* Blurred logo watermark — revealed when light is on */}
-      <AnimatePresence>
-        {lit && (
-          <motion.div
-            className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none"
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.85 }}
-            transition={{ duration: 0.5, ease: 'ease-in-out' }}
+      {/* Background wall logo — always rendered, opacity driven by light toggle */}
+      <div
+        className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none transition-all duration-700 ease-in-out"
+        style={{ opacity: lit ? 1 : 0 }}
+      >
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt=""
+            className="rounded-3xl object-cover transition-all duration-700 ease-in-out"
+            style={{
+              width: 384,
+              height: 384,
+              opacity: lit ? 0.2 : 0,
+              filter: 'blur(12px) saturate(1.3)',
+              transition: 'opacity 700ms ease-in-out, filter 700ms ease-in-out',
+              boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
+            }}
+          />
+        ) : (
+          <div
+            className="rounded-3xl flex items-center justify-center font-bold transition-all duration-700 ease-in-out"
+            style={{
+              width: 384,
+              height: 384,
+              fontSize: 160,
+              background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+              opacity: lit ? 0.2 : 0,
+              filter: 'blur(12px) saturate(1.3)',
+              transition: 'opacity 700ms ease-in-out, filter 700ms ease-in-out',
+              boxShadow: '0 0 25px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.15)',
+              color: '#0a0301',
+            }}
           >
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt=""
-                className="rounded-3xl object-cover"
-                style={{
-                  width: 280,
-                  height: 280,
-                  opacity: 0.12,
-                  filter: 'blur(40px) saturate(1.3)',
-                  boxShadow: '0 0 120px rgba(251,191,36,0.25)',
-                }}
-              />
-            ) : (
-              <div
-                className="rounded-3xl flex items-center justify-center font-bold"
-                style={{
-                  width: 280,
-                  height: 280,
-                  fontSize: 120,
-                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                  opacity: 0.12,
-                  filter: 'blur(40px) saturate(1.3)',
-                  boxShadow: '0 0 120px rgba(251,191,36,0.25)',
-                  color: '#0a0301',
-                }}
-              >
-                L
-              </div>
-            )}
-          </motion.div>
+            L
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* Animated room illumination layer */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none z-0"
-        initial={false}
-        animate={{ opacity: lit ? 1 : 0 }}
-        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+      {/* Animated room illumination layer — warm indoor light when on */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0 transition-all duration-700 ease-in-out"
         style={{
+          opacity: lit ? 1 : 0,
           background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)',
+          transition: 'opacity 700ms ease-in-out',
         }}
       />
-      <motion.div
-        className="absolute inset-0 pointer-events-none z-0"
-        initial={false}
-        animate={{ opacity: lit ? 0 : 1 }}
-        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+      {/* Dark room baseline — visible when light is off */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0 transition-all duration-700 ease-in-out"
         style={{
+          opacity: lit ? 0 : 1,
           background: 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
+          transition: 'opacity 700ms ease-in-out',
         }}
       />
-      {/* Ambient volumetric glow — spring-driven ease-in-out expansion */}
-      <motion.div
-        className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none"
+      {/* Ambient volumetric glow */}
+      <div
+        className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-700 ease-in-out"
         style={{
           width: 800,
           height: 700,
           background: 'radial-gradient(ellipse, rgba(251,191,36,0.16) 0%, rgba(251,140,0,0.06) 30%, transparent 65%)',
           filter: 'blur(24px)',
-          x: '-50%',
+          opacity: lit ? 1 : 0,
+          transform: `translateX(-50%) scale(${lit ? 1 : 0.25})`,
+          transition: 'opacity 700ms ease-in-out, transform 700ms ease-in-out',
         }}
-        animate={{ opacity: lit ? 1 : 0, scale: lit ? 1 : 0.25 }}
-        transition={{ type: 'spring', stiffness: 120, damping: 14 }}
       />
 
       {/* Dust motes in light beam */}
@@ -706,11 +700,8 @@ function GlassCard3D({ children }: { children: React.ReactNode }) {
         ref={ref}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className="relative rounded-3xl p-6 overflow-hidden"
+        className="relative rounded-3xl p-6 overflow-hidden backdrop-blur-xl bg-white/10 dark:bg-black/25"
         style={{
-          background: 'rgba(15,20,35,0.35)',
-          backdropFilter: 'blur(24px) saturate(140%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(140%)',
           border: '1px solid rgba(251,191,36,0.18)',
           boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 30px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
           transformStyle: 'preserve-3d',
