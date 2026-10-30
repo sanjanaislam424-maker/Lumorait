@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 12_000;
 
 const CONTENT_FALLBACK = {
   funny_bn: "সোশ্যাল মিডিয়ায় ভাইরাল হতে গিয়ে নিজের অ্যাকাউন্ট হ্যাক খাওয়া — এটাই আসল ফ্রিল্যান্সিং সাফল্য!",

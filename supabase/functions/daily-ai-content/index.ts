@@ -38,7 +38,7 @@ function pick<T>(arr: T[]): T {
 }
 
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 12_000;
 
 async function getAllKeys(supabaseClient: any): Promise<string[]> {
   const { data: settings } = await supabaseClient

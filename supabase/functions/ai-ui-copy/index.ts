@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 12_000;
 
 const FALLBACK: Record<string, string> = {
   tasks_header: "Kaj er palla ora kore, apni boshe chaye khao moshay!",

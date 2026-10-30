@@ -70,7 +70,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
   const [limitReached, setLimitReached] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
-  const aiEndpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
+  const aiEndpoint = `${supabaseUrl}/functions/v1/ai-chat`;
   const countdown = useCountdown();
 
   const scrollToBottom = useCallback(() => {
@@ -253,7 +253,7 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
     try {
       const result = await streamAiReply({
         endpoint: aiEndpoint,
-        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        anonKey: supabaseAnonKey,
         messages: history,
         sessionId: sid,
         onText: (delta) => typewriter.push(delta),

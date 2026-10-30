@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 12_000;
 
 // Bengali text uses ~3x more tokens than English per character.
 // Give ample room so Gemini never truncates mid-sentence.
