@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, UserCog, Sparkles, RefreshCw, Menu, Clock } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { streamAiReply } from '@/lib/aiChatStream';
 import { createTypewriter } from '@/lib/typewriter';

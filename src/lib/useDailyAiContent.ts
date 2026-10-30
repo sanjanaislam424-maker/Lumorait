@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 
 export interface DailyAiContent {
   funny_bn: string;
@@ -88,10 +88,10 @@ export function useDailyAiContent(): { content: DailyAiContent; loading: boolean
         return;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-ai-content`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/daily-ai-content`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${supabaseAnonKey}`,
           'Content-Type': 'application/json',
         },
       });

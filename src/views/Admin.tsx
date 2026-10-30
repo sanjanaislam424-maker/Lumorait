@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
-import { supabase, Profile, TxRow } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey, Profile, TxRow } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
@@ -1583,9 +1583,9 @@ function AiKeysTab() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 60_000);
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-test-key`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/ai-test-key`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
         body: JSON.stringify({
           apiKey: key,
           messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
@@ -2113,11 +2113,11 @@ function AiContentTab() {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 45_000);
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-regenerate`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/ai-regenerate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${supabaseAnonKey}`,
         },
         body: JSON.stringify({ table, field }),
         signal: controller.signal,
@@ -2153,11 +2153,11 @@ function AiContentTab() {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 60_000);
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-regenerate-all`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/ai-regenerate-all`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${supabaseAnonKey}`,
         },
         signal: controller.signal,
       });

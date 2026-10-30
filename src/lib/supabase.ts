@@ -7,6 +7,9 @@ export const supabase = createClient(url, anonKey, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 
+export const supabaseUrl = (supabase as any).supabaseUrl as string;
+export const supabaseAnonKey = (supabase as any).supabaseKey as string;
+
 export type Profile = {
   id: string;
   phone: string | null;

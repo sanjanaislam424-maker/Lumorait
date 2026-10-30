@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 
 const STATIC_FALLBACKS: Record<string, string> = {
   tasksHeader: "Kaj er palla ora kore, apni boshe chaye khao moshay!",
@@ -89,9 +89,9 @@ async function fetchDailyCopy(): Promise<Record<string, string>> {
           copy[jsKey] = (dbRow as Record<string, string>)[dbKey] || STATIC_FALLBACKS[jsKey];
         }
       } else {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-ui-copy`, {
+        const res = await fetch(`${supabaseUrl}/functions/v1/ai-ui-copy`, {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}` },
         });
         if (res.ok) {
           const data = await res.json();
