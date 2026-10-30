@@ -56,14 +56,14 @@
 
 /* Theme: Dark — high contrast deep black */
 .theme-dark {
-  --neon-primary: #38bdf8;
-  --neon-secondary: #2563eb;
+  --neon-primary: #5eead4;
+  --neon-secondary: #60a5fa;
   --neon-accent: #22d3ee;
-  --neon-glow: rgba(56, 189, 248, 0.32);
+  --neon-glow: rgba(94, 234, 212, 0.3);
   --neon-bg: #020617;
-  --neon-card-bg: rgba(15, 23, 42, 0.72);
-  --neon-border: rgba(148, 163, 184, 0.22);
-  --neon-text: #e2e8f0;
+  --neon-card-bg: rgba(15, 23, 42, 0.82);
+  --neon-border: rgba(148, 163, 184, 0.25);
+  --neon-text: #f1f5f9;
   --neon-muted: #94a3b8;
 }
 
@@ -290,4 +290,122 @@ body {
 /* Particles: subtle in light theme */
 .theme-light .neon-particle {
   opacity: 0.15;
+}
+
+/* ============================================================
+   ADDITIONAL CONTRAST GUARANTEES
+   Ensure colored accent text stays bold and readable on every
+   theme. No faint or washed-out text anywhere.
+   ============================================================ */
+
+/* Amber/yellow accent text: ensure readability on light bg */
+.theme-light .text-amber-200,
+.theme-light .text-amber-100 {
+  color: #b45309 !important;
+}
+.theme-light .text-amber-300 {
+  color: #d97706 !important;
+}
+.theme-light .text-amber-400 {
+  color: #c2410c !important;
+}
+.theme-light .text-green-200,
+.theme-light .text-green-300 {
+  color: #15803d !important;
+}
+.theme-light .text-green-400 {
+  color: #16a34a !important;
+}
+.theme-light .text-cyan-300,
+.theme-light .text-cyan-400 {
+  color: #0e7490 !important;
+}
+.theme-light .text-blue-300,
+.theme-light .text-blue-400 {
+  color: #1d4ed8 !important;
+}
+.theme-light .text-red-300,
+.theme-light .text-red-400 {
+  color: #dc2626 !important;
+}
+.theme-light .text-pink-200,
+.theme-light .text-pink-300 {
+  color: #be185d !important;
+}
+.theme-light .text-fuchsia-300,
+.theme-light .text-fuchsia-400 {
+  color: #a21caf !important;
+}
+
+/* Amber/green accent backgrounds: keep readable on light */
+.theme-light .bg-amber-500\/10,
+.theme-light .bg-amber-500\/20 {
+  background: rgba(245, 158, 11, 0.12) !important;
+}
+.theme-light .bg-green-500\/10,
+.theme-light .bg-green-500\/20 {
+  background: rgba(22, 163, 74, 0.1) !important;
+}
+.theme-light .bg-green-500\/15 {
+  background: rgba(22, 163, 74, 0.12) !important;
+}
+.theme-light .bg-red-500\/10,
+.theme-light .bg-red-500\/15,
+.theme-light .bg-red-500\/20 {
+  background: rgba(220, 38, 38, 0.1) !important;
+}
+.theme-light .bg-blue-500\/10,
+.theme-light .bg-blue-500\/20 {
+  background: rgba(29, 78, 216, 0.1) !important;
+}
+.theme-light .bg-pink-500\/10,
+.theme-light .bg-pink-500\/20 {
+  background: rgba(190, 24, 93, 0.08) !important;
+}
+.theme-light .bg-fuchsia-500\/10,
+.theme-light .bg-fuchsia-500\/15 {
+  background: rgba(162, 28, 175, 0.08) !important;
+}
+.theme-light .bg-slate-700\/30 {
+  background: rgba(241, 245, 249, 0.6) !important;
+}
+.theme-light .bg-slate-800\/30 {
+  background: rgba(241, 245, 249, 0.5) !important;
+}
+
+/* Amber/green border accents: subtle but visible on light */
+.theme-light .border-amber-500\/20,
+.theme-light .border-amber-500\/30,
+.theme-light .border-amber-500\/50 {
+  border-color: rgba(180, 83, 9, 0.3) !important;
+}
+.theme-light .border-green-500\/20,
+.theme-light .border-green-500\/25,
+.theme-light .border-green-500\/30 {
+  border-color: rgba(21, 128, 61, 0.25) !important;
+}
+.theme-light .border-red-500\/20,
+.theme-light .border-red-500\/30 {
+  border-color: rgba(220, 38, 38, 0.25) !important;
+}
+.theme-light .border-blue-500\/20,
+.theme-light .border-blue-500\/50 {
+  border-color: rgba(29, 78, 216, 0.25) !important;
+}
+.theme-light .border-pink-500\/30 {
+  border-color: rgba(190, 24, 93, 0.2) !important;
+}
+
+/* Dark theme: boost muted text legibility */
+.theme-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+.theme-dark .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Ensure neon-text is never faint — bold weight fallback */
+.neon-text {
+  color: var(--neon-text);
+  font-weight: 500;
 }
