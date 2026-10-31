@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Ban, ShieldCheck, BadgeCheck } from 'lucide-react';
+import { Search, Ban, ShieldCheck, BadgeCheck, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button, EmptyState } from '@/components/ui';
 import { AdminUserDetailModal } from '@/components/admin/AdminUserDetailModal';
-import { AdminUserRow, UserFilter, adminErrorMessage, fetchAdminUsers } from '@/lib/adminUsers';
+import { AdminUserRow, UserFilter, fetchAdminUsers } from '@/lib/adminUsers';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+type PageSize = typeof PAGE_SIZE_OPTIONS[number];
 
 const FILTERS: { key: UserFilter; label: string }[] = [
-  { key: 'all', label: 'All users' },
-  { key: 'banned', label: 'Banned' },
+  { key: 'all', label: 'All Users' },
   { key: 'admin', label: 'Admins' },
+  { key: 'banned', label: 'Banned' },
   { key: 'kyc_verified', label: 'Verified' },
-  { key: 'kyc_pending', label: 'Not verified' },
-  { key: 'low_balance', label: 'Low coins' },
+  { key: 'kyc_pending', label: 'Unverified' },
+  { key: 'low_balance', label: 'Low Coin' },
 ];
 
 function formatDate(value: string | null): string {
@@ -24,45 +25,64 @@ export function AdminUsersTab() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filter, setFilter] = useState<UserFilter>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(10);
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const requestRef = useRef(0);
 
   useEffect(() => {
-    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    const id = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
     return () => clearTimeout(id);
   }, [search]);
 
-  const load = async (append: boolean) => {
+  useEffect(() => {
     const requestId = ++requestRef.current;
     setLoading(true);
     setLoadError(null);
-    try {
-      const result = await fetchAdminUsers({
-        search: debouncedSearch,
-        filter,
-        offset: append ? rows.length : 0,
-        limit: PAGE_SIZE,
+    fetchAdminUsers({
+      search: debouncedSearch,
+      filter,
+      offset: (page - 1) * pageSize,
+      limit: pageSize,
+    })
+      .then((result) => {
+        if (requestId !== requestRef.current) return;
+        setTotal(result.total);
+        setRows(result.rows);
+      })
+      .catch((err: unknown) => {
+        if (requestId !== requestRef.current) return;
+        setRows([]);
+        setTotal(0);
+        setLoadError(err instanceof Error ? err.message : 'Could not load users. Please try again.');
+      })
+      .finally(() => {
+        if (requestId === requestRef.current) setLoading(false);
       });
-      if (requestId !== requestRef.current) return;
-      setTotal(result.total);
-      setRows(append ? [...rows, ...result.rows] : result.rows);
-    } catch (err) {
-      if (requestId === requestRef.current) setLoadError(adminErrorMessage(err, 'Could not load users. Please try again.'));
-    } finally {
-      if (requestId === requestRef.current) setLoading(false);
-    }
+  }, [debouncedSearch, filter, page, pageSize, reloadToken]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
+
+  const changeFilter = (next: UserFilter) => {
+    setFilter(next);
+    setPage(1);
   };
 
-  useEffect(() => {
-    load(false);
-    // Reload only when the search text or filter changes.
-  }, [debouncedSearch, filter]);
-
-  const selected = rows.find((r) => r.id === selectedId) ?? null;
+  const changePageSize = (next: PageSize) => {
+    setPageSize(next);
+    setPage(1);
+  };
 
   return (
     <div className="space-y-4">
@@ -80,7 +100,7 @@ export function AdminUsersTab() {
         {FILTERS.map((f) => (
           <button
             key={f.key}
-            onClick={() => setFilter(f.key)}
+            onClick={() => changeFilter(f.key)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${
               filter === f.key ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
@@ -90,12 +110,31 @@ export function AdminUsersTab() {
         ))}
       </div>
 
-      <p className="text-xs text-slate-500">
-        {loading && rows.length === 0 ? 'Loading users...' : `Showing ${rows.length} of ${total} users`}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">
+          {loading && rows.length === 0 ? 'Loading users...' : `Showing ${rangeStart}-${rangeEnd} of ${total} users`}
+        </p>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          Per page
+          <select
+            value={pageSize}
+            onChange={(e) => changePageSize(Number(e.target.value) as PageSize)}
+            className="bg-slate-700 border border-white/10 rounded-lg px-2 py-1 text-white text-xs outline-none focus:border-amber-500/50"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {loadError && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{loadError}</div>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 flex items-center justify-between gap-3">
+          <span className="text-sm text-red-300">{loadError}</span>
+          <Button variant="ghost" className="text-xs px-2 py-1 shrink-0" onClick={() => setReloadToken((t) => t + 1)}>
+            <RefreshCw size={12} className="inline mr-1" /> Retry
+          </Button>
+        </div>
       )}
 
       {!loading && !loadError && rows.length === 0 ? (
@@ -129,10 +168,14 @@ export function AdminUsersTab() {
         </div>
       )}
 
-      {rows.length < total && (
-        <div className="flex justify-center">
-          <Button variant="ghost" disabled={loading} onClick={() => load(true)}>
-            {loading ? 'Loading...' : 'Load more'}
+      {total > 0 && (
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="ghost" disabled={loading || page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            <ChevronLeft size={14} className="inline mr-1" /> Previous
+          </Button>
+          <span className="text-xs text-slate-400">Page {page} of {totalPages}</span>
+          <Button variant="ghost" disabled={loading || page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            Next <ChevronRight size={14} className="inline ml-1" />
           </Button>
         </div>
       )}
@@ -141,7 +184,7 @@ export function AdminUsersTab() {
         <AdminUserDetailModal
           user={selected}
           onClose={() => setSelectedId(null)}
-          onChanged={() => load(false)}
+          onChanged={() => setReloadToken((t) => t + 1)}
         />
       )}
     </div>

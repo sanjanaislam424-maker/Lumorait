@@ -76,10 +76,21 @@ export async function fetchAdminUsers(params: {
     p_limit: params.limit,
     p_offset: params.offset,
   });
-  if (error) throw error;
+  if (error) {
+    console.error('admin_list_users failed', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      params,
+    });
+    if (error.code === '42501') throw new Error('Your account does not have admin access.');
+    throw new Error('Could not load users. Please try again.');
+  }
   const payload = data as { total?: unknown; rows?: unknown } | null;
   if (!payload || typeof payload.total !== 'number' || !Array.isArray(payload.rows)) {
-    throw new Error('Unexpected user list response');
+    console.error('admin_list_users returned an unexpected shape', data);
+    throw new Error('Could not load users. Please try again.');
   }
   return { total: payload.total, rows: payload.rows as AdminUserRow[] };
 }
