@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Sparkles, Share2 } from 'lucide-react';
+import { Users, Sparkles } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { Card, CoinBadge } from '@/components/ui';
+import { ReferralActions } from '@/components/ReferralActions';
 import { supabase } from '@/lib/supabase';
 
 export function ReferView() {
@@ -19,10 +20,6 @@ export function ReferView() {
   }, [profile?.id]);
 
   if (!profile) return null;
-
-  const shareText = lang === 'bn'
-    ? `Lumora IT-তে যোগ দাও! আমার রেফার কোড: ${profile.referral_code}`
-    : `Join Lumora IT! Use my referral code: ${profile.referral_code}`;
 
   return (
     <div>
@@ -71,20 +68,7 @@ export function ReferView() {
           </div>
         </div>
 
-        {/* Share button */}
-        <button
-          onClick={() => {
-            if (navigator.share) {
-              navigator.share({ text: shareText });
-            } else {
-              navigator.clipboard?.writeText(shareText);
-            }
-          }}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-300 text-sm font-medium transition hover:bg-green-500/20"
-        >
-          <Share2 size={18} />
-          {lang === 'bn' ? 'রেফার লিঙ্ক শেয়ার করো' : 'Share referral link'}
-        </button>
+        <ReferralActions code={profile.referral_code ?? ''} />
 
         {/* 2-step reward breakdown */}
         <div className="grid grid-cols-2 gap-2 mt-3">

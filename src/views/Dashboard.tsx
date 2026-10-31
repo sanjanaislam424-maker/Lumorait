@@ -4,6 +4,7 @@ import { Coins, Flame, Gift, Trophy, Users, TrendingUp, ShieldCheck, Calendar, S
 import { useApp } from '@/lib/AppContext';
 import { WeatherHeader } from '@/components/WeatherHeader';
 import { Card, Button, CoinBadge, Modal } from '@/components/ui';
+import { ReferralActions } from '@/components/ReferralActions';
 import { supabase } from '@/lib/supabase';
 import { View } from '@/components/AppShell';
 import { useDailyAiContent } from '@/lib/useDailyAiContent';
@@ -196,12 +197,6 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
             <p className="text-sm text-slate-300">{t('inviteFriends')}</p>
             <div className="flex items-center gap-2 mt-1">
               <code className="text-amber-300 font-mono text-sm">{profile.referral_code}</code>
-              <button
-                onClick={() => { navigator.clipboard?.writeText(profile.referral_code || ''); }}
-                className="text-xs text-slate-400 hover:text-white"
-              >
-                Copy
-              </button>
             </div>
           </div>
           <div className="text-right">
@@ -209,6 +204,8 @@ export function Dashboard({ setView }: { setView: (v: View) => void }) {
             <p className="text-lg font-bold text-green-300">{referralStats.active}/{referralStats.total}</p>
           </div>
         </div>
+
+        <ReferralActions code={profile.referral_code ?? ''} />
 
         {/* 2-step reward breakdown */}
         <div className="grid grid-cols-2 gap-2 mt-3">

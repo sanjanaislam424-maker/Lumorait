@@ -7,13 +7,17 @@ import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 import { LoginBranding, logoBlurPx } from '@/lib/loginBranding';
 
+function readRefFromUrl() {
+  return new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase() ?? '';
+}
+
 export function AuthScreen({ embedded = false, branding }: { embedded?: boolean; branding?: LoginBranding }) {
   const ctx = useApp();
   const { t, lang, setLang, logoUrl } = ctx;
   const lighting = branding ?? ctx.loginBranding;
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup'>(() => (readRefFromUrl() ? 'signup' : 'login'));
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -22,7 +26,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
   const [showPwd, setShowPwd] = useState(false);
   const [pwdFocused, setPwdFocused] = useState(false);
   const [phoneFocused, setPhoneFocused] = useState(false);
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(readRefFromUrl);
   const [resetOpen, setResetOpen] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
