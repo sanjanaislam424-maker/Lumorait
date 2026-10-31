@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { SocialLinks } from '@/lib/profileDetails';
 
 export type ReviewType = 'good' | 'bad';
 
@@ -16,8 +17,11 @@ export type PublicProfile = {
   good_reviews: number;
   bad_reviews: number;
   badges: PublicBadge[];
+  skills: string[];
+  social_links: SocialLinks;
   contact: { phone: string | null; email: string | null; address: string | null } | null;
 };
+
 
 export type UserReview = {
   id: string;

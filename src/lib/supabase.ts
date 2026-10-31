@@ -43,8 +43,13 @@ export type Profile = {
   is_super_admin: boolean;
   bio: string | null;
   contact_email: string | null;
+  contact_phone: string | null;
+  show_phone: boolean;
+  show_email: boolean;
   address: string | null;
   share_contact_info: boolean;
+  social_links: Record<string, string> | null;
+  skills: string[] | null;
   level: number;
   xp_points: number;
   notify_tasks: boolean;

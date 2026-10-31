@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User as UserIcon, Mail, MapPin, Phone, ThumbsUp, ThumbsDown, Award, Trophy } from 'lucide-react';
+import { User as UserIcon, Mail, MapPin, Phone, ThumbsUp, ThumbsDown, Award, Trophy, ExternalLink, Pin } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { Modal } from '@/components/ui';
 import {
@@ -9,6 +9,7 @@ import {
   ReviewType,
   UserReview,
 } from '@/lib/reviews';
+import { PortfolioItem, SOCIAL_PLATFORMS, fetchPortfolio, toSafeHttpUrl } from '@/lib/profileDetails';
 
 const tierStyles: Record<string, string> = {
   bronze: 'text-amber-400 bg-amber-700/20 border-amber-700/30',
@@ -21,6 +22,7 @@ export function PublicProfileModal({ userId, onClose }: { userId: string | null;
   const { lang } = useApp();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [reviews, setReviews] = useState<UserReview[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [tab, setTab] = useState<ReviewType>('good');
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -30,15 +32,17 @@ export function PublicProfileModal({ userId, onClose }: { userId: string | null;
     let cancelled = false;
     setProfile(null);
     setReviews([]);
+    setPortfolio([]);
     setTab('good');
     setFailed(false);
     setLoading(true);
     (async () => {
       try {
-        const [p, r] = await Promise.all([fetchPublicProfile(userId), fetchReviews(userId)]);
+        const [p, r, w] = await Promise.all([fetchPublicProfile(userId), fetchReviews(userId), fetchPortfolio(userId)]);
         if (cancelled) return;
         setProfile(p);
         setReviews(r);
+        setPortfolio(w);
       } catch {
         if (!cancelled) setFailed(true);
       } finally {
@@ -52,6 +56,11 @@ export function PublicProfileModal({ userId, onClose }: { userId: string | null;
   const contact = profile?.contact;
   const hasContact = !!(contact && (contact.phone || contact.email || contact.address));
   const avgRating = Number(profile?.avg_rating ?? 0);
+  const socialEntries = SOCIAL_PLATFORMS.flatMap((p) => {
+    const href = toSafeHttpUrl(profile?.social_links?.[p.key] ?? '');
+    return href ? [{ key: p.key, label: p.label, href }] : [];
+  });
+  const skills = profile?.skills ?? [];
 
   const emptyText = lang === 'bn' ? 'এখনও কোনো রিভিউ নেই' : 'No reviews yet';
 
@@ -111,6 +120,65 @@ export function PublicProfileModal({ userId, onClose }: { userId: string | null;
                       <Award size={12} /> {b.label}
                     </span>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {skills.length > 0 && (
+              <div>
+                <p className="text-xs neon-muted mb-2">{lang === 'bn' ? 'দক্ষতা' : 'Skills'}</p>
+                <div className="flex flex-wrap gap-2">
+                  {skills.map((skill) => (
+                    <span key={skill} className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs font-medium">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {socialEntries.length > 0 && (
+              <div>
+                <p className="text-xs neon-muted mb-2">{lang === 'bn' ? 'লিংক' : 'Links'}</p>
+                <div className="flex flex-wrap gap-2">
+                  {socialEntries.map((s) => (
+                    <a
+                      key={s.key}
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-white/10 text-xs font-medium text-slate-200 hover:border-amber-500/50 hover:text-amber-200 transition"
+                    >
+                      <ExternalLink size={12} /> {s.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {portfolio.length > 0 && (
+              <div>
+                <p className="text-xs neon-muted mb-2">{lang === 'bn' ? 'কাজের নমুনা' : 'Portfolio'}</p>
+                <div className="space-y-2">
+                  {portfolio.map((w) => {
+                    const href = toSafeHttpUrl(w.url);
+                    if (!href) return null;
+                    return (
+                      <a
+                        key={w.id}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block rounded-xl bg-slate-800/60 border border-white/5 hover:border-amber-500/40 p-3 transition"
+                      >
+                        <p className="text-sm font-semibold neon-text flex items-center gap-1.5">
+                          {w.pinned && <Pin size={12} className="text-amber-400 shrink-0" />}
+                          <span className="truncate">{w.title}</span>
+                        </p>
+                        {w.description && <p className="text-xs neon-muted mt-1">{w.description}</p>}
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             )}

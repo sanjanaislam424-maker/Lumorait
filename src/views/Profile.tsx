@@ -7,6 +7,8 @@ import { useToast } from '@/components/Toast';
 import { ChatWidget } from '@/components/ChatWidget';
 import { PublicProfileModal } from '@/components/PublicProfileModal';
 import { PublicContactCard } from '@/components/PublicContactCard';
+import { SkillsAndLinksCard } from '@/components/SkillsAndLinksCard';
+import { PortfolioManager } from '@/components/PortfolioManager';
 import { PendingReviews } from '@/components/PendingReviews';
 import { uploadBrandingImage } from '@/lib/upload';
 
@@ -230,13 +232,17 @@ export function ProfileView() {
           </div>
           <div>
             <label className="text-xs neon-muted block mb-1">{t('bioLabel')}</label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t('bioPlaceholder')} rows={2} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 neon-text text-sm outline-none resize-none focus:border-amber-500/50" />
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t('bioPlaceholder')} rows={2} maxLength={280} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 neon-text text-sm outline-none resize-none focus:border-amber-500/50" />
           </div>
           <Button className="w-full" onClick={saveProfile}>{t('save')}</Button>
         </div>
       </Card>
 
       <PublicContactCard />
+
+      <SkillsAndLinksCard />
+
+      <PortfolioManager />
 
       <PendingReviews />
 
