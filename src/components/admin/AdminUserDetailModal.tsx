@@ -3,12 +3,14 @@ import { Modal } from '@/components/ui';
 import { AdminUserActivity } from '@/components/admin/AdminUserActivity';
 import { AdminUserContent } from '@/components/admin/AdminUserContent';
 import { AdminUserEditor } from '@/components/admin/AdminUserEditor';
+import { AdminUserSecurity } from '@/components/admin/AdminUserSecurity';
 import { AdminUserRow } from '@/lib/adminUsers';
 
-type Section = 'details' | 'activity' | 'content';
+type Section = 'details' | 'security' | 'activity' | 'content';
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: 'details', label: 'Details' },
+  { key: 'security', label: 'Security' },
   { key: 'activity', label: 'Activity' },
   { key: 'content', label: 'Content' },
 ];
@@ -42,6 +44,7 @@ export function AdminUserDetailModal({
         </div>
 
         {section === 'details' && <AdminUserEditor user={user} onChanged={onChanged} />}
+        {section === 'security' && <AdminUserSecurity user={user} />}
         {section === 'activity' && <AdminUserActivity userId={user.id} />}
         {section === 'content' && <AdminUserContent userId={user.id} onChanged={onChanged} />}
       </div>

@@ -13,7 +13,15 @@ export type ActivityKind =
   | 'transaction'
   | 'transfer'
   | 'task_submission'
+  | 'checkin'
+  | 'password_change'
   | 'credential_change';
+
+export type ActivityFilters = {
+  from: string | null;
+  to: string | null;
+  kinds: ActivityKind[];
+};
 
 export type ActivityRow = {
   id: string;
@@ -139,16 +147,34 @@ export async function resetUserPassword(userId: string, password: string): Promi
   }
 }
 
-export async function fetchUserActivity(userId: string): Promise<ActivityRow[]> {
-  const { data, error } = await supabase
-    .from('user_activity_log')
-    .select('id, kind, summary, actor_id, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (error) throw error;
-  return (data || []) as ActivityRow[];
+export const ACTIVITY_PAGE_SIZE = 50;
+
+export async function fetchUserActivity(
+  userId: string,
+  filters: ActivityFilters,
+  page: number,
+): Promise<{ total: number; rows: ActivityRow[] }> {
+  const { data, error } = await supabase.rpc('admin_list_user_activity', {
+    p_user_id: userId,
+    p_from: filters.from,
+    p_to: filters.to,
+    p_kinds: filters.kinds.length > 0 ? filters.kinds : null,
+    p_limit: ACTIVITY_PAGE_SIZE,
+    p_offset: (page - 1) * ACTIVITY_PAGE_SIZE,
+  });
+  if (error) {
+    console.error('admin_list_user_activity failed', { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    if (error.code === '42501') throw new Error('Your account does not have admin access.');
+    throw new Error('Could not load activity. Please try again.');
+  }
+  const payload = data as { total?: unknown; rows?: unknown } | null;
+  if (!payload || typeof payload.total !== 'number' || !Array.isArray(payload.rows)) {
+    console.error('admin_list_user_activity returned an unexpected shape', data);
+    throw new Error('Could not load activity. Please try again.');
+  }
+  return { total: payload.total, rows: payload.rows as ActivityRow[] };
 }
+
 
 export async function fetchUserTasks(userId: string): Promise<TaskRow[]> {
   const { data, error } = await supabase

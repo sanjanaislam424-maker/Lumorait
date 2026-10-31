@@ -5,6 +5,8 @@ import { ToastProvider } from '@/components/Toast';
 import { AuthScreen } from '@/components/AuthScreen';
 import { AppShell, View } from '@/components/AppShell';
 import { DeletionPendingModal } from '@/components/DeletionPendingModal';
+import { RequiredDetailsGate } from '@/components/RequiredDetailsGate';
+import { hasMissingRequiredDetails } from '@/lib/requiredDetails';
 import { Dashboard } from '@/views/Dashboard';
 import { Tasks } from '@/views/Tasks';
 import { Wallet } from '@/views/Wallet';
@@ -40,6 +42,10 @@ function Main() {
 
   if (profile.banned && view !== 'profile') {
     setView('profile');
+  }
+
+  if (hasMissingRequiredDetails(profile)) {
+    return <RequiredDetailsGate profile={profile} />;
   }
 
   return (
