@@ -746,6 +746,7 @@ function SettingsTab() {
         login_beam_enabled: lighting.beamEnabled,
         login_beam_spread: lighting.beamSpread,
         login_beam_opacity: lighting.beamOpacity,
+        login_beam_blur: lighting.beamBlur,
       }).eq('id', 1);
       if (error) { notify(error.message, 'error'); return; }
       lightingDirty.current = false;

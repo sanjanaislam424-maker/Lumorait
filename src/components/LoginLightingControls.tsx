@@ -11,8 +11,9 @@ const SLIDERS: { key: Exclude<keyof LoginBranding, 'beamEnabled'>; label: string
   { key: 'logoBlur', label: 'Background logo blur', hint: 'Soft depth-of-field blur on the logo wall. Keep it low for a crisp look.', unit: '', limits: LOGIN_BRANDING_LIMITS.logoBlur },
   { key: 'cardOpacity', label: 'Glass card opacity', hint: 'How solid the login card background is. Lower is clearer.', unit: '%', limits: LOGIN_BRANDING_LIMITS.cardOpacity },
   { key: 'cardBlur', label: 'Glass card blur', hint: 'Frosted blur behind the login card. Higher is more frosted.', unit: 'px', limits: LOGIN_BRANDING_LIMITS.cardBlur },
-  { key: 'beamSpread', label: 'Light beam spread', hint: 'How wide the cone of light opens toward the bottom of the page.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamSpread },
-  { key: 'beamOpacity', label: 'Light beam brightness', hint: 'How bright and glowing the overhead light beam looks.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamOpacity },
+  { key: 'beamSpread', label: 'Light radius', hint: 'How far the circular glow spreads from the bulb, from a compact glow to a wide one.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamSpread },
+  { key: 'beamBlur', label: 'Light blur / softness', hint: 'How soft and feathered the glow edge is. Higher blends it more smoothly into the background.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamBlur },
+  { key: 'beamOpacity', label: 'Light brightness', hint: 'The overall intensity of the glow.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamOpacity },
 ];
 
 export function LoginLightingControls({ value, onChange }: Props) {
@@ -27,7 +28,7 @@ export function LoginLightingControls({ value, onChange }: Props) {
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
         <div>
           <p className="text-sm text-white">Overhead light beam</p>
-          <p className="text-[11px] text-slate-500">Shows a cone of light from the chandelier when the light is on.</p>
+          <p className="text-[11px] text-slate-500">Shows a glow radiating from the bulb when the light is on.</p>
         </div>
         <button
           type="button"

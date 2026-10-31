@@ -6,6 +6,7 @@ export type LoginBranding = {
   beamEnabled: boolean;
   beamSpread: number;
   beamOpacity: number;
+  beamBlur: number;
 };
 
 export const DEFAULT_LOGIN_BRANDING: LoginBranding = {
@@ -16,6 +17,7 @@ export const DEFAULT_LOGIN_BRANDING: LoginBranding = {
   beamEnabled: true,
   beamSpread: 50,
   beamOpacity: 60,
+  beamBlur: 40,
 };
 
 export const LOGIN_BRANDING_LIMITS = {
@@ -25,6 +27,7 @@ export const LOGIN_BRANDING_LIMITS = {
   cardBlur: { min: 0, max: 40 },
   beamSpread: { min: 0, max: 100 },
   beamOpacity: { min: 0, max: 100 },
+  beamBlur: { min: 0, max: 100 },
 } as const;
 
 export function logoBlurPx(value: number) {
@@ -44,6 +47,7 @@ export function parseLoginBranding(raw: unknown): { logoUrl: string | null; bran
       beamEnabled: typeof row.beam_enabled === 'boolean' ? row.beam_enabled : DEFAULT_LOGIN_BRANDING.beamEnabled,
       beamSpread: num(row.beam_spread, DEFAULT_LOGIN_BRANDING.beamSpread),
       beamOpacity: num(row.beam_opacity, DEFAULT_LOGIN_BRANDING.beamOpacity),
+      beamBlur: num(row.beam_blur, DEFAULT_LOGIN_BRANDING.beamBlur),
     },
   };
 }

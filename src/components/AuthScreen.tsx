@@ -105,6 +105,8 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
     setLit((v) => !v);
   }, []);
 
+  const chandelierSway = useChandelierSway();
+
   return (
     <div
       className={`relative flex items-center justify-center p-4 overflow-hidden ${embedded ? 'h-full w-full' : 'min-h-screen'}`}
@@ -139,17 +141,14 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         )}
       </div>
 
-      {/* Overhead light cone: narrow at the chandelier, widening toward the bottom */}
+      {/* Radial glow radiating from the swinging bulb in all directions */}
       {lighting.beamEnabled && (
-        <div
-          className="absolute left-0 right-0 bottom-0 z-[2] pointer-events-none transition-opacity duration-500 ease-in-out"
-          style={{
-            top: 150,
-            opacity: lit ? lighting.beamOpacity / 100 : 0,
-            background: 'linear-gradient(180deg, rgba(255,251,235,0.9) 0%, rgba(251,191,36,0.4) 40%, rgba(251,191,36,0.08) 85%, rgba(251,191,36,0) 100%)',
-            clipPath: `polygon(46% 0, 54% 0, ${50 + 6 + lighting.beamSpread * 0.44}% 100%, ${50 - 6 - lighting.beamSpread * 0.44}% 100%)`,
-            filter: 'blur(8px)',
-          }}
+        <BulbGlow
+          sway={chandelierSway}
+          lit={lit}
+          radius={lighting.beamSpread}
+          blur={lighting.beamBlur}
+          brightness={lighting.beamOpacity}
         />
       )}
 
@@ -236,7 +235,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
       </motion.button>
 
       {/* 3D Chandelier + pull cord */}
-      <Chandelier3D lit={lit} onToggle={toggleLight} />
+      <Chandelier3D lit={lit} onToggle={toggleLight} sway={chandelierSway} />
 
       {/* Main content */}
       <div className="relative z-20 w-full max-w-md flex flex-col items-center">
@@ -744,11 +743,10 @@ function GlassCard3D({ children, lighting }: { children: React.ReactNode; lighti
 
 /* ============== 3D REALISTIC CHANDELIER ============== */
 
-function Chandelier3D({ lit, onToggle }: { lit: boolean; onToggle: () => void }) {
+function useChandelierSway() {
   const dragY = useMotionValue(0);
   const springY = useSpring(dragY, { stiffness: 120, damping: 14, mass: 1.5 });
   const [pulling, setPulling] = useState(false);
-  const cordRef = useRef<HTMLDivElement>(null);
 
   const sway = useSpring(0, { stiffness: 40, damping: 5, mass: 4 });
   useEffect(() => {
@@ -764,6 +762,39 @@ function Chandelier3D({ lit, onToggle }: { lit: boolean; onToggle: () => void })
 
   const fixtureX = useTransform([springY, sway], ([dy, sw]: number[]) => sw + dy * 0.08);
   const fixtureRotate = useTransform([springY, sway], ([dy, sw]: number[]) => sw + dy * 0.025);
+
+  return { dragY, pulling, setPulling, fixtureX, fixtureRotate };
+}
+
+type ChandelierSway = ReturnType<typeof useChandelierSway>;
+
+const BULB_PIVOT_DISTANCE = 118;
+const BULB_TOP = 124;
+
+function BulbGlow({ sway, lit, radius, blur, brightness }: { sway: ChandelierSway; lit: boolean; radius: number; blur: number; brightness: number }) {
+  const bulbX = useTransform([sway.fixtureX, sway.fixtureRotate], ([x, r]: number[]) => x + BULB_PIVOT_DISTANCE * Math.sin((r * Math.PI) / 180));
+  const size = 320 + radius * 10;
+  return (
+    <motion.div
+      className="absolute left-1/2 z-[2] pointer-events-none rounded-full transition-opacity duration-500 ease-in-out"
+      style={{
+        x: bulbX,
+        top: BULB_TOP,
+        width: size,
+        height: size,
+        marginLeft: -size / 2,
+        marginTop: -size / 2,
+        opacity: lit ? brightness / 100 : 0,
+        background: 'radial-gradient(circle, rgba(255,251,235,0.95) 0%, rgba(251,191,36,0.55) 22%, rgba(251,191,36,0.18) 50%, rgba(251,191,36,0) 70%)',
+        filter: `blur(${blur * 0.6}px)`,
+      }}
+    />
+  );
+}
+
+function Chandelier3D({ lit, onToggle, sway }: { lit: boolean; onToggle: () => void; sway: ChandelierSway }) {
+  const { dragY, pulling, setPulling, fixtureX, fixtureRotate } = sway;
+  const cordRef = useRef<HTMLDivElement>(null);
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     setPulling(false);
