@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle, XCircle, Info } from 'lucide-react';
+import { CheckCircle, XCircle, Info, AlertTriangle } from 'lucide-react';
 
-type Toast = { id: number; msg: string; type: 'success' | 'error' | 'info' };
+type Toast = { id: number; msg: string; type: 'success' | 'error' | 'info' | 'warning' };
 const ToastCtx = createContext<{ notify: (msg: string, type?: Toast['type']) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -30,6 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               {tst.type === 'success' && <CheckCircle size={18} className="text-green-400" />}
               {tst.type === 'error' && <XCircle size={18} className="text-red-400" />}
               {tst.type === 'info' && <Info size={18} className="text-blue-400" />}
+              {tst.type === 'warning' && <AlertTriangle size={18} className="text-amber-400" />}
               <span className="text-white text-sm">{tst.msg}</span>
             </motion.div>
           ))}

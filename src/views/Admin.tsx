@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
 import { AuthScreen } from '@/components/AuthScreen';
 import { LoginLightingControls } from '@/components/LoginLightingControls';
+import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { LoginBranding } from '@/lib/loginBranding';
 import { uploadBrandingImage } from '@/lib/upload';
 import { invalidateAiCopyCache } from '@/lib/microcopy';
@@ -112,7 +113,7 @@ export function Admin() {
       </div>
 
       {activeTab === 'overview' && <Overview />}
-      {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'users' && <AdminUsersTab />}
       {activeTab === 'staff' && <StaffTab />}
       {activeTab === 'verifications' && <VerificationsTab />}
       {activeTab === 'finance' && <FinanceTab />}
@@ -128,7 +129,6 @@ export function Admin() {
       {activeTab === 'ad_campaigns' && <AdCampaignsTab />}
       {activeTab === 'badges' && <BadgesTab />}
       {activeTab === 'ai_content' && <AiContentTab />}
-      {activeTab === 'branding' && <BrandingTab />}
     </div>
   );
 }
@@ -321,121 +321,6 @@ function StaffTab() {
             </label>
           ))}
           <Button className="w-full" onClick={savePerms}>{t('save')}</Button>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-function UsersTab() {
-  const { t, refreshProfile } = useApp();
-  const { notify } = useToast();
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [search, setSearch] = useState('');
-  const [editUser, setEditUser] = useState<Profile | null>(null);
-  const [editBalances, setEditBalances] = useState({ lumora_coins: 0, withdrawable_coins: 0, bonus_coins: 0, cash_balance: 0, withdrawable_balance: 0 });
-
-  const load = async () => {
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(50);
-    setUsers(data as Profile[] || []);
-  };
-  useEffect(() => { load(); }, []);
-
-  const filtered = users.filter((u) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (u.full_name || '').toLowerCase().includes(q) || (u.phone || '').toLowerCase().includes(q);
-  });
-
-  const toggleBan = async (u: Profile) => {
-    await supabase.from('profiles').update({ banned: !u.banned }).eq('id', u.id);
-    notify(u.banned ? 'Unbanned' : 'Banned', 'success');
-    load();
-  };
-
-  const openEdit = (u: Profile) => {
-    setEditUser(u);
-    setEditBalances({
-      lumora_coins: u.lumora_coins,
-      withdrawable_coins: u.withdrawable_coins || 0,
-      bonus_coins: u.bonus_coins || 0,
-      cash_balance: u.cash_balance || 0,
-      withdrawable_balance: u.withdrawable_balance ?? u.cash_balance ?? 0,
-    });
-  };
-
-  const saveBalances = async () => {
-    if (!editUser) return;
-    const updates = {
-      lumora_coins: editBalances.lumora_coins,
-      withdrawable_coins: editBalances.withdrawable_coins,
-      bonus_coins: editBalances.bonus_coins,
-      cash_balance: editBalances.cash_balance,
-      withdrawable_balance: editBalances.withdrawable_balance,
-    };
-    await supabase.from('profiles').update(updates).eq('id', editUser.id);
-    const delta = editBalances.lumora_coins - editUser.lumora_coins;
-    if (delta !== 0) {
-      await supabase.from('transactions').insert({ user_id: editUser.id, type: 'admin_adjust', amount: delta, status: 'completed', note: `Admin adjustment: coins ${delta > 0 ? '+' : ''}${delta}` });
-    }
-    notify(t('saved'), 'success');
-    setEditUser(null);
-    load();
-    refreshProfile();
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('searchUsers')}
-          className="w-full bg-slate-700 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm outline-none focus:border-amber-500/50"
-        />
-      </div>
-
-      {filtered.length === 0 ? <EmptyState message={t('users')} /> : filtered.map((u) => (
-        <div key={u.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-white font-medium truncate">{u.full_name || u.phone || 'User'}</p>
-            <p className="text-xs text-slate-500">
-              {u.role} • {u.lumora_coins} {t('lumoraCoins')} • {(u.cash_balance || 0)} BDT
-              {u.banned && ' • BANNED'}
-            </p>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => openEdit(u)}>{t('adjustCoins')}</Button>
-            <Button variant={u.banned ? 'ghost' : 'danger'} className="text-xs px-2 py-1" onClick={() => toggleBan(u)}>{u.banned ? 'Unban' : t('ban')}</Button>
-          </div>
-        </div>
-      ))}
-
-      <Modal open={!!editUser} onClose={() => setEditUser(null)} title={t('adjustCoins')}>
-        <div className="space-y-3">
-          <p className="text-sm text-slate-400">{editUser?.full_name || editUser?.phone}</p>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">{t('adjustCash')}</label>
-            <input type="number" value={editBalances.cash_balance} onChange={(e) => setEditBalances({ ...editBalances, cash_balance: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Withdrawable Balance (BDT)</label>
-            <input type="number" value={editBalances.withdrawable_balance} onChange={(e) => setEditBalances({ ...editBalances, withdrawable_balance: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">{t('lumoraCoins')} (Total)</label>
-            <input type="number" value={editBalances.lumora_coins} onChange={(e) => setEditBalances({ ...editBalances, lumora_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">{t('adjustWithdrawable')}</label>
-            <input type="number" value={editBalances.withdrawable_coins} onChange={(e) => setEditBalances({ ...editBalances, withdrawable_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">{t('adjustBonus')}</label>
-            <input type="number" value={editBalances.bonus_coins} onChange={(e) => setEditBalances({ ...editBalances, bonus_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-          </div>
-          <Button className="w-full" onClick={saveBalances}>{t('save')}</Button>
         </div>
       </Modal>
     </div>

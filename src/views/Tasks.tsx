@@ -325,6 +325,8 @@ function CategoryPage({
   onEdit: (task: TaskRow) => void;
   t: (key: any) => string;
 }) {
+  const { lang, aiTone } = useApp();
+  const microcopy = createMicrocopy(lang, aiTone);
   const embedUrl = toEmbedUrl(categoryData?.video_tutorial_url || '');
 
   const categoryTasks = (tasks || []).filter((tk) => tk && tk.platform === categoryName && (tk.status === 'open' || (tk.creator_id === profile?.id && tk.status !== 'completed')) && tk.filled < tk.slots);

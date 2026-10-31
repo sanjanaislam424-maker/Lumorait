@@ -25,13 +25,17 @@
       "hasChanged": false,
       "hash": "0e8b93cd4d95b2d7ebe0092694b120cd7cd672ace918f13e3dc43aa748128d1d"
     },
+    "delete-user-account": {
+      "hasChanged": false,
+      "hash": "1e14ab446b7a62c19d1d305223654174454f717ef82a20677402f2ed6fa9e845"
+    },
     "process-promotion-charges": {
       "hasChanged": false,
       "hash": "637c9994edbb1441c6b1a090bb74fec131f0bbcbc60a257d14db373ba52b60aa"
     },
-    "delete-user-account": {
+    "admin-reset-password": {
       "hasChanged": false,
-      "hash": "1e14ab446b7a62c19d1d305223654174454f717ef82a20677402f2ed6fa9e845"
+      "hash": "e41b0fab48a941186e3ce7a73d1e53c205e96c015644399e06a10280e3532ed3"
     }
   }
 }

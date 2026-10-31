@@ -29,3 +29,7 @@ entrypoint = "./functions/ai-regenerate-all/index.ts"
 [functions.delete-user-account]
 verify_jwt = true
 entrypoint = "./functions/delete-user-account/index.ts"
+
+[functions.admin-reset-password]
+verify_jwt = true
+entrypoint = "./functions/admin-reset-password/index.ts"
