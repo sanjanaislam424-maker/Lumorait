@@ -126,6 +126,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
       {/* Admin-uploaded login background image (base layer, full-bleed) */}
       {loginBackgroundUrl && (
         <div
+          key={loginBackgroundUrl}
           className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
           style={{ opacity: 1 }}
         >

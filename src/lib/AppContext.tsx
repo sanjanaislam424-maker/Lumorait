@@ -133,6 +133,7 @@ type AppState = {
   loginBranding: LoginBranding;
   loginBackgroundUrl: string | null;
   refreshLogo: () => Promise<void>;
+  setBrandingOverride: (override: { logoUrl?: string | null; loginBackgroundUrl?: string | null }) => void;
   setLang: (l: Lang) => void;
   setThemeMode: (tm: ThemeMode) => void;
   setAiTone: (tone: AiTone) => void;
@@ -254,6 +255,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await logoChannelRef.current?.send({ type: 'broadcast', event: 'logo_changed', payload: {} });
   }, [fetchBranding]);
 
+  const setBrandingOverride = useCallback((override: { logoUrl?: string | null; loginBackgroundUrl?: string | null }) => {
+    if (override.logoUrl !== undefined) setLogoUrl(override.logoUrl);
+    if (override.loginBackgroundUrl !== undefined) setLoginBackgroundUrl(override.loginBackgroundUrl);
+  }, []);
+
   // Dynamically update browser favicon whenever the logo changes
   useEffect(() => {
     const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
@@ -320,7 +326,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, loginBackgroundUrl, refreshLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, loginBackgroundUrl, refreshLogo, setBrandingOverride, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );

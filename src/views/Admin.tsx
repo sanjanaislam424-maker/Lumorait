@@ -603,7 +603,7 @@ function DisputesTab() {
 }
 
 function SettingsTab() {
-  const { t, refreshLogo, loginBranding } = useApp();
+  const { t, refreshLogo, loginBranding, setBrandingOverride } = useApp();
   const { notify } = useToast();
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -687,16 +687,20 @@ function SettingsTab() {
     try {
       const { url, error } = await uploadBrandingImage(file, 'logo');
       if (error || !url) { notify(error || 'Upload failed', 'error'); return; }
-      await supabase.from('app_settings').update({ app_logo_url: url }).eq('id', 1);
+      const { error: dbError } = await supabase.from('app_settings').update({ app_logo_url: url }).eq('id', 1);
+      if (dbError) { notify('Failed to save: ' + dbError.message, 'error'); return; }
       setS((prev: any) => ({ ...prev, app_logo_url: url }));
+      setBrandingOverride({ logoUrl: url });
       await refreshLogo();
       notify(t('saved'), 'success');
     } finally { setLogoUploading(false); }
   };
 
   const removeLogo = async () => {
-    await supabase.from('app_settings').update({ app_logo_url: null }).eq('id', 1);
+    const { error: dbError } = await supabase.from('app_settings').update({ app_logo_url: null }).eq('id', 1);
+    if (dbError) { notify('Failed to remove: ' + dbError.message, 'error'); return; }
     setS((prev: any) => ({ ...prev, app_logo_url: null }));
+    setBrandingOverride({ logoUrl: null });
     await refreshLogo();
     notify(t('saved'), 'success');
   };
@@ -711,6 +715,7 @@ function SettingsTab() {
       const { error: dbError } = await supabase.from('app_settings').update({ login_background_url: url }).eq('id', 1);
       if (dbError) { notify('Failed to save: ' + dbError.message, 'error'); return; }
       setS((prev: any) => ({ ...prev, login_background_url: url }));
+      setBrandingOverride({ loginBackgroundUrl: url });
       await refreshLogo();
       notify(t('saved'), 'success');
     } finally { setBgUploading(false); }
@@ -720,6 +725,7 @@ function SettingsTab() {
     const { error: dbError } = await supabase.from('app_settings').update({ login_background_url: null }).eq('id', 1);
     if (dbError) { notify('Failed to remove: ' + dbError.message, 'error'); return; }
     setS((prev: any) => ({ ...prev, login_background_url: null }));
+    setBrandingOverride({ loginBackgroundUrl: null });
     await refreshLogo();
     notify(t('saved'), 'success');
   };
