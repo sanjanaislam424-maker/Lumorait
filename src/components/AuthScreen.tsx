@@ -139,6 +139,19 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         )}
       </div>
 
+      {/* Overhead light cone: narrow at the chandelier, widening toward the bottom */}
+      {lighting.beamEnabled && (
+        <div
+          className="absolute inset-0 z-[2] pointer-events-none transition-opacity duration-500 ease-in-out"
+          style={{
+            opacity: lit ? lighting.beamOpacity / 100 : 0,
+            background: 'linear-gradient(180deg, rgba(255,251,235,0.9) 0%, rgba(251,191,36,0.4) 40%, rgba(251,191,36,0.08) 85%, rgba(251,191,36,0) 100%)',
+            clipPath: `polygon(46% 0, 54% 0, ${50 + 6 + lighting.beamSpread * 0.44}% 100%, ${50 - 6 - lighting.beamSpread * 0.44}% 100%)`,
+            filter: 'blur(8px)',
+          }}
+        />
+      )}
+
       {/* Animated room illumination layer — warm indoor light when on */}
       <div
         className="absolute inset-0 pointer-events-none z-0 transition-all duration-500 ease-in-out"

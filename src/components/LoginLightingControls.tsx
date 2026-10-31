@@ -6,11 +6,13 @@ type Props = {
   onChange: (patch: Partial<LoginBranding>) => void;
 };
 
-const SLIDERS: { key: keyof LoginBranding; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
+const SLIDERS: { key: Exclude<keyof LoginBranding, 'beamEnabled'>; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
   { key: 'logoOpacity', label: 'Background logo opacity', hint: 'How strong the logo wall looks when the light is on.', unit: '%', limits: LOGIN_BRANDING_LIMITS.logoOpacity },
   { key: 'logoBlur', label: 'Background logo blur', hint: 'Soft depth-of-field blur on the logo wall. Keep it low for a crisp look.', unit: '', limits: LOGIN_BRANDING_LIMITS.logoBlur },
   { key: 'cardOpacity', label: 'Glass card opacity', hint: 'How solid the login card background is. Lower is clearer.', unit: '%', limits: LOGIN_BRANDING_LIMITS.cardOpacity },
   { key: 'cardBlur', label: 'Glass card blur', hint: 'Frosted blur behind the login card. Higher is more frosted.', unit: 'px', limits: LOGIN_BRANDING_LIMITS.cardBlur },
+  { key: 'beamSpread', label: 'Light beam spread', hint: 'How wide the cone of light opens toward the bottom of the page.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamSpread },
+  { key: 'beamOpacity', label: 'Light beam brightness', hint: 'How bright and glowing the overhead light beam looks.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamOpacity },
 ];
 
 export function LoginLightingControls({ value, onChange }: Props) {
@@ -21,6 +23,23 @@ export function LoginLightingControls({ value, onChange }: Props) {
         <h3 className="font-semibold text-white">Login page lighting</h3>
       </div>
       <p className="text-xs text-slate-400 mb-4">Changes appear in the preview below as you move the sliders and save automatically for the live login page.</p>
+
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
+        <div>
+          <p className="text-sm text-white">Overhead light beam</p>
+          <p className="text-[11px] text-slate-500">Shows a cone of light from the chandelier when the light is on.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={value.beamEnabled}
+          onClick={() => onChange({ beamEnabled: !value.beamEnabled })}
+          className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${value.beamEnabled ? 'bg-amber-400' : 'bg-slate-700'}`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${value.beamEnabled ? 'translate-x-5' : ''}`} />
+        </button>
+      </div>
+
       <div className="space-y-4">
         {SLIDERS.map((s) => {
           const current = value[s.key];

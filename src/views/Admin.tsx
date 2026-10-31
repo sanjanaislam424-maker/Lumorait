@@ -743,6 +743,9 @@ function SettingsTab() {
         login_logo_blur: lighting.logoBlur,
         login_card_opacity: lighting.cardOpacity,
         login_card_blur: lighting.cardBlur,
+        login_beam_enabled: lighting.beamEnabled,
+        login_beam_spread: lighting.beamSpread,
+        login_beam_opacity: lighting.beamOpacity,
       }).eq('id', 1);
       if (error) { notify(error.message, 'error'); return; }
       lightingDirty.current = false;
