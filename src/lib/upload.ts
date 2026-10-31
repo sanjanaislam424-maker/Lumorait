@@ -9,12 +9,14 @@ export async function uploadBrandingImage(
 
   const { error: uploadError } = await supabase.storage
     .from('branding')
-    .upload(fileName, file, { cacheControl: '3600', upsert: false });
+    .upload(fileName, file, { cacheControl: '3600', upsert: true });
 
   if (uploadError) {
     return { url: null, error: uploadError.message };
   }
 
   const { data } = supabase.storage.from('branding').getPublicUrl(fileName);
-  return { url: data.publicUrl, error: null };
+  const baseUrl = data.publicUrl;
+  const cacheBustedUrl = baseUrl.includes('?') ? `${baseUrl}&t=${Date.now()}` : `${baseUrl}?t=${Date.now()}`;
+  return { url: cacheBustedUrl, error: null };
 }

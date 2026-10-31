@@ -708,7 +708,8 @@ function SettingsTab() {
     try {
       const { url, error } = await uploadBrandingImage(file, 'login-backgrounds');
       if (error || !url) { notify(error || 'Upload failed', 'error'); return; }
-      await supabase.from('app_settings').update({ login_background_url: url }).eq('id', 1);
+      const { error: dbError } = await supabase.from('app_settings').update({ login_background_url: url }).eq('id', 1);
+      if (dbError) { notify('Failed to save: ' + dbError.message, 'error'); return; }
       setS((prev: any) => ({ ...prev, login_background_url: url }));
       await refreshLogo();
       notify(t('saved'), 'success');
@@ -716,7 +717,8 @@ function SettingsTab() {
   };
 
   const removeBg = async () => {
-    await supabase.from('app_settings').update({ login_background_url: null }).eq('id', 1);
+    const { error: dbError } = await supabase.from('app_settings').update({ login_background_url: null }).eq('id', 1);
+    if (dbError) { notify('Failed to remove: ' + dbError.message, 'error'); return; }
     setS((prev: any) => ({ ...prev, login_background_url: null }));
     await refreshLogo();
     notify(t('saved'), 'success');

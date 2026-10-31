@@ -17,6 +17,11 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
   const lighting = branding ?? ctx.loginBranding;
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
+
+  useEffect(() => {
+    if (!embedded) ctx.refreshLogo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded]);
   const [mode, setMode] = useState<'login' | 'signup'>(() => (readRefFromUrl() ? 'signup' : 'login'));
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
