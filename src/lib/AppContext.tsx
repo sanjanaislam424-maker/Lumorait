@@ -131,6 +131,7 @@ type AppState = {
   aiTone: AiTone;
   logoUrl: string | null;
   loginBranding: LoginBranding;
+  loginBackgroundUrl: string | null;
   refreshLogo: () => Promise<void>;
   setLang: (l: Lang) => void;
   setThemeMode: (tm: ThemeMode) => void;
@@ -154,6 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => resolveTheme(localStorage.getItem('lumora_theme')));
   const [aiTone, setAiToneState] = useState<AiTone>(() => resolveAiTone(localStorage.getItem('lumora_ai_tone')));
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [loginBackgroundUrl, setLoginBackgroundUrl] = useState<string | null>(null);
   const [loginBranding, setLoginBranding] = useState<LoginBranding>(DEFAULT_LOGIN_BRANDING);
 
   // Resolve actual theme from mode + system preference
@@ -224,9 +226,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchBranding = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_public_login_branding');
-    if (error) { setLogoUrl(null); setLoginBranding(DEFAULT_LOGIN_BRANDING); return; }
+    if (error) { setLogoUrl(null); setLoginBackgroundUrl(null); setLoginBranding(DEFAULT_LOGIN_BRANDING); return; }
     const parsed = parseLoginBranding(data);
     setLogoUrl(parsed.logoUrl);
+    setLoginBackgroundUrl(parsed.branding.backgroundUrl);
     setLoginBranding(parsed.branding);
   }, []);
 
@@ -317,7 +320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, refreshLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, loginBackgroundUrl, refreshLogo, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );

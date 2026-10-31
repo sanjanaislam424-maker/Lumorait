@@ -1,4 +1,5 @@
 export type LoginBranding = {
+  backgroundUrl: string | null;
   logoOpacity: number;
   logoBlur: number;
   cardOpacity: number;
@@ -10,6 +11,7 @@ export type LoginBranding = {
 };
 
 export const DEFAULT_LOGIN_BRANDING: LoginBranding = {
+  backgroundUrl: null,
   logoOpacity: 80,
   logoBlur: 2,
   cardOpacity: 25,
@@ -40,6 +42,7 @@ export function parseLoginBranding(raw: unknown): { logoUrl: string | null; bran
   return {
     logoUrl: typeof row.logo_url === 'string' && row.logo_url ? row.logo_url : null,
     branding: {
+      backgroundUrl: typeof row.login_background_url === 'string' && row.login_background_url ? row.login_background_url : null,
       logoOpacity: num(row.logo_opacity, DEFAULT_LOGIN_BRANDING.logoOpacity),
       logoBlur: num(row.logo_blur, DEFAULT_LOGIN_BRANDING.logoBlur),
       cardOpacity: num(row.card_opacity, DEFAULT_LOGIN_BRANDING.cardOpacity),

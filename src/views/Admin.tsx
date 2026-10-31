@@ -608,6 +608,8 @@ function SettingsTab() {
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileRef = useRef<HTMLInputElement>(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const bgFileRef = useRef<HTMLInputElement>(null);
   const [previewLit, setPreviewLit] = useState(false);
   const [promoTiers, setPromoTiers] = useState<{ duration_days: number; label: string; free_cost: number; pro_cost: number; vip_cost: number; daily_rate_after_lock_free?: number; daily_rate_after_lock_pro?: number; daily_rate_after_lock_vip?: number; daily_rate_after_lock?: number }[]>([]);
   const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate_after_lock_free: 0, daily_rate_after_lock_pro: 0, daily_rate_after_lock_vip: 0 });
@@ -699,6 +701,27 @@ function SettingsTab() {
     notify(t('saved'), 'success');
   };
 
+  const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBgUploading(true);
+    try {
+      const { url, error } = await uploadBrandingImage(file, 'login-backgrounds');
+      if (error || !url) { notify(error || 'Upload failed', 'error'); return; }
+      await supabase.from('app_settings').update({ login_background_url: url }).eq('id', 1);
+      setS((prev: any) => ({ ...prev, login_background_url: url }));
+      await refreshLogo();
+      notify(t('saved'), 'success');
+    } finally { setBgUploading(false); }
+  };
+
+  const removeBg = async () => {
+    await supabase.from('app_settings').update({ login_background_url: null }).eq('id', 1);
+    setS((prev: any) => ({ ...prev, login_background_url: null }));
+    await refreshLogo();
+    notify(t('saved'), 'success');
+  };
+
   const save = async () => {
     await supabase.from('app_settings').update({
       bdt_to_coin: s.bdt_to_coin, min_deposit_bdt: s.min_deposit_bdt,
@@ -747,6 +770,38 @@ function SettingsTab() {
             </Button>
             {s.app_logo_url && (
               <Button variant="danger" className="text-xs px-3 py-2" onClick={removeLogo}><Trash2 size={14} /></Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+
+    {/* Login Background Image */}
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <ImageIcon size={18} className="text-amber-400" />
+        <h3 className="font-semibold text-white">Login Background Image</h3>
+      </div>
+      <p className="text-xs text-slate-400 mb-3">Upload a background or feature image for the login screen. It appears behind the chandelier and login card. Recommended: wide landscape image, at least 1920x1080.</p>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="shrink-0">
+          {s.login_background_url ? (
+            <img src={s.login_background_url} alt="Login background" className="w-28 h-16 rounded-xl object-cover border border-white/10" />
+          ) : (
+            <div className="w-28 h-16 rounded-xl flex items-center justify-center bg-slate-700/50 border border-white/10">
+              <ImageIcon size={20} className="text-slate-600" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-xs text-slate-400 mb-2">{s.login_background_url ? 'Current background uploaded' : 'No background image set'}</p>
+          <div className="flex gap-2">
+            <input ref={bgFileRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
+            <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => bgFileRef.current?.click()} disabled={bgUploading}>
+              {bgUploading ? <><ImageIcon size={14} /> Uploading...</> : <><Upload size={14} /> Upload Background</>}
+            </Button>
+            {s.login_background_url && (
+              <Button variant="danger" className="text-xs px-3 py-2" onClick={removeBg}><Trash2 size={14} /></Button>
             )}
           </div>
         </div>

@@ -6,7 +6,7 @@ type Props = {
   onChange: (patch: Partial<LoginBranding>) => void;
 };
 
-const SLIDERS: { key: Exclude<keyof LoginBranding, 'beamEnabled'>; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
+const SLIDERS: { key: Exclude<keyof LoginBranding, 'beamEnabled' | 'backgroundUrl'>; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
   { key: 'logoOpacity', label: 'Background logo opacity', hint: 'How strong the logo wall looks when the light is on.', unit: '%', limits: LOGIN_BRANDING_LIMITS.logoOpacity },
   { key: 'logoBlur', label: 'Background logo blur', hint: 'Soft depth-of-field blur on the logo wall. Keep it low for a crisp look.', unit: '', limits: LOGIN_BRANDING_LIMITS.logoBlur },
   { key: 'cardOpacity', label: 'Glass card opacity', hint: 'How solid the login card background is. Lower is clearer.', unit: '%', limits: LOGIN_BRANDING_LIMITS.cardOpacity },

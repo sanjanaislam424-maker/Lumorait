@@ -13,7 +13,7 @@ function readRefFromUrl() {
 
 export function AuthScreen({ embedded = false, branding }: { embedded?: boolean; branding?: LoginBranding }) {
   const ctx = useApp();
-  const { t, lang, setLang, logoUrl } = ctx;
+  const { t, lang, setLang, logoUrl, loginBackgroundUrl } = ctx;
   const lighting = branding ?? ctx.loginBranding;
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
@@ -118,6 +118,21 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         perspective: '1200px',
       }}
     >
+      {/* Admin-uploaded login background image (base layer, full-bleed) */}
+      {loginBackgroundUrl && (
+        <div
+          className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
+          style={{ opacity: 1 }}
+        >
+          <img
+            src={loginBackgroundUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ filter: 'saturate(1.1) brightness(0.55)' }}
+          />
+        </div>
+      )}
+
       {/* Background wall logo: full-bleed, fully opaque when lit, hidden when off */}
       <div
         className="absolute inset-0 z-[1] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
