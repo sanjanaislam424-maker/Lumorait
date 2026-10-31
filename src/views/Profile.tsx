@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift, Lock } from 'lucide-react';
+import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift, Lock, Eye } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { ChatWidget } from '@/components/ChatWidget';
+import { PublicProfileModal } from '@/components/PublicProfileModal';
+import { PublicContactCard } from '@/components/PublicContactCard';
+import { PendingReviews } from '@/components/PendingReviews';
 import { uploadBrandingImage } from '@/lib/upload';
 
 const badgeIcons: Record<string, React.ReactNode> = {
@@ -35,6 +38,7 @@ export function ProfileView() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletePwd, setDeletePwd] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [publicUserId, setPublicUserId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -191,6 +195,10 @@ export function ProfileView() {
           )}
           {kycBadge()}
         </div>
+        <Button variant="secondary" className="mt-4 inline-flex items-center gap-2 !px-4 !py-2 text-sm" onClick={() => setPublicUserId(profile.id)}>
+          <Eye size={14} /> {lang === 'bn' ? 'পাবলিক প্রোফাইল দেখুন' : 'View public profile'}
+        </Button>
+        <PublicProfileModal userId={publicUserId} onClose={() => setPublicUserId(null)} />
       </Card>
 
       {/* ===== Personal Information ===== */}
@@ -227,6 +235,10 @@ export function ProfileView() {
           <Button className="w-full" onClick={saveProfile}>{t('save')}</Button>
         </div>
       </Card>
+
+      <PublicContactCard />
+
+      <PendingReviews />
 
       {/* ===== Account Verification (KYC) ===== */}
       <Card>

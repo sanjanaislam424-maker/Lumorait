@@ -42,6 +42,9 @@ export type Profile = {
   ai_tone: 'buddy' | 'mentor' | 'coach';
   is_super_admin: boolean;
   bio: string | null;
+  contact_email: string | null;
+  address: string | null;
+  share_contact_info: boolean;
   level: number;
   xp_points: number;
   notify_tasks: boolean;
