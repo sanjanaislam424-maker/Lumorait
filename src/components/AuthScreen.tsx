@@ -161,21 +161,23 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         />
       )}
 
-      {/* Animated room illumination layer — warm indoor light when on */}
+      {/* Animated room illumination layer — warm indoor light when on.
+          Semi-transparent so the admin-uploaded background image shows through. */}
       <div
         className="absolute inset-0 pointer-events-none z-0 transition-all duration-500 ease-in-out"
         style={{
-          opacity: lit ? 1 : 0,
-          background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.95) 45%, rgba(2,6,23,1) 100%)',
+          opacity: lit ? (loginBackgroundUrl ? 0.35 : 1) : 0,
+          background: 'radial-gradient(ellipse at 50% 12%, rgba(251,191,36,0.20) 0%, rgba(15,23,42,0.55) 45%, rgba(2,6,23,0.65) 100%)',
           transition: 'opacity 500ms ease-in-out',
         }}
       />
-      {/* Dark room baseline — visible when light is off */}
+      {/* Dark room baseline — visible when light is off.
+          Semi-transparent so the admin-uploaded background image shows through. */}
       <div
         className="absolute inset-0 pointer-events-none z-0 transition-all duration-500 ease-in-out"
         style={{
-          opacity: lit ? 0 : 1,
-          background: 'linear-gradient(180deg, #020617 0%, #080d1a 50%, #020617 100%)',
+          opacity: lit ? 0 : (loginBackgroundUrl ? 0.4 : 1),
+          background: 'linear-gradient(180deg, rgba(2,6,23,0.6) 0%, rgba(8,13,26,0.5) 50%, rgba(2,6,23,0.6) 100%)',
           transition: 'opacity 500ms ease-in-out',
         }}
       />
@@ -192,7 +194,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
             src={loginBackgroundUrl}
             alt=""
             className="w-full h-full object-cover"
-            style={{ filter: `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.1) brightness(0.55)`, transition: 'filter 300ms ease-in-out' }}
+            style={{ filter: `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.1)`, transition: 'filter 300ms ease-in-out' }}
           />
         </div>
       )}
