@@ -225,8 +225,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setThemeMode = (tm: ThemeMode) => setThemeModeState(tm);
   const setAiTone = (tone: AiTone) => setAiToneState(tone);
 
+  const brandingRequestRef = useRef(0);
+
   const fetchBranding = useCallback(async () => {
+    const requestId = ++brandingRequestRef.current;
     const { data, error } = await supabase.rpc('get_public_login_branding');
+    if (requestId !== brandingRequestRef.current) return;
     if (error) { setLogoUrl(null); setLoginBackgroundUrl(null); setLoginBranding(DEFAULT_LOGIN_BRANDING); return; }
     const parsed = parseLoginBranding(data);
     setLogoUrl(parsed.logoUrl);
@@ -256,6 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [fetchBranding]);
 
   const setBrandingOverride = useCallback((override: { logoUrl?: string | null; loginBackgroundUrl?: string | null }) => {
+    brandingRequestRef.current++;
     if (override.logoUrl !== undefined) setLogoUrl(override.logoUrl);
     if (override.loginBackgroundUrl !== undefined) setLoginBackgroundUrl(override.loginBackgroundUrl);
   }, []);
