@@ -254,98 +254,125 @@ function TreasureChest({
         )}
       </AnimatePresence>
 
-      {/* Lid — hinged at top, violently snaps open and stays broken */}
-      <motion.div
-        className="absolute left-0 right-0"
-        style={{ top: 0, height: lidH, transformOrigin: 'top center', zIndex: 3 }}
-        animate={
-          isBlasted && cracking
-            ? { rotateX: [0, -6, 8, -12, 6, -4, 0], x: [0, -2, 2, -1, 0] }
-            : isBlasted && !cracking
-            ? { rotateX: [0, -8, -130, -118, -125, -125] }
-            : { rotateX: 0 }
-        }
-        transition={
-          isBlasted && cracking
-            ? { duration: 0.5, ease: 'easeInOut' }
-            : isBlasted && !cracking
-            ? { duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }
-            : { duration: 0.3 }
-        }
-      >
-        <div className="absolute inset-0" style={{
-          background: `linear-gradient(180deg, ${woodLight} 0%, ${woodMid} 50%, ${woodDark} 100%)`,
-          borderRadius: '6px 6px 4px 4px',
-          boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.08), inset 0 -6px 10px rgba(0,0,0,0.5)',
-          border: '1.5px solid #2a1810',
-        }}>
-          <div className="absolute left-0 right-0" style={{
-            top: lidH * 0.45, height: 6,
-            background: `linear-gradient(180deg, ${goldLight}, ${gold}, #9a7411)`,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3)',
-          }} />
-          {[[0, 0], [w - 14, 0]].map(([bx, by], bi) => (
-            <div key={bi} className="absolute" style={{
-              left: bx, top: by, width: 14, height: 14,
-              background: `linear-gradient(135deg, ${goldLight}, ${gold}, #9a7411)`,
-              borderRadius: 2, border: '1px solid #7a5c0e',
-            }} />
-          ))}
-          {rivets([[4, 4], [w - 8, 4], [4, lidH - 6], [w - 8, lidH - 6], [w / 2 - 2, 4]])}
+      {/* Multi-piece lid — 3 distinct pieces that shatter apart and stay broken */}
+      {(() => {
+        // Piece dimensions
+        const pieceW = w / 3;
+        // Crack-edge zigzag paths (jagged edges between pieces)
+        const leftJagged = `M0,0 L${pieceW - 3},${lidH * 0.15} L${pieceW + 2},${lidH * 0.4} L${pieceW - 4},${lidH * 0.65} L${pieceW + 1},${lidH * 0.88} L${pieceW - 2},${lidH}`;
+        const midJaggedR = `M${pieceW - 1},0 L${pieceW * 2 + 3},${lidH * 0.18} L${pieceW * 2 - 2},${lidH * 0.42} L${pieceW * 2 + 4},${lidH * 0.68} L${pieceW * 2 - 1},${lidH * 0.9} L${pieceW * 2 + 2},${lidH}`;
 
-          {/* Jagged crack lines across the lid during cracking */}
-          {isBlasted && cracking && (
-            <svg className="absolute inset-0 pointer-events-none" width={w} height={lidH}>
-              <motion.path d={`M ${w * 0.2} 1 L ${w * 0.35} ${lidH * 0.4} L ${w * 0.25} ${lidH * 0.6} L ${w * 0.38} ${lidH - 1}`} stroke={cfg.accent} strokeWidth="2.5" fill="none"
-                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 1] }} transition={{ duration: 0.35 }}
-                style={{ filter: `drop-shadow(0 0 5px ${cfg.accent})` }} />
-              <motion.path d={`M ${w * 0.55} 1 L ${w * 0.5} ${lidH * 0.35} L ${w * 0.65} ${lidH * 0.55} L ${w * 0.55} ${lidH - 1}`} stroke={cfg.accent} strokeWidth="2" fill="none"
-                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 0.9, 0.9] }} transition={{ duration: 0.35, delay: 0.08 }}
-                style={{ filter: `drop-shadow(0 0 4px ${cfg.accent})` }} />
-              <motion.path d={`M ${w * 0.8} 1 L ${w * 0.75} ${lidH * 0.5} L ${w * 0.85} ${lidH - 1}`} stroke={cfg.accent} strokeWidth="1.5" fill="none"
-                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 0.7, 0.7] }} transition={{ duration: 0.3, delay: 0.12 }}
-                style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }} />
-            </svg>
-          )}
+        const lidPieceStyle = (pieceId: 'left' | 'mid' | 'right') => {
+          const clipPath = pieceId === 'left'
+            ? `polygon(0 0, ${pieceW + 2}px 0, ${pieceW + 2}px ${lidH * 0.4}px, ${pieceW - 4}px ${lidH * 0.65}px, ${pieceW + 1}px ${lidH * 0.88}px, ${pieceW - 2}px ${lidH}px, 0 ${lidH}px)`
+            : pieceId === 'mid'
+            ? `polygon(${pieceW - 3}px 0, ${pieceW * 2 + 3}px 0, ${pieceW * 2 + 4}px ${lidH * 0.68}px, ${pieceW * 2 - 1}px ${lidH * 0.9}px, ${pieceW * 2 + 2}px ${lidH}px, ${pieceW + 1}px ${lidH * 0.88}px, ${pieceW - 4}px ${lidH * 0.65}px, ${pieceW + 2}px ${lidH * 0.4}px)`
+            : `polygon(${pieceW * 2 - 1}px 0, ${w}px 0, ${w}px ${lidH}px, ${pieceW * 2 + 2}px ${lidH}px, ${pieceW * 2 - 1}px ${lidH * 0.9}px, ${pieceW * 2 + 4}px ${lidH * 0.68}px, ${pieceW * 2 + 3}px ${lidH * 0.18}px)`;
 
-          {/* Permanent crack lines etched into the lid after opening */}
-          {isBlasted && !cracking && (
-            <svg className="absolute inset-0 pointer-events-none" width={w} height={lidH}>
-              <path d={`M ${w * 0.2} 1 L ${w * 0.35} ${lidH * 0.4} L ${w * 0.25} ${lidH * 0.6} L ${w * 0.38} ${lidH - 1}`} stroke="#1a0f08" strokeWidth="1.5" fill="none" opacity={0.8} />
-              <path d={`M ${w * 0.55} 1 L ${w * 0.5} ${lidH * 0.35} L ${w * 0.65} ${lidH * 0.55} L ${w * 0.55} ${lidH - 1}`} stroke="#1a0f08" strokeWidth="1.2" fill="none" opacity={0.7} />
-              <path d={`M ${w * 0.8} 1 L ${w * 0.75} ${lidH * 0.5} L ${w * 0.85} ${lidH - 1}`} stroke="#1a0f08" strokeWidth="1" fill="none" opacity={0.6} />
-            </svg>
-          )}
-        </div>
+          const origin = pieceId === 'left' ? 'right center' : pieceId === 'right' ? 'left center' : 'center center';
 
-        {/* Flying wood shard debris from the lid crack */}
-        {isBlasted && !cracking && (
+          // Resting positions after shatter (permanent)
+          const restPos = isBlasted && !cracking
+            ? pieceId === 'left'
+              ? { x: -pieceW * 0.35, y: -lidH * 0.15, rotate: -38 }
+              : pieceId === 'right'
+              ? { x: pieceW * 0.35, y: -lidH * 0.15, rotate: 38 }
+              : { x: 0, y: -lidH * 0.6, rotate: 0 }
+            : { x: 0, y: 0, rotate: 0 };
+
+          return { clipPath, origin, restPos };
+        };
+
+        const renderLidPiece = (pieceId: 'left' | 'mid' | 'right') => {
+          const { clipPath, origin, restPos } = lidPieceStyle(pieceId);
+          const left = pieceId === 'left' ? 0 : pieceId === 'mid' ? pieceW - 3 : pieceW * 2 - 1;
+          const pieceWidth = pieceId === 'left' ? pieceW + 4 : pieceId === 'mid' ? pieceW + 8 : w - (pieceW * 2 - 1) + 4;
+          return (
+            <motion.div
+              key={`lid-${pieceId}`}
+              className="absolute"
+              style={{
+                left, top: 0, width: pieceWidth, height: lidH,
+                clipPath,
+                transformOrigin: origin, zIndex: 3,
+              }}
+              animate={
+                isBlasted && cracking
+                  ? pieceId === 'left'
+                    ? { x: [0, -2, 1, -1, 0], rotate: [0, 2, -1, 0], }
+                    : pieceId === 'right'
+                    ? { x: [0, 2, -1, 1, 0], rotate: [0, -2, 1, 0] }
+                    : { y: [0, -1, 0, -2, 0], rotate: [0, 1, -1, 0] }
+                  : isBlasted && !cracking
+                  ? pieceId === 'left'
+                    ? { x: [0, -pieceW * 0.1, -pieceW * 0.35], y: [0, -lidH * 0.05, -lidH * 0.15], rotate: [-5, -15, -38], opacity: 1 }
+                    : pieceId === 'right'
+                    ? { x: [0, pieceW * 0.1, pieceW * 0.35], y: [0, -lidH * 0.05, -lidH * 0.15], rotate: [5, 15, 38], opacity: 1 }
+                    : { y: [0, -lidH * 0.3, -lidH * 0.6], rotate: [0, -8, 0], opacity: 1 }
+                  : { x: 0, y: 0, rotate: 0 }
+              }
+              transition={
+                isBlasted && cracking
+                  ? { duration: 0.5, ease: 'easeInOut' }
+                  : isBlasted && !cracking
+                  ? { duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }
+                  : { duration: 0.3 }
+              }
+            >
+              <div className="absolute inset-0" style={{
+                background: `linear-gradient(180deg, ${woodLight} 0%, ${woodMid} 50%, ${woodDark} 100%)`,
+                borderRadius: '6px 6px 4px 4px',
+                boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.08), inset 0 -6px 10px rgba(0,0,0,0.5)',
+                border: '1.5px solid #2a1810',
+              }}>
+                {/* Gold band across pieces */}
+                <div className="absolute left-0 right-0" style={{
+                  top: lidH * 0.45, height: 6,
+                  background: `linear-gradient(180deg, ${goldLight}, ${gold}, #9a7411)`,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3)',
+                }} />
+                {pieceId === 'left' && [[0, 0]].map(([bx, by], bi) => (
+                  <div key={bi} className="absolute" style={{
+                    left: bx, top: by, width: 14, height: 14,
+                    background: `linear-gradient(135deg, ${goldLight}, ${gold}, #9a7411)`,
+                    borderRadius: 2, border: '1px solid #7a5c0e',
+                  }} />
+                ))}
+                {pieceId === 'right' && [[pieceWidth - 14, 0]].map(([bx, by], bi) => (
+                  <div key={bi} className="absolute" style={{
+                    left: bx, top: by, width: 14, height: 14,
+                    background: `linear-gradient(135deg, ${goldLight}, ${gold}, #9a7411)`,
+                    borderRadius: 2, border: '1px solid #7a5c0e',
+                  }} />
+                ))}
+                {pieceId === 'left' && rivets([[4, 4], [4, lidH - 6]])}
+                {pieceId === 'mid' && rivets([[pieceWidth / 2 - 2, 4]])}
+                {pieceId === 'right' && rivets([[pieceWidth - 8, 4], [pieceWidth - 8, lidH - 6]])}
+              </div>
+            </motion.div>
+          );
+        };
+
+        return (
           <>
-            {Array.from({ length: 6 }).map((_, si) => {
-              const sx = (w / 6) * si + 6;
-              const angle = -60 - Math.random() * 40;
-              return (
-                <motion.div
-                  key={`shard-${si}`}
-                  className="absolute"
-                  style={{
-                    left: sx, top: 2, width: 4 + Math.random() * 4, height: 8 + Math.random() * 6,
-                    background: woodDark, borderRadius: 1, zIndex: 5,
-                  }}
-                  initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
-                  animate={{
-                    x: Math.cos((angle * Math.PI) / 180) * (20 + Math.random() * 30),
-                    y: Math.sin((angle * Math.PI) / 180) * (20 + Math.random() * 30) - 15,
-                    opacity: [1, 1, 0],
-                    rotate: (Math.random() - 0.5) * 360,
-                  }}
-                  transition={{ duration: 0.8, ease: 'easeOut' }}
-                />
-              );
-            })}
+            {renderLidPiece('left')}
+            {renderLidPiece('mid')}
+            {renderLidPiece('right')}
+
+            {/* Cracking glow lines along the fracture seams */}
+            {isBlasted && cracking && (
+              <svg className="absolute pointer-events-none" width={w} height={lidH} style={{ top: 0, left: 0, zIndex: 4 }}>
+                <motion.path d={`M ${pieceW} 0 L ${pieceW - 2} ${lidH * 0.3} L ${pieceW + 3} ${lidH * 0.6} L ${pieceW - 1} ${lidH}`} stroke={cfg.accent} strokeWidth="2" fill="none"
+                  initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 1] }} transition={{ duration: 0.35 }}
+                  style={{ filter: `drop-shadow(0 0 5px ${cfg.accent})` }} />
+                <motion.path d={`M ${pieceW * 2} 0 L ${pieceW * 2 + 2} ${lidH * 0.3} L ${pieceW * 2 - 3} ${lidH * 0.6} L ${pieceW * 2 + 1} ${lidH}`} stroke={cfg.accent} strokeWidth="2" fill="none"
+                  initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 1] }} transition={{ duration: 0.35, delay: 0.08 }}
+                  style={{ filter: `drop-shadow(0 0 5px ${cfg.accent})` }} />
+              </svg>
+            )}
           </>
-        )}
-      </motion.div>
+        );
+      })()}
 
       {/* Burst flash on open */}
       <AnimatePresence>
