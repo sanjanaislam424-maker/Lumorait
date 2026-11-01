@@ -19,7 +19,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
   const [lit, setLit] = useState(false);
 
   useEffect(() => {
-    if (!embedded) ctx.refreshLogo();
+    if (!embedded) ctx.refreshBranding();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedded]);
   const [mode, setMode] = useState<'login' | 'signup'>(() => (readRefFromUrl() ? 'signup' : 'login'));

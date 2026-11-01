@@ -603,7 +603,7 @@ function DisputesTab() {
 }
 
 function SettingsTab() {
-  const { t, refreshLogo, loginBranding, setBrandingOverride } = useApp();
+  const { t, refreshBranding, loginBranding, setBrandingOverride } = useApp();
   const { notify } = useToast();
   const [s, setS] = useState<any>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -637,7 +637,7 @@ function SettingsTab() {
       }).eq('id', 1);
       if (error) { notify(error.message, 'error'); return; }
       lightingDirty.current = false;
-      await refreshLogo();
+      await refreshBranding();
     }, 400);
     return () => clearTimeout(timer);
   }, [lighting]);
@@ -691,7 +691,7 @@ function SettingsTab() {
       if (dbError) { notify('Failed to save: ' + dbError.message, 'error'); return; }
       setS((prev: any) => ({ ...prev, app_logo_url: url }));
       setBrandingOverride({ logoUrl: url });
-      await refreshLogo();
+      await refreshBranding();
       notify(t('saved'), 'success');
     } finally { setLogoUploading(false); }
   };
@@ -701,7 +701,7 @@ function SettingsTab() {
     if (dbError) { notify('Failed to remove: ' + dbError.message, 'error'); return; }
     setS((prev: any) => ({ ...prev, app_logo_url: null }));
     setBrandingOverride({ logoUrl: null });
-    await refreshLogo();
+    await refreshBranding();
     notify(t('saved'), 'success');
   };
 
@@ -716,7 +716,7 @@ function SettingsTab() {
       if (dbError) { notify('Failed to save: ' + dbError.message, 'error'); return; }
       setS((prev: any) => ({ ...prev, login_background_url: url }));
       setBrandingOverride({ loginBackgroundUrl: url });
-      await refreshLogo();
+      await refreshBranding();
       notify(t('saved'), 'success');
     } finally { setBgUploading(false); }
   };
@@ -726,7 +726,7 @@ function SettingsTab() {
     if (dbError) { notify('Failed to remove: ' + dbError.message, 'error'); return; }
     setS((prev: any) => ({ ...prev, login_background_url: null }));
     setBrandingOverride({ loginBackgroundUrl: null });
-    await refreshLogo();
+    await refreshBranding();
     notify(t('saved'), 'success');
   };
 

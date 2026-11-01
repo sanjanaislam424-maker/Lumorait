@@ -132,7 +132,7 @@ type AppState = {
   logoUrl: string | null;
   loginBranding: LoginBranding;
   loginBackgroundUrl: string | null;
-  refreshLogo: () => Promise<void>;
+  refreshBranding: () => Promise<void>;
   setBrandingOverride: (override: { logoUrl?: string | null; loginBackgroundUrl?: string | null }) => void;
   setLang: (l: Lang) => void;
   setThemeMode: (tm: ThemeMode) => void;
@@ -244,8 +244,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const channel = supabase
-      .channel('branding-logo', { config: { broadcast: { self: true } } })
-      .on('broadcast', { event: 'logo_changed' }, () => { fetchBranding(); })
+      .channel('branding-sync', { config: { broadcast: { self: true } } })
+      .on('broadcast', { event: 'branding_changed' }, () => { fetchBranding(); })
       .subscribe();
     logoChannelRef.current = channel;
     return () => {
@@ -254,9 +254,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchBranding]);
 
-  const refreshLogo = useCallback(async () => {
+  const refreshBranding = useCallback(async () => {
     await fetchBranding();
-    await logoChannelRef.current?.send({ type: 'broadcast', event: 'logo_changed', payload: {} });
+    await logoChannelRef.current?.send({ type: 'broadcast', event: 'branding_changed', payload: {} });
   }, [fetchBranding]);
 
   const setBrandingOverride = useCallback((override: { logoUrl?: string | null; loginBackgroundUrl?: string | null }) => {
@@ -331,7 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tFn = useCallback((key: DictKey) => translate(lang, key), [lang]);
 
   return (
-    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, loginBackgroundUrl, refreshLogo, setBrandingOverride, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
+    <Ctx.Provider value={{ session, profile, loading, lang, theme, themeMode, themeConfig: themes[theme] ?? themes.cyber, aiTone, logoUrl, loginBranding, loginBackgroundUrl, refreshBranding, setBrandingOverride, setLang, setThemeMode, setAiTone, refreshProfile, signOut, t: tFn }}>
       {children}
     </Ctx.Provider>
   );
