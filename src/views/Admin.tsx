@@ -11,6 +11,7 @@ import { AuthScreen } from '@/components/AuthScreen';
 import { LoginLightingControls } from '@/components/LoginLightingControls';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { LoginBranding } from '@/lib/loginBranding';
+import { BACKGROUND_PRESETS } from '@/lib/backgroundPresets';
 import { uploadBrandingImage } from '@/lib/upload';
 import { invalidateAiCopyCache } from '@/lib/microcopy';
 import { invalidateDailyAiCache } from '@/lib/useDailyAiContent';
@@ -815,6 +816,36 @@ function SettingsTab() {
               <Button variant="danger" className="text-xs px-3 py-2" onClick={removeBg}><Trash2 size={14} /></Button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Preset background gallery — quick-pick themes, writes only to login_background_url */}
+      <div className="mt-4 pt-4 border-t border-white/10">
+        <p className="text-sm text-white mb-1">Preset themes</p>
+        <p className="text-xs text-slate-400 mb-3">Click a preset to instantly set it as the login background. This only changes the login screen background and does not touch the global app logo.</p>
+        <div className="grid grid-cols-5 gap-2">
+          {BACKGROUND_PRESETS.map((preset) => {
+            const active = s.login_background_url === preset.url;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={async () => {
+                  const { error: dbError } = await supabase.from('app_settings').update({ login_background_url: preset.url }).eq('id', 1);
+                  if (dbError) { notify('Failed to apply: ' + dbError.message, 'error'); return; }
+                  setS((prev: any) => ({ ...prev, login_background_url: preset.url }));
+                  setBrandingOverride({ loginBackgroundUrl: preset.url });
+                  await refreshBranding();
+                  notify(t('saved'), 'success');
+                }}
+                className={`group relative rounded-lg overflow-hidden border transition-all duration-200 ${active ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-white/10 hover:border-white/30'}`}
+                style={{ aspectRatio: '16 / 9' }}
+              >
+                <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" loading="lazy" />
+                <span className="absolute inset-x-0 bottom-0 px-1.5 py-1 text-[10px] text-white font-medium text-center bg-black/60 backdrop-blur-sm truncate">{preset.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </Card>
