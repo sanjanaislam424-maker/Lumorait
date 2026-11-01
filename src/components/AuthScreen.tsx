@@ -190,8 +190,8 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
       {loginBackgroundUrl && (
         <div
           key={loginBackgroundUrl}
-          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
-          style={{ opacity: lighting.backgroundOpacity / 100 }}
+          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none"
+          style={{ opacity: lighting.backgroundOpacity / 100, transition: 'opacity 500ms ease-in-out' }}
         >
           <img
             src={loginBackgroundUrl}
