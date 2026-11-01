@@ -258,13 +258,35 @@ function TreasureChest({
         )}
       </AnimatePresence>
 
+      {/* Lid — single solid piece when pristine, splits into 3 fragments when blasted */}
+      {!isBlasted ? (
+        <div className="absolute left-0 right-0" style={{ top: 0, height: lidH, zIndex: 3 }}>
+          <div className="absolute inset-0" style={{
+            background: `linear-gradient(180deg, ${woodLight} 0%, ${woodMid} 50%, ${woodDark} 100%)`,
+            borderRadius: '6px 6px 4px 4px',
+            boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.08), inset 0 -6px 10px rgba(0,0,0,0.5)',
+            border: '1.5px solid #2a1810',
+          }}>
+            <div className="absolute left-0 right-0" style={{
+              top: lidH * 0.45, height: 6,
+              background: `linear-gradient(180deg, ${goldLight}, ${gold}, #9a7411)`,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3)',
+            }} />
+            {[[0, 0], [w - 14, 0]].map(([bx, by], bi) => (
+              <div key={bi} className="absolute" style={{
+                left: bx, top: by, width: 14, height: 14,
+                background: `linear-gradient(135deg, ${goldLight}, ${gold}, #9a7411)`,
+                borderRadius: 2, border: '1px solid #7a5c0e',
+              }} />
+            ))}
+            {rivets([[4, 4], [w - 8, 4], [4, lidH - 6], [w - 8, lidH - 6], [w / 2 - 2, 4]])}
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Multi-piece lid — 3 distinct pieces that shatter apart and stay broken */}
       {(() => {
-        // Piece dimensions
         const pieceW = w / 3;
-        // Crack-edge zigzag paths (jagged edges between pieces)
-        const leftJagged = `M0,0 L${pieceW - 3},${lidH * 0.15} L${pieceW + 2},${lidH * 0.4} L${pieceW - 4},${lidH * 0.65} L${pieceW + 1},${lidH * 0.88} L${pieceW - 2},${lidH}`;
-        const midJaggedR = `M${pieceW - 1},0 L${pieceW * 2 + 3},${lidH * 0.18} L${pieceW * 2 - 2},${lidH * 0.42} L${pieceW * 2 + 4},${lidH * 0.68} L${pieceW * 2 - 1},${lidH * 0.9} L${pieceW * 2 + 2},${lidH}`;
 
         const lidPieceStyle = (pieceId: 'left' | 'mid' | 'right') => {
           const clipPath = pieceId === 'left'
@@ -274,21 +296,11 @@ function TreasureChest({
             : `polygon(${pieceW * 2 - 1}px 0, ${w}px 0, ${w}px ${lidH}px, ${pieceW * 2 + 2}px ${lidH}px, ${pieceW * 2 - 1}px ${lidH * 0.9}px, ${pieceW * 2 + 4}px ${lidH * 0.68}px, ${pieceW * 2 + 3}px ${lidH * 0.18}px)`;
 
           const origin = pieceId === 'left' ? 'right center' : pieceId === 'right' ? 'left center' : 'center center';
-
-          // Resting positions after shatter (permanent)
-          const restPos = isBlasted && !cracking
-            ? pieceId === 'left'
-              ? { x: -pieceW * 0.35, y: -lidH * 0.15, rotate: -38 }
-              : pieceId === 'right'
-              ? { x: pieceW * 0.35, y: -lidH * 0.15, rotate: 38 }
-              : { x: 0, y: -lidH * 0.6, rotate: 0 }
-            : { x: 0, y: 0, rotate: 0 };
-
-          return { clipPath, origin, restPos };
+          return { clipPath, origin };
         };
 
         const renderLidPiece = (pieceId: 'left' | 'mid' | 'right') => {
-          const { clipPath, origin, restPos } = lidPieceStyle(pieceId);
+          const { clipPath, origin } = lidPieceStyle(pieceId);
           const left = pieceId === 'left' ? 0 : pieceId === 'mid' ? pieceW - 3 : pieceW * 2 - 1;
           const pieceWidth = pieceId === 'left' ? pieceW + 4 : pieceId === 'mid' ? pieceW + 8 : w - (pieceW * 2 - 1) + 4;
           return (
@@ -337,7 +349,6 @@ function TreasureChest({
                 boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.08), inset 0 -6px 10px rgba(0,0,0,0.5)',
                 border: '1.5px solid #2a1810',
               }}>
-                {/* Gold band across pieces */}
                 <div className="absolute left-0 right-0" style={{
                   top: lidH * 0.45, height: 6,
                   background: `linear-gradient(180deg, ${goldLight}, ${gold}, #9a7411)`,
@@ -385,6 +396,8 @@ function TreasureChest({
           </>
         );
       })()}
+      </>
+      )}
 
       {/* Burst flash on open */}
       <AnimatePresence>
