@@ -183,18 +183,23 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
       />
       {/* Admin-uploaded login background image.
           Persistent across both lighting states; never falls back to the global app logo.
-          Drawn above the room gradients so it stays visible when the light is on or off. */}
+          Drawn above the room gradients so it stays visible when the light is on or off.
+          When the light is on, the background is dimmed by the admin-controlled dim level
+          so the warm light effect blends over it — the image stays visible at all times. */}
       {loginBackgroundUrl && (
         <div
           key={loginBackgroundUrl}
-          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
+          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none transition-all duration-500 ease-in-out"
           style={{ opacity: lighting.backgroundOpacity / 100 }}
         >
           <img
             src={loginBackgroundUrl}
             alt=""
             className="w-full h-full object-cover"
-            style={{ filter: `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.1)`, transition: 'filter 300ms ease-in-out' }}
+            style={{
+              filter: `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.1) brightness(${lit ? 1 - lighting.backgroundDimLevel / 100 : 1})`,
+              transition: 'filter 500ms ease-in-out',
+            }}
           />
         </div>
       )}

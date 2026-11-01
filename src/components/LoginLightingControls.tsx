@@ -16,9 +16,10 @@ const SLIDERS: { key: Exclude<keyof LoginBranding, 'beamEnabled' | 'backgroundUr
   { key: 'beamOpacity', label: 'Light brightness', hint: 'The overall intensity of the glow.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamOpacity },
 ];
 
-const BACKGROUND_SLIDERS: { key: 'backgroundOpacity' | 'backgroundBlur'; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
+const BACKGROUND_SLIDERS: { key: 'backgroundOpacity' | 'backgroundBlur' | 'backgroundDimLevel'; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
   { key: 'backgroundOpacity', label: 'Background image opacity', hint: 'How visible the uploaded login background is. Applies in both the light-on and light-off states.', unit: '%', limits: LOGIN_BRANDING_LIMITS.backgroundOpacity },
   { key: 'backgroundBlur', label: 'Background image blur', hint: 'Depth-of-field blur on the login background image.', unit: '', limits: LOGIN_BRANDING_LIMITS.backgroundBlur },
+  { key: 'backgroundDimLevel', label: 'Background dim when light is on', hint: 'How much the background darkens when the overhead light turns on. 0 means no dimming — the background stays at full brightness in both states. Higher values dim it so the warm light effect blends over it.', unit: '%', limits: LOGIN_BRANDING_LIMITS.backgroundDimLevel },
 ];
 
 export function LoginLightingControls({ value, onChange }: Props) {

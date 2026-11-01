@@ -2,6 +2,7 @@ export type LoginBranding = {
   backgroundUrl: string | null;
   backgroundOpacity: number;
   backgroundBlur: number;
+  backgroundDimLevel: number;
   logoOpacity: number;
   logoBlur: number;
   cardOpacity: number;
@@ -16,6 +17,7 @@ export const DEFAULT_LOGIN_BRANDING: LoginBranding = {
   backgroundUrl: null,
   backgroundOpacity: 100,
   backgroundBlur: 0,
+  backgroundDimLevel: 20,
   logoOpacity: 80,
   logoBlur: 2,
   cardOpacity: 25,
@@ -29,6 +31,7 @@ export const DEFAULT_LOGIN_BRANDING: LoginBranding = {
 export const LOGIN_BRANDING_LIMITS = {
   backgroundOpacity: { min: 0, max: 100 },
   backgroundBlur: { min: 0, max: 20 },
+  backgroundDimLevel: { min: 0, max: 100 },
   logoOpacity: { min: 0, max: 100 },
   logoBlur: { min: 0, max: 20 },
   cardOpacity: { min: 0, max: 100 },
@@ -55,6 +58,7 @@ export function parseLoginBranding(raw: unknown): { logoUrl: string | null; bran
       backgroundUrl: typeof row.login_background_url === 'string' && row.login_background_url ? row.login_background_url : null,
       backgroundOpacity: num(row.background_opacity, DEFAULT_LOGIN_BRANDING.backgroundOpacity),
       backgroundBlur: num(row.background_blur, DEFAULT_LOGIN_BRANDING.backgroundBlur),
+      backgroundDimLevel: num(row.background_dim_level, DEFAULT_LOGIN_BRANDING.backgroundDimLevel),
       logoOpacity: num(row.logo_opacity, DEFAULT_LOGIN_BRANDING.logoOpacity),
       logoBlur: num(row.logo_blur, DEFAULT_LOGIN_BRANDING.logoBlur),
       cardOpacity: num(row.card_opacity, DEFAULT_LOGIN_BRANDING.cardOpacity),
