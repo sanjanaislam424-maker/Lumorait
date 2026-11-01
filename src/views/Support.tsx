@@ -49,6 +49,7 @@ export function SupportView() {
   };
 
   if (chatStarted) {
+    const isQuestion = selectedType === 'question';
     return (
       <div className="space-y-4">
         <button
@@ -57,7 +58,12 @@ export function SupportView() {
         >
           ← {lang === 'bn' ? 'ফিরে যাও' : 'Back'}
         </button>
-        <ChatWidget supportMode subject={fullSubject} initialAttachmentUrl={attachmentUrl} />
+        <ChatWidget
+          supportMode
+          subject={fullSubject}
+          initialAttachmentUrl={isQuestion ? '' : attachmentUrl}
+          routeToAdmin={!isQuestion}
+        />
       </div>
     );
   }
@@ -138,7 +144,8 @@ export function SupportView() {
           </button>
         </div>
 
-        {/* Screenshot upload */}
+        {/* Screenshot upload — only for Bug Report and Feedback */}
+        {selectedType !== 'question' && (
         <div className="mt-3">
           <input
             ref={fileInputRef}
@@ -185,6 +192,7 @@ export function SupportView() {
             </div>
           )}
         </div>
+        )}
       </Card>
 
       <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--neon-muted)' }}>

@@ -53,7 +53,7 @@ function secondsUntil(isoTimestamp: string | null): number {
   return Math.max(0, diff);
 }
 
-export function ChatWidget({ supportMode = false, subject = '', initialAttachmentUrl = '' }: { supportMode?: boolean; subject?: string; initialAttachmentUrl?: string }) {
+export function ChatWidget({ supportMode = false, subject = '', initialAttachmentUrl = '', routeToAdmin = false }: { supportMode?: boolean; subject?: string; initialAttachmentUrl?: string; routeToAdmin?: boolean }) {
   const { t, profile, lang, aiTone } = useApp();
   const attachmentUsedRef = useRef(false);
   const { notify } = useToast();
@@ -133,7 +133,7 @@ export function ChatWidget({ supportMode = false, subject = '', initialAttachmen
         title: supportMode ? (subject || 'Support Request') : 'AI Chat',
         is_support: supportMode,
         subject: supportMode ? subject : null,
-        status: 'active',
+        status: routeToAdmin ? 'pending_human' : 'active',
       }).select('*').single();
       if (error) {
         notify(lang === 'bn' ? 'চ্যাট শুরু করা যায়নি' : 'Could not start chat', 'error');
@@ -141,11 +141,12 @@ export function ChatWidget({ supportMode = false, subject = '', initialAttachmen
       }
       setSessionId(data.id);
       setSessionStatus(data.status);
+      setPendingHuman(data.status === 'pending_human');
       return data.id;
     } finally {
       setCreatingSession(false);
     }
-  }, [profile, supportMode, subject, notify, lang]);
+  }, [profile, supportMode, subject, routeToAdmin, notify, lang]);
 
   const loadMessages = useCallback(async (sid: string) => {
     const { data } = await supabase
@@ -535,11 +536,11 @@ function ChatBubble({ msg, lang }: { msg: ChatMsg; lang: string }) {
         <AnimatePresence>
           {showTime && timeStr && (
             <motion.div
-              initial={{ opacity: 0, y: 4 }}
+              initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
+              exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              className={`absolute z-10 top-0 ${msg.role === 'user' ? 'right-full mr-2' : 'left-full ml-2'} whitespace-nowrap pointer-events-none`}
+              className="absolute z-10 top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none"
             >
               <span
                 className="inline-block px-2 py-1 rounded-lg text-[10px] font-medium shadow-md"

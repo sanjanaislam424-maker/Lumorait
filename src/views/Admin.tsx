@@ -1935,6 +1935,9 @@ function SupportChatsTab() {
                   <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : m.role === 'admin' ? 'bg-amber-500/20 text-amber-200' : 'bg-slate-700 text-slate-200'}`}>
                     {m.role !== 'user' && <p className="text-[10px] font-bold mb-1 opacity-70">{m.role}</p>}
                     <p>{m.content}</p>
+                    {m.image_url && (
+                      <img src={m.image_url} alt="attachment" className="mt-2 rounded-lg max-w-full max-h-40 object-cover border border-white/10" />
+                    )}
                   </div>
                 </div>
               ))}
