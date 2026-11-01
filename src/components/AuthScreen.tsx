@@ -15,6 +15,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
   const ctx = useApp();
   const { t, lang, setLang, logoUrl, loginBackgroundUrl } = ctx;
   const lighting = branding ?? ctx.loginBranding;
+  const backgroundBleedPx = Math.ceil(backgroundBlurPx(lighting.backgroundBlur) * 3);
   const { notify } = useToast();
   const [lit, setLit] = useState(false);
 
@@ -189,14 +190,18 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
       {loginBackgroundUrl && (
         <div
           key={loginBackgroundUrl}
-          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none transition-all duration-500 ease-in-out"
+          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
           style={{ opacity: lighting.backgroundOpacity / 100 }}
         >
           <img
             src={loginBackgroundUrl}
             alt=""
-            className="w-full h-full object-cover"
+            className="absolute object-cover max-w-none"
             style={{
+              top: -backgroundBleedPx, right: -backgroundBleedPx, bottom: -backgroundBleedPx, left: -backgroundBleedPx,
+              width: `calc(100% + ${backgroundBleedPx * 2}px)`,
+              height: `calc(100% + ${backgroundBleedPx * 2}px)`,
+              transform: 'none',
               filter: lit
                 ? `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.4) brightness(1)`
                 : `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) grayscale(${lighting.backgroundOffDesaturate}%) brightness(${1 - lighting.backgroundDimLevel / 100}) saturate(${1 - lighting.backgroundOffDesaturate / 100})`,
