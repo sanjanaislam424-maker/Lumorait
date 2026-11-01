@@ -182,10 +182,10 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         }}
       />
       {/* Admin-uploaded login background image.
-          Persistent across both lighting states; never falls back to the global app logo.
-          Drawn above the room gradients so it stays visible when the light is on or off.
-          When the light is on, the background is dimmed by the admin-controlled dim level
-          so the warm light effect blends over it — the image stays visible at all times. */}
+          Dynamic lighting effect:
+          - Light OFF: dark, desaturated, monochrome (moody night look).
+          - Light ON: full color, vibrant, bright — like turning on a room light.
+          Persistent across both lighting states; never falls back to the global app logo. */}
       {loginBackgroundUrl && (
         <div
           key={loginBackgroundUrl}
@@ -197,8 +197,10 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
             alt=""
             className="w-full h-full object-cover"
             style={{
-              filter: `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.1) brightness(${lit ? 1 - lighting.backgroundDimLevel / 100 : 1})`,
-              transition: 'filter 500ms ease-in-out',
+              filter: lit
+                ? `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.4) brightness(1)`
+                : `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) grayscale(${lighting.backgroundOffDesaturate}%) brightness(${1 - lighting.backgroundDimLevel / 100}) saturate(${1 - lighting.backgroundOffDesaturate / 100})`,
+              transition: 'filter 600ms ease-in-out',
             }}
           />
         </div>

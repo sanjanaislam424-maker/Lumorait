@@ -638,6 +638,7 @@ function SettingsTab() {
         login_background_opacity: lighting.backgroundOpacity,
         login_background_blur: lighting.backgroundBlur,
         login_background_dim_level: lighting.backgroundDimLevel,
+        login_background_off_desaturate: lighting.backgroundOffDesaturate,
       }).eq('id', 1);
       if (error) { notify(error.message, 'error'); return; }
       lightingDirty.current = false;

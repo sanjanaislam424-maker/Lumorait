@@ -16,10 +16,11 @@ const SLIDERS: { key: Exclude<keyof LoginBranding, 'beamEnabled' | 'backgroundUr
   { key: 'beamOpacity', label: 'Light brightness', hint: 'The overall intensity of the glow.', unit: '%', limits: LOGIN_BRANDING_LIMITS.beamOpacity },
 ];
 
-const BACKGROUND_SLIDERS: { key: 'backgroundOpacity' | 'backgroundBlur' | 'backgroundDimLevel'; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
+const BACKGROUND_SLIDERS: { key: 'backgroundOpacity' | 'backgroundBlur' | 'backgroundDimLevel' | 'backgroundOffDesaturate'; label: string; hint: string; unit: string; limits: { min: number; max: number } }[] = [
   { key: 'backgroundOpacity', label: 'Background image opacity', hint: 'How visible the uploaded login background is. Applies in both the light-on and light-off states.', unit: '%', limits: LOGIN_BRANDING_LIMITS.backgroundOpacity },
   { key: 'backgroundBlur', label: 'Background image blur', hint: 'Depth-of-field blur on the login background image.', unit: '', limits: LOGIN_BRANDING_LIMITS.backgroundBlur },
-  { key: 'backgroundDimLevel', label: 'Background dim when light is on', hint: 'How much the background darkens when the overhead light turns on. 0 means no dimming — the background stays at full brightness in both states. Higher values dim it so the warm light effect blends over it.', unit: '%', limits: LOGIN_BRANDING_LIMITS.backgroundDimLevel },
+  { key: 'backgroundDimLevel', label: 'Darkness when light is off', hint: 'How dark the background gets when the light is OFF. 0 means the background stays at full brightness in the dark state. Higher values darken it for a moody night look. When the light turns ON the image returns to full vibrant brightness.', unit: '%', limits: LOGIN_BRANDING_LIMITS.backgroundDimLevel },
+  { key: 'backgroundOffDesaturate', label: 'Monochrome when light is off', hint: 'How desaturated (black-and-white) the background becomes when the light is OFF. 0 keeps full color, 100 fully converts to grayscale. When the light turns ON the image snaps back to full vibrant color.', unit: '%', limits: LOGIN_BRANDING_LIMITS.backgroundOffDesaturate },
 ];
 
 export function LoginLightingControls({ value, onChange }: Props) {
