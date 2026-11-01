@@ -140,6 +140,188 @@ const DEBRIS_COLORS = ['#9d174d', '#be185d', '#831843', '#0e7490', '#155e75', '#
 
 const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// ---- Antique Treasure Chest ----
+function TreasureChest({
+  size, cfg, isBlasted, cracking, disabled, onClick,
+}: {
+  size: number; cfg: BoxConfig; isBlasted: boolean; cracking: boolean; disabled: boolean;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const w = size;
+  const h = Math.round(size * 0.78);
+  const lidH = Math.round(h * 0.42);
+  const bodyH = h - lidH;
+  const woodDark = '#3b2412';
+  const woodMid = '#5b3a1f';
+  const woodLight = '#7a4e2a';
+  const gold = '#d4a017';
+  const goldLight = '#f5d061';
+
+  const rivets = (positions: [number, number][]) =>
+    positions.map(([rx, ry], ri) => (
+      <div key={ri} className="absolute rounded-full" style={{
+        left: rx, top: ry, width: 4, height: 4,
+        background: `radial-gradient(circle at 30% 30%, ${goldLight}, ${gold})`,
+        boxShadow: '0 1px 1px rgba(0,0,0,0.6), inset 0 -1px 1px rgba(0,0,0,0.4)',
+      }} />
+    ));
+
+  return (
+    <motion.button
+      whileHover={!disabled && !isBlasted ? { scale: 1.06, y: -5 } : {}}
+      whileTap={!disabled && !isBlasted ? { scale: 0.96 } : {}}
+      animate={
+        isBlasted && cracking
+          ? { x: [0, -3, 3, -2, 2, -1, 1, 0], rotate: [0, 1.5, -1.5, 2, -2, 1, -1, 0] }
+          : isBlasted && !cracking
+          ? { scale: [1, 1.06, 1, 1] }
+          : disabled
+          ? {}
+          : { y: [0, -6, 0] }
+      }
+      transition={
+        isBlasted && cracking
+          ? { duration: 0.5, ease: 'easeInOut' }
+          : isBlasted && !cracking
+          ? { duration: 1.0, ease: 'easeOut' }
+          : disabled
+          ? {}
+          : { y: { duration: 2.8, repeat: Infinity, ease: 'easeInOut' } }
+      }
+      onClick={onClick}
+      disabled={disabled}
+      className="relative cursor-pointer"
+      style={{ width: w, height: h, border: 'none', background: 'none', padding: 0 }}
+    >
+      {/* Chest body */}
+      <div className="absolute left-0 right-0 bottom-0" style={{
+        height: bodyH,
+        background: `linear-gradient(180deg, ${woodLight} 0%, ${woodMid} 30%, ${woodDark} 100%)`,
+        borderRadius: '4px 4px 6px 6px',
+        boxShadow: 'inset 0 -10px 20px rgba(0,0,0,0.6), inset 0 4px 8px rgba(255,255,255,0.06), inset 6px 0 10px rgba(0,0,0,0.3), inset -6px 0 10px rgba(0,0,0,0.3)',
+        border: '1.5px solid #2a1810',
+      }}>
+        <div className="absolute left-0 right-0" style={{ top: bodyH * 0.33, height: 1, background: 'rgba(0,0,0,0.4)' }} />
+        <div className="absolute left-0 right-0" style={{ top: bodyH * 0.66, height: 1, background: 'rgba(0,0,0,0.4)' }} />
+
+        {/* Gold corner braces */}
+        {[[0, 0], [w - 14, 0], [0, bodyH - 14], [w - 14, bodyH - 14]].map(([bx, by], bi) => (
+          <div key={bi} className="absolute" style={{
+            left: bx, top: by, width: 14, height: 14,
+            background: `linear-gradient(135deg, ${goldLight}, ${gold}, #9a7411)`,
+            borderRadius: 2,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3)',
+            border: '1px solid #7a5c0e',
+          }} />
+        ))}
+        {rivets([[4, 4], [w - 8, 4], [4, bodyH - 8], [w - 8, bodyH - 8], [w / 2 - 2, 4], [w / 2 - 2, bodyH - 8]])}
+
+        {/* Center lock plate */}
+        <div className="absolute left-1/2 -translate-x-1/2" style={{
+          top: bodyH * 0.35, width: 22, height: 26, borderRadius: 3,
+          background: `linear-gradient(180deg, ${goldLight}, ${gold}, #9a7411)`,
+          border: '1px solid #7a5c0e',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3)',
+        }}>
+          <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 8, width: 6, height: 8, borderRadius: 3, background: '#2a1810', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.8)' }} />
+        </div>
+
+        {!isBlasted && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span style={{
+              fontSize: '30px', fontWeight: 900,
+              color: 'rgba(255,235,180,0.85)',
+              textShadow: `0 0 14px ${cfg.accent}, 0 2px 4px rgba(0,0,0,0.8)`,
+            }}>?</span>
+          </div>
+        )}
+      </div>
+
+      {/* Inside glow when lid opens */}
+      <AnimatePresence>
+        {isBlasted && !cracking && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 0.6, 0] }}
+            transition={{ duration: 1, ease: 'easeOut' }}
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{
+              bottom: bodyH - 2, width: w * 0.7, height: lidH * 1.4,
+              background: `radial-gradient(ellipse at bottom, ${cfg.accent} 0%, ${cfg.accent}55 30%, transparent 70%)`,
+              filter: 'blur(6px)', zIndex: 2,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Lid — hinged at top, snaps open on blast then closes */}
+      <motion.div
+        className="absolute left-0 right-0"
+        style={{ top: 0, height: lidH, transformOrigin: 'top center', zIndex: 3 }}
+        animate={
+          isBlasted && cracking
+            ? { rotateX: [0, -8, 6, -10, 4, 0] }
+            : isBlasted && !cracking
+            ? { rotateX: [0, -115, -100, -110, 0] }
+            : { rotateX: 0 }
+        }
+        transition={
+          isBlasted && cracking
+            ? { duration: 0.5, ease: 'easeInOut' }
+            : isBlasted && !cracking
+            ? { duration: 1.0, ease: 'easeOut' }
+            : { duration: 0.3 }
+        }
+      >
+        <div className="absolute inset-0" style={{
+          background: `linear-gradient(180deg, ${woodLight} 0%, ${woodMid} 50%, ${woodDark} 100%)`,
+          borderRadius: '6px 6px 4px 4px',
+          boxShadow: 'inset 0 4px 8px rgba(255,255,255,0.08), inset 0 -6px 10px rgba(0,0,0,0.5)',
+          border: '1.5px solid #2a1810',
+        }}>
+          <div className="absolute left-0 right-0" style={{
+            top: lidH * 0.45, height: 6,
+            background: `linear-gradient(180deg, ${goldLight}, ${gold}, #9a7411)`,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3)',
+          }} />
+          {[[0, 0], [w - 14, 0]].map(([bx, by], bi) => (
+            <div key={bi} className="absolute" style={{
+              left: bx, top: by, width: 14, height: 14,
+              background: `linear-gradient(135deg, ${goldLight}, ${gold}, #9a7411)`,
+              borderRadius: 2, border: '1px solid #7a5c0e',
+            }} />
+          ))}
+          {rivets([[4, 4], [w - 8, 4], [4, lidH - 6], [w - 8, lidH - 6], [w / 2 - 2, 4]])}
+
+          {isBlasted && cracking && (
+            <svg className="absolute inset-0 pointer-events-none" width={w} height={lidH}>
+              <motion.path d={`M ${w * 0.3} 2 L ${w * 0.4} ${lidH * 0.5} L ${w * 0.32} ${lidH - 2}`} stroke={cfg.accent} strokeWidth="2" fill="none"
+                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 0.8] }} transition={{ duration: 0.4 }}
+                style={{ filter: `drop-shadow(0 0 4px ${cfg.accent})` }} />
+              <motion.path d={`M ${w * 0.6} 2 L ${w * 0.55} ${lidH * 0.5} L ${w * 0.65} ${lidH - 2}`} stroke={cfg.accent} strokeWidth="1.5" fill="none"
+                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 0.7, 0.5] }} transition={{ duration: 0.4, delay: 0.1 }}
+                style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }} />
+            </svg>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Burst flash on open */}
+      <AnimatePresence>
+        {isBlasted && !cracking && (
+          <motion.div
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: [0.3, 1.4, 1], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.9, ease: 'easeOut' }}
+            className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/4 pointer-events-none"
+            style={{ width: w * 1.2, height: w * 1.2, background: `radial-gradient(circle, ${cfg.accent} 0%, ${cfg.accent}55 40%, transparent 70%)`, filter: 'blur(8px)', zIndex: 4 }}
+          />
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+}
+
 export function Spin() {
   const { t, profile, refreshProfile, lang } = useApp();
   const { notify } = useToast();
@@ -193,7 +375,7 @@ export function Spin() {
       .from('box_winners')
       .select('id, user_name, box_type, box_label, coins_won, created_at')
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(100);
     setWinners((data as WinnerRow[]) || []);
   }, []);
 
@@ -853,167 +1035,28 @@ export function Spin() {
                   }}
                 />
 
-                {/* Box — stays visible during cracking, then shatters */}
-                <motion.button
-                  whileHover={!disabled && !isBlasted ? { scale: 1.08, y: -6, rotateY: 8 } : {}}
-                  whileTap={!disabled && !isBlasted ? { scale: 0.94 } : {}}
-                  animate={
-                    isBlasted && cracking
-                      ? // Cracking phase: violent shake
-                        { x: [0, -4, 4, -3, 3, -2, 2, 0], rotateZ: [0, 2, -2, 3, -3, 1, -1, 0] }
-                      : isBlasted && !cracking
-                      ? // Explosion phase: scale up and shatter apart
-                        { scale: [1, 1.3, 1.1, 0], opacity: [1, 0.8, 0.4, 0], rotateZ: [0, 15, -10, 25] }
-                      : disabled
-                      ? {}
-                      : { y: [0, -8, 0], rotateY: [0, 5, 0, -5, 0] }
-                  }
-                  transition={
-                    isBlasted && cracking
-                      ? { duration: 0.5, ease: 'easeInOut' }
-                      : isBlasted && !cracking
-                      ? { duration: 1.0, ease: 'easeOut' }
-                      : disabled
-                      ? {}
-                      : {
-                          y: { duration: 2.5 + i * 0.4, repeat: Infinity, ease: 'easeInOut' },
-                          rotateY: { duration: 4 + i * 0.5, repeat: Infinity, ease: 'easeInOut' },
-                        }
-                  }
-                  onClick={(e) => blastBox(i, e.currentTarget as HTMLElement)}
+                {/* Antique Treasure Chest — lid snaps open on blast, stays in place */}
+                <TreasureChest
+                  size={boxSize}
+                  cfg={cfg}
+                  isBlasted={isBlasted}
+                  cracking={cracking}
                   disabled={disabled}
-                  className="relative cursor-pointer"
-                  style={{
-                    width: boxSize, height: boxSize,
-                    transformStyle: 'preserve-3d',
-                    transform: 'rotateX(18deg) rotateY(-15deg)',
-                    border: 'none', background: 'none', padding: 0,
-                  }}
-                >
-                  {/* Cracking visual: glowing fracture lines appear during cracking phase */}
-                  {isBlasted && cracking && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ transform: `translateZ(${boxSize / 2 + 1}px)`, borderRadius: 10 }}
-                    >
-                      <svg width={boxSize} height={boxSize} style={{ position: 'absolute', inset: 0 }}>
-                        <motion.path
-                          d="M55 10 L48 35 L60 55 L45 80 L52 100"
-                          stroke={cfg.accent}
-                          strokeWidth="2"
-                          fill="none"
-                          initial={{ pathLength: 0, opacity: 0 }}
-                          animate={{ pathLength: 1, opacity: [0, 1, 0.8] }}
-                          transition={{ duration: 0.4, ease: 'easeOut' }}
-                          style={{ filter: `drop-shadow(0 0 4px ${cfg.accent})` }}
-                        />
-                        <motion.path
-                          d="M20 20 L35 40 L25 60 L40 85"
-                          stroke={cfg.accent}
-                          strokeWidth="1.5"
-                          fill="none"
-                          initial={{ pathLength: 0, opacity: 0 }}
-                          animate={{ pathLength: 1, opacity: [0, 0.7, 0.5] }}
-                          transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
-                          style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }}
-                        />
-                        <motion.path
-                          d="M80 15 L70 40 L85 60 L72 85"
-                          stroke={cfg.accent}
-                          strokeWidth="1.5"
-                          fill="none"
-                          initial={{ pathLength: 0, opacity: 0 }}
-                          animate={{ pathLength: 1, opacity: [0, 0.7, 0.5] }}
-                          transition={{ duration: 0.4, delay: 0.15, ease: 'easeOut' }}
-                          style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }}
-                        />
-                      </svg>
-                    </motion.div>
-                  )}
+                  onClick={(e) => blastBox(i, e.currentTarget as HTMLElement)}
+                />
 
-                  {/* Front face */}
-                  <div className="absolute" style={{
-                    width: boxSize, height: boxSize,
-                    transform: `translateZ(${boxSize / 2}px)`,
-                    background: cfg.front,
-                    borderRadius: 10,
-                    border: `1.5px solid ${cfg.accent}`,
-                    boxShadow: `inset 0 -12px 24px rgba(0,0,0,0.5), inset 0 6px 12px rgba(255,255,255,0.12), inset 4px 0 8px rgba(0,0,0,0.2), inset -4px 0 8px rgba(0,0,0,0.2)`,
-                  }}>
-                    <div className="absolute left-0 right-0" style={{
-                      top: '22%', height: 3,
-                      background: 'linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.6), rgba(0,0,0,0.4))',
-                      boxShadow: '0 1px 0 rgba(255,255,255,0.08)',
-                    }} />
-                    <div className="absolute" style={{
-                      top: '14%', left: '50%', transform: 'translateX(-50%)',
-                      width: 18, height: 14, borderRadius: 3,
-                      background: 'linear-gradient(135deg, rgba(255,255,255,0.3), rgba(0,0,0,0.3))',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
-                    }} />
-                    <div className="absolute inset-0 flex items-center justify-center" style={{ top: '8%' }}>
-                      <span style={{
-                        fontSize: '36px', fontWeight: 900,
-                        color: 'rgba(255,255,255,0.92)',
-                        textShadow: `0 0 16px ${cfg.accent}, 0 0 4px ${cfg.accent}, 0 3px 6px rgba(0,0,0,0.7)`,
-                      }}>?</span>
-                    </div>
-                    {[[8, 8], [8, boxSize - 12], [boxSize - 16, 8], [boxSize - 16, boxSize - 12]].map(([sx, sy], si) => (
-                      <div key={si} className="absolute rounded-full" style={{
-                        left: sx, top: sy, width: 6, height: 6,
-                        background: `radial-gradient(circle at 30% 30%, ${cfg.stud}, ${cfg.accent})`,
-                        boxShadow: `0 0 6px ${cfg.accent}, inset 0 -1px 2px rgba(0,0,0,0.4)`,
-                      }} />
-                    ))}
-                  </div>
-
-                  {/* Top face */}
-                  <div className="absolute" style={{
-                    width: boxSize, height: boxSize * 0.3,
-                    top: 0, left: 0,
-                    transform: `rotateX(-90deg) translateZ(${boxSize * 0.15}px) translateY(${boxSize * 0.15}px)`,
-                    transformOrigin: 'top',
-                    background: cfg.top,
-                    borderRadius: '10px 10px 0 0',
-                    border: `1.5px solid ${cfg.accent}`,
-                    boxShadow: `inset 0 4px 8px rgba(255,255,255,0.2), inset 0 -4px 8px rgba(0,0,0,0.3)`,
-                  }} />
-
-                  {/* Right side face */}
-                  <div className="absolute" style={{
-                    width: boxSize * 0.3, height: boxSize,
-                    top: 0, right: 0,
-                    transform: `rotateY(90deg) translateZ(${boxSize * 0.2}px) translateX(${boxSize * 0.2}px)`,
-                    transformOrigin: 'right',
-                    background: cfg.side,
-                    boxShadow: `inset 0 0 12px rgba(0,0,0,0.4)`,
-                  }} />
-
-                  <div className="absolute" style={{
-                    width: boxSize - 4, height: 3,
-                    top: 0, left: 2,
-                    transform: `translateZ(${boxSize / 2 + 0.5}px)`,
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-                    borderRadius: 2,
-                  }} />
-                </motion.button>
-
-                {/* Floating coin reward reveal — animates upward from inside the box */}
+                {/* Flying reward — emerges from inside the chest and floats up */}
                 <AnimatePresence>
                   {floatingReward && floatingReward.boxIndex === i && (
                     <motion.div
                       key="float-reward"
-                      initial={{ opacity: 0, y: 40, scale: 0.3 }}
-                      animate={{ opacity: 1, y: -80, scale: 1 }}
-                      exit={{ opacity: 0, y: -140, scale: 0.8 }}
+                      initial={{ opacity: 0, y: 20, scale: 0.2 }}
+                      animate={{ opacity: 1, y: -90, scale: 1 }}
+                      exit={{ opacity: 0, y: -150, scale: 0.7 }}
                       transition={{ duration: 1.8, ease: 'easeOut' }}
                       className="absolute pointer-events-none z-50 flex flex-col items-center"
                       style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
                     >
-                      {/* Coin icon */}
                       <motion.div
                         animate={{ rotateY: [0, 360] }}
                         transition={{ duration: 1, repeat: 2, ease: 'linear' }}
@@ -1026,7 +1069,6 @@ export function Spin() {
                       >
                         {floatingReward.reward.value > 0 ? floatingReward.reward.emoji : '💨'}
                       </motion.div>
-                      {/* Amount text */}
                       <motion.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -1039,7 +1081,6 @@ export function Spin() {
                       >
                         {floatingReward.reward.value > 0 ? `+${floatingReward.reward.value}` : '0'} {t('lumoraCoins')}
                       </motion.p>
-                      {/* Witty comment */}
                       <motion.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 0.9 }}
