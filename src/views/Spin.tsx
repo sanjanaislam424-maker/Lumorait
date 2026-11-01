@@ -142,9 +142,9 @@ const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ---- Antique Treasure Chest ----
 function TreasureChest({
-  size, cfg, isBlasted, cracking, disabled, onClick,
+  size, cfg, isBlasted, cracking, repairing, disabled, onClick,
 }: {
-  size: number; cfg: BoxConfig; isBlasted: boolean; cracking: boolean; disabled: boolean;
+  size: number; cfg: BoxConfig; isBlasted: boolean; cracking: boolean; repairing: boolean; disabled: boolean;
   onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   const w = size;
@@ -173,6 +173,8 @@ function TreasureChest({
       animate={
         isBlasted && cracking
           ? { x: [0, -3, 3, -2, 2, -1, 1, 0], rotate: [0, 1.5, -1.5, 2, -2, 1, -1, 0] }
+          : isBlasted && repairing
+          ? { scale: [1, 1.03, 1] }
           : isBlasted && !cracking
           ? { scale: [1, 1.06, 1, 1] }
           : disabled
@@ -182,6 +184,8 @@ function TreasureChest({
       transition={
         isBlasted && cracking
           ? { duration: 0.5, ease: 'easeInOut' }
+          : isBlasted && repairing
+          ? { duration: 0.6, ease: 'easeInOut' }
           : isBlasted && !cracking
           ? { duration: 1.0, ease: 'easeOut' }
           : disabled
@@ -239,7 +243,7 @@ function TreasureChest({
 
       {/* Inside glow when lid opens */}
       <AnimatePresence>
-        {isBlasted && !cracking && (
+        {isBlasted && !cracking && !repairing && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: [0, 1, 0.7, 0.7] }}
@@ -299,10 +303,16 @@ function TreasureChest({
               animate={
                 isBlasted && cracking
                   ? pieceId === 'left'
-                    ? { x: [0, -2, 1, -1, 0], rotate: [0, 2, -1, 0], }
+                    ? { x: [0, -2, 1, -1, 0], rotate: [0, 2, -1, 0] }
                     : pieceId === 'right'
                     ? { x: [0, 2, -1, 1, 0], rotate: [0, -2, 1, 0] }
                     : { y: [0, -1, 0, -2, 0], rotate: [0, 1, -1, 0] }
+                  : isBlasted && repairing
+                  ? pieceId === 'left'
+                    ? { x: [-pieceW * 0.35, 0], y: [-lidH * 0.15, 0], rotate: [-38, 0] }
+                    : pieceId === 'right'
+                    ? { x: [pieceW * 0.35, 0], y: [-lidH * 0.15, 0], rotate: [38, 0] }
+                    : { y: [-lidH * 0.6, 0], rotate: [0, 0] }
                   : isBlasted && !cracking
                   ? pieceId === 'left'
                     ? { x: [0, -pieceW * 0.1, -pieceW * 0.35], y: [0, -lidH * 0.05, -lidH * 0.15], rotate: [-5, -15, -38], opacity: 1 }
@@ -314,6 +324,8 @@ function TreasureChest({
               transition={
                 isBlasted && cracking
                   ? { duration: 0.5, ease: 'easeInOut' }
+                  : isBlasted && repairing
+                  ? { duration: 0.6, ease: 'easeInOut' }
                   : isBlasted && !cracking
                   ? { duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }
                   : { duration: 0.3 }
@@ -376,7 +388,7 @@ function TreasureChest({
 
       {/* Burst flash on open */}
       <AnimatePresence>
-        {isBlasted && !cracking && (
+        {isBlasted && !cracking && !repairing && (
           <motion.div
             initial={{ scale: 0.3, opacity: 0 }}
             animate={{ scale: [0.3, 1.4, 1], opacity: [0, 1, 0] }}
@@ -411,11 +423,13 @@ export function Spin() {
   const [now, setNow] = useState<number>(Date.now());
   const [extraBlasts, setExtraBlasts] = useState(0); // extra blasts from ads/tasks
   const [blasting, setBlasting] = useState(false);
-  const [cracking, setCracking] = useState(false); // box is cracking phase
+  const [crackingBox, setCrackingBox] = useState<number | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [result, setResult] = useState<{ reward: Reward } | null>(null);
   const [celebrate, setCelebrate] = useState(false);
-  const [blastedBox, setBlastedBox] = useState<number | null>(null);
+  const [blastedBoxes, setBlastedBoxes] = useState<Set<number>>(new Set());
+  const [repairingBoxes, setRepairingBoxes] = useState<Set<number>>(new Set());
+  const repairTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [floatingReward, setFloatingReward] = useState<{ reward: Reward; boxIndex: number } | null>(null);
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(15);
@@ -716,18 +730,20 @@ export function Spin() {
 
   useEffect(() => () => {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    repairTimersRef.current.forEach((t) => clearTimeout(t));
+    repairTimersRef.current.clear();
   }, []);
 
   // ---- CORE: blast a box ----
   const blastBox = async (boxIndex: number, boxEl: HTMLElement) => {
-    if (blasting || cracking || blastsLeft <= 0 || !profile) return;
+    if (blasting || crackingBox !== null || blastsLeft <= 0 || !profile) return;
 
     // Determine if this is a free blast or extra blast
     const usingFree = freeBoxReady;
 
     setBlasting(true);
-    setCracking(true);
-    setBlastedBox(boxIndex);
+    setCrackingBox(boxIndex);
+    setBlastedBoxes((prev) => new Set(prev).add(boxIndex));
     setResult(null);
     setFloatingReward(null);
 
@@ -736,7 +752,7 @@ export function Spin() {
 
     // After 500ms of cracking, trigger explosion
     setTimeout(() => {
-      setCracking(false);
+      setCrackingBox(null);
       if (soundOn) playExplosion();
       triggerExplosion(boxEl, BOX_CONFIGS[boxIndex].accent);
 
@@ -796,10 +812,22 @@ export function Spin() {
           notify(reward.comment, 'info');
         }
 
-        // Clear floating reward after a delay; chest stays permanently open
+        // Clear floating reward after a delay
         setTimeout(() => {
           setFloatingReward(null);
         }, 2000);
+
+        // 15-second auto-repair: merge lid pieces back and restore to pristine
+        const repairTimer = setTimeout(() => {
+          repairTimersRef.current.delete(boxIndex);
+          setRepairingBoxes((prev) => new Set(prev).add(boxIndex));
+          // After repair animation completes, clear both states
+          setTimeout(() => {
+            setBlastedBoxes((prev) => { const n = new Set(prev); n.delete(boxIndex); return n; });
+            setRepairingBoxes((prev) => { const n = new Set(prev); n.delete(boxIndex); return n; });
+          }, 600);
+        }, 15000);
+        repairTimersRef.current.set(boxIndex, repairTimer);
       }, 1200);
     }, 500);
   };
@@ -1073,8 +1101,10 @@ export function Spin() {
         <div className="grid grid-cols-3 gap-3 sm:gap-6" style={{ perspective: '900px', perspectiveOrigin: '50% 30%' }}>
           {[0, 1, 2].map((i) => {
             const cfg = BOX_CONFIGS[i];
-            const isBlasted = blastedBox === i;
-            const disabled = blasting || blastsLeft <= 0;
+            const isBlasted = blastedBoxes.has(i);
+            const isCracking = crackingBox === i;
+            const isRepairing = repairingBoxes.has(i);
+            const disabled = blasting || isBlasted || blastsLeft <= 0;
             return (
               <div key={i} className="flex justify-center items-end relative" style={{ minHeight: boxSize + 40 }}>
                 {/* Ground shadow */}
@@ -1107,7 +1137,8 @@ export function Spin() {
                   size={boxSize}
                   cfg={cfg}
                   isBlasted={isBlasted}
-                  cracking={cracking}
+                  cracking={isCracking}
+                  repairing={isRepairing}
                   disabled={disabled}
                   onClick={(e) => blastBox(i, e.currentTarget as HTMLElement)}
                 />
