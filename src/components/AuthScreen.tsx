@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, PanInfo, animate } from 'framer-motion';
 import { Phone, Lock, User as UserIcon, Eye, EyeOff, Hand, Check, X, Ticket, KeyRound, Mail, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -110,7 +110,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
   };
 
   const toggleLight = useCallback(() => {
-    playClick();
+    playPullSound();
     setLit((v) => !v);
   }, []);
 
@@ -829,18 +829,7 @@ function BulbGlow({ sway, lit, radius, blur, brightness }: { sway: ChandelierSwa
 }
 
 function Chandelier3D({ lit, onToggle, sway }: { lit: boolean; onToggle: () => void; sway: ChandelierSway }) {
-  const { dragY, pulling, setPulling, fixtureX, fixtureRotate } = sway;
-  const cordRef = useRef<HTMLDivElement>(null);
-
-  const handleDragEnd = (_: any, info: PanInfo) => {
-    setPulling(false);
-    if (Math.abs(info.offset.y) > 40 || Math.abs(info.velocity.y) > 250) {
-      dragY.set(0);
-      onToggle();
-    } else {
-      dragY.set(0);
-    }
-  };
+  const { fixtureX, fixtureRotate } = sway;
 
   return (
     <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 select-none pointer-events-none" style={{ height: 320, perspective: '800px' }}>
@@ -952,50 +941,10 @@ function Chandelier3D({ lit, onToggle, sway }: { lit: boolean; onToggle: () => v
           {/* Main bulb — 3D glass */}
           <Bulb3D lit={lit} />
 
-          {/* Pull cord — physically weighted */}
-          <motion.div
-            ref={cordRef}
-            className="absolute left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none pointer-events-auto"
-            style={{ y: dragY, originY: 0, top: 35 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 120 }}
-            dragElastic={0.15 }
-            onDragStart={() => setPulling(true)}
-            onDragEnd={handleDragEnd}
-            onClick={() => { if (!pulling) onToggle(); }}
-          >
-            {/* Beaded chain cord */}
-            <div className="flex flex-col items-center" style={{ gap: 0 }}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-full"
-                  style={{
-                    width: 4, height: 7, marginTop: -1,
-                    background: 'linear-gradient(135deg, #64748b, #334155, #1e293b)',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Pull knob — 3D metallic bead */}
-            <motion.div
-              className="relative mt-0 rounded-full flex items-center justify-center"
-              style={{
-                width: 28, height: 28,
-                background: 'radial-gradient(circle at 30% 25%, #fde68a 0%, #fbbf24 30%, #d97706 60%, #78350f 100%)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5), 0 0 10px rgba(251,191,36,0.2), inset 0 2px 4px rgba(255,255,255,0.2)',
-                border: '1px solid rgba(251,191,36,0.3)',
-              }}
-              animate={{ scale: pulling ? 1.15 : 1 }}
-              whileHover={{ scale: 1.08 }}
-            >
-              <span className="rounded-full" style={{ width: 6, height: 6, background: 'rgba(254,243,199,0.4)' }} />
-            </motion.div>
-          </motion.div>
         </div>
       </motion.div>
+
+      <PullCord sway={sway} onToggle={onToggle} />
 
       {/* Dynamic drop shadow on floor */}
       <motion.div
@@ -1010,6 +959,84 @@ function Chandelier3D({ lit, onToggle, sway }: { lit: boolean; onToggle: () => v
         animate={{ opacity: lit ? 0.5 : 0.3, scale: lit ? 1.1 : 0.9 }}
         transition={{ type: 'spring', stiffness: 120, damping: 14 }}
       />
+    </div>
+  );
+}
+
+const CORD_OFFSET_X = 92;
+const CORD_ANCHOR_X = 40;
+const CORD_HANDLE_TOP = 30;
+const CORD_HANDLE_RADIUS = 14;
+const CORD_MAX_PULL = 120;
+const CORD_TOGGLE_DISTANCE = 40;
+const CORD_TOGGLE_VELOCITY = 250;
+const CORD_SWAY = 0.35;
+
+function PullCord({ sway, onToggle }: { sway: ChandelierSway; onToggle: () => void }) {
+  const { dragY, pulling, setPulling } = sway;
+  const wave = useMotionValue(0);
+  const handleX = useTransform(wave, (w: number) => w * CORD_SWAY);
+  const cordPath = useTransform([dragY, wave], ([h, w]: number[]) => {
+    const endX = CORD_ANCHOR_X + w * CORD_SWAY;
+    const endY = CORD_HANDLE_TOP + CORD_HANDLE_RADIUS + h;
+    const c1x = CORD_ANCHOR_X + w;
+    const c2x = endX - w * 0.5;
+    return `M ${CORD_ANCHOR_X} 0 C ${c1x} ${endY * 0.3} ${c2x} ${endY * 0.7} ${endX} ${endY}`;
+  });
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    setPulling(false);
+    if (Math.abs(info.offset.y) > CORD_TOGGLE_DISTANCE || Math.abs(info.velocity.y) > CORD_TOGGLE_VELOCITY) {
+      onToggle();
+    }
+    const kick = Math.max(-40, Math.min(40, dragY.get() * 0.2));
+    wave.set(kick);
+    animate(wave, 0, { type: 'spring', stiffness: 60, damping: 4, mass: 1.2 });
+    animate(dragY, 0, { type: 'spring', stiffness: 140, damping: 9, mass: 0.9 });
+  };
+
+  return (
+    <div
+      className="absolute top-0 pointer-events-none"
+      style={{ left: CORD_OFFSET_X - CORD_ANCHOR_X, width: CORD_ANCHOR_X * 2, height: 200 }}
+    >
+      <svg className="absolute top-0 left-0 overflow-visible" width={CORD_ANCHOR_X * 2} height={200} aria-hidden="true">
+        <motion.path
+          d={cordPath}
+          fill="none"
+          stroke="#94a3b8"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))' }}
+        />
+        <circle cx={CORD_ANCHOR_X} cy={0} r={3} fill="#475569" />
+      </svg>
+
+      <motion.div
+        className="absolute left-0 w-[80px] flex justify-center cursor-grab active:cursor-grabbing touch-none pointer-events-auto"
+        style={{ top: CORD_HANDLE_TOP, y: dragY, x: handleX }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: CORD_MAX_PULL }}
+        dragElastic={0.15}
+        onDragStart={() => setPulling(true)}
+        onDragEnd={handleDragEnd}
+        onClick={() => { if (!pulling) onToggle(); }}
+      >
+        <motion.div
+          className="rounded-full flex items-center justify-center"
+          style={{
+            width: CORD_HANDLE_RADIUS * 2,
+            height: CORD_HANDLE_RADIUS * 2,
+            background: 'radial-gradient(circle at 30% 25%, #fde68a 0%, #fbbf24 30%, #d97706 60%, #78350f 100%)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5), 0 0 10px rgba(251,191,36,0.2), inset 0 2px 4px rgba(255,255,255,0.2)',
+            border: '1px solid rgba(251,191,36,0.3)',
+          }}
+          animate={{ scale: pulling ? 1.15 : 1 }}
+          whileHover={{ scale: 1.08 }}
+        >
+          <span className="rounded-full" style={{ width: 6, height: 6, background: 'rgba(254,243,199,0.4)' }} />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -1475,21 +1502,42 @@ function Field3D({ icon, children, focused }: { icon: React.ReactNode; children:
   );
 }
 
-/* ============== CLICK SOUND ============== */
+/* ============== PULL-STRING SOUND ============== */
 
-function playClick() {
+function playPullSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    const length = Math.floor(ctx.sampleRate * 0.04);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 4);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 2200;
+    bandpass.Q.value = 1.2;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.5;
+    noise.connect(bandpass).connect(noiseGain).connect(ctx.destination);
+    noise.start(now);
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.15);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+
+    setTimeout(() => ctx.close(), 400);
   } catch {
     // audio not available
   }
