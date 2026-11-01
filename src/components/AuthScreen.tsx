@@ -123,22 +123,6 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
         perspective: '1200px',
       }}
     >
-      {/* Admin-uploaded login background image (base layer, full-bleed) */}
-      {loginBackgroundUrl && (
-        <div
-          key={loginBackgroundUrl}
-          className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
-          style={{ opacity: 1 }}
-        >
-          <img
-            src={loginBackgroundUrl}
-            alt=""
-            className="w-full h-full object-cover"
-            style={{ filter: 'saturate(1.1) brightness(0.55)' }}
-          />
-        </div>
-      )}
-
       {/* Background wall logo: full-bleed, fully opaque when lit, hidden when off */}
       <div
         className="absolute inset-0 z-[1] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
@@ -195,6 +179,21 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
           transition: 'opacity 500ms ease-in-out',
         }}
       />
+      {/* Admin-uploaded login background image, drawn above the room layers so it is visible */}
+      {loginBackgroundUrl && (
+        <div
+          key={loginBackgroundUrl}
+          className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
+        >
+          <img
+            src={loginBackgroundUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ filter: 'saturate(1.1) brightness(0.55)' }}
+          />
+        </div>
+      )}
+
       {/* Ambient volumetric glow */}
       <div
         className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none transition-all duration-500 ease-in-out"
