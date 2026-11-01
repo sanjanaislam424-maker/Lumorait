@@ -53,8 +53,9 @@ function secondsUntil(isoTimestamp: string | null): number {
   return Math.max(0, diff);
 }
 
-export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?: boolean; subject?: string }) {
+export function ChatWidget({ supportMode = false, subject = '', initialAttachmentUrl = '' }: { supportMode?: boolean; subject?: string; initialAttachmentUrl?: string }) {
   const { t, profile, lang, aiTone } = useApp();
+  const attachmentUsedRef = useRef(false);
   const { notify } = useToast();
   const [open, setOpen] = useState(supportMode);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -229,9 +230,11 @@ export function ChatWidget({ supportMode = false, subject = '' }: { supportMode?
       session_id: sid,
       role: 'user',
       content: text,
+      ...(initialAttachmentUrl && !attachmentUsedRef.current ? { image_url: initialAttachmentUrl } : {}),
     }).select('*').single();
 
     if (inserted) {
+      attachmentUsedRef.current = true;
       setMessages((prev) => prev.map((m) => m.id === userMsg.id ? inserted as ChatMsg : m));
     }
 
@@ -483,6 +486,13 @@ function ChatMessages({ messages, loading, scrollRef, lang }: {
               </div>
             )}
             <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            {msg.image_url && (
+              <img
+                src={msg.image_url}
+                alt="attachment"
+                className="mt-2 rounded-lg max-w-full max-h-40 object-cover border border-white/10"
+              />
+            )}
           </div>
         </div>
       ))}

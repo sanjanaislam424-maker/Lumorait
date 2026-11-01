@@ -15,6 +15,7 @@ export interface ChatMessageRow {
   role: string;
   content: string;
   created_at: string;
+  image_url?: string | null;
 }
 
 export async function fetchChatSessions(userId: string, limit = 20): Promise<ChatSessionSummary[] | null> {

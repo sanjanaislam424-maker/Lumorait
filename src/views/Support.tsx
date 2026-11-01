@@ -1,16 +1,20 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bug, Lightbulb, HelpCircle, MessageSquare, Send } from 'lucide-react';
+import { Bug, Lightbulb, HelpCircle, MessageSquare, Send, ImagePlus, X, Loader2 } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { ChatWidget } from '@/components/ChatWidget';
 import { ChatHistory } from '@/components/ChatHistory';
 import { Card } from '@/components/ui';
+import { supabase } from '@/lib/supabase';
 
 export function SupportView() {
   const { t, lang } = useApp();
   const [subject, setSubject] = useState('');
   const [selectedType, setSelectedType] = useState<'bug' | 'question' | 'feedback'>('question');
   const [chatStarted, setChatStarted] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const types = [
     { id: 'bug' as const, icon: <Bug size={20} />, label: lang === 'bn' ? 'বাগ রিপোর্ট' : 'Bug Report', desc: lang === 'bn' ? 'কোনো সমস্যা বা এরর পেয়েছে?' : 'Found an issue or error?' },
@@ -19,6 +23,30 @@ export function SupportView() {
   ];
 
   const fullSubject = `[${types.find((tp) => tp.id === selectedType)?.label}] ${subject}`;
+
+  const handleFileSelect = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const fileName = `support/${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('support-screenshots')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('support-screenshots').getPublicUrl(fileName);
+      setAttachmentUrl(data.publicUrl);
+    } catch {
+      // ignore upload errors silently
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = () => {
+    setAttachmentUrl('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   if (chatStarted) {
     return (
@@ -29,7 +57,7 @@ export function SupportView() {
         >
           ← {lang === 'bn' ? 'ফিরে যাও' : 'Back'}
         </button>
-        <ChatWidget supportMode subject={fullSubject} />
+        <ChatWidget supportMode subject={fullSubject} initialAttachmentUrl={attachmentUrl} />
       </div>
     );
   }
@@ -108,6 +136,54 @@ export function SupportView() {
             <Send size={16} />
             {lang === 'bn' ? 'শুরু করো' : 'Start'}
           </button>
+        </div>
+
+        {/* Screenshot upload */}
+        <div className="mt-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+            className="hidden"
+          />
+          {!attachmentUrl && !uploading && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition border-dashed border"
+              style={{
+                borderColor: 'var(--neon-border)',
+                color: 'var(--neon-muted)',
+                background: 'var(--neon-card-bg)',
+              }}
+            >
+              <ImagePlus size={14} />
+              {lang === 'bn' ? 'স্ক্রিনশট যোগ করো (ঐচ্ছিক)' : 'Add screenshot (optional)'}
+            </button>
+          )}
+          {uploading && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs" style={{ color: 'var(--neon-muted)' }}>
+              <Loader2 size={14} className="animate-spin" />
+              {lang === 'bn' ? 'আপলোড হচ্ছে...' : 'Uploading...'}
+            </div>
+          )}
+          {attachmentUrl && (
+            <div className="relative inline-block">
+              <img
+                src={attachmentUrl}
+                alt="Screenshot preview"
+                className="rounded-xl max-h-32 object-cover border"
+                style={{ borderColor: 'var(--neon-border)' }}
+              />
+              <button
+                onClick={removeAttachment}
+                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white shadow-lg transition"
+                title={lang === 'bn' ? 'সরাও' : 'Remove'}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </Card>
 
