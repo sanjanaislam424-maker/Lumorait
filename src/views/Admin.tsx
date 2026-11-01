@@ -634,6 +634,8 @@ function SettingsTab() {
         login_beam_spread: lighting.beamSpread,
         login_beam_opacity: lighting.beamOpacity,
         login_beam_blur: lighting.beamBlur,
+        login_background_opacity: lighting.backgroundOpacity,
+        login_background_blur: lighting.backgroundBlur,
       }).eq('id', 1);
       if (error) { notify(error.message, 'error'); return; }
       lightingDirty.current = false;

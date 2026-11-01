@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useToast } from '@/components/Toast';
 import { Logo } from '@/components/Logo';
-import { LoginBranding, logoBlurPx } from '@/lib/loginBranding';
+import { LoginBranding, logoBlurPx, backgroundBlurPx } from '@/lib/loginBranding';
 
 function readRefFromUrl() {
   return new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase() ?? '';
@@ -126,7 +126,7 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
       {/* Background wall logo: full-bleed, fully opaque when lit, hidden when off */}
       <div
         className="absolute inset-0 z-[1] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
-        style={{ opacity: lit ? lighting.logoOpacity / 100 : 0 }}
+        style={{ opacity: loginBackgroundUrl ? 0 : (lit ? lighting.logoOpacity / 100 : 0) }}
       >
         {logoUrl ? (
           <img
@@ -179,17 +179,20 @@ export function AuthScreen({ embedded = false, branding }: { embedded?: boolean;
           transition: 'opacity 500ms ease-in-out',
         }}
       />
-      {/* Admin-uploaded login background image, drawn above the room layers so it is visible */}
+      {/* Admin-uploaded login background image.
+          Persistent across both lighting states; never falls back to the global app logo.
+          Drawn above the room gradients so it stays visible when the light is on or off. */}
       {loginBackgroundUrl && (
         <div
           key={loginBackgroundUrl}
-          className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
+          className="absolute inset-0 z-[2] overflow-hidden pointer-events-none transition-opacity duration-500 ease-in-out"
+          style={{ opacity: lighting.backgroundOpacity / 100 }}
         >
           <img
             src={loginBackgroundUrl}
             alt=""
             className="w-full h-full object-cover"
-            style={{ filter: 'saturate(1.1) brightness(0.55)' }}
+            style={{ filter: `blur(${backgroundBlurPx(lighting.backgroundBlur)}px) saturate(1.1) brightness(0.55)`, transition: 'filter 300ms ease-in-out' }}
           />
         </div>
       )}
