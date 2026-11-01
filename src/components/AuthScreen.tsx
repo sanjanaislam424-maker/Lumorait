@@ -970,20 +970,32 @@ function Chandelier3D({ lit, onToggle, sway }: { lit: boolean; onToggle: () => v
 
 const CORD_OFFSET_X = 92;
 const CORD_ANCHOR_X = 40;
-const CORD_HANDLE_TOP = 30;
-const CORD_HANDLE_RADIUS = 14;
-const CORD_MAX_PULL = 120;
+const CORD_HANDLE_RADIUS = 16;
+const CORD_MAX_PULL = 140;
 const CORD_TOGGLE_DISTANCE = 40;
 const CORD_TOGGLE_VELOCITY = 250;
 const CORD_SWAY = 0.35;
 
+function useViewportHeight() {
+  const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 800));
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return vh;
+}
+
 function PullCord({ sway, onToggle }: { sway: ChandelierSway; onToggle: () => void }) {
   const { dragY, pulling, setPulling } = sway;
+  const vh = useViewportHeight();
+  const restTop = Math.max(140, Math.min(vh * 0.58, vh - 180));
+  const containerHeight = restTop + CORD_HANDLE_RADIUS * 2 + CORD_MAX_PULL + 40;
   const wave = useMotionValue(0);
   const handleX = useTransform(wave, (w: number) => w * CORD_SWAY);
   const cordPath = useTransform([dragY, wave], ([h, w]: number[]) => {
     const endX = CORD_ANCHOR_X + w * CORD_SWAY;
-    const endY = CORD_HANDLE_TOP + CORD_HANDLE_RADIUS + h;
+    const endY = restTop + CORD_HANDLE_RADIUS + h;
     const c1x = CORD_ANCHOR_X + w;
     const c2x = endX - w * 0.5;
     return `M ${CORD_ANCHOR_X} 0 C ${c1x} ${endY * 0.3} ${c2x} ${endY * 0.7} ${endX} ${endY}`;
@@ -1003,9 +1015,9 @@ function PullCord({ sway, onToggle }: { sway: ChandelierSway; onToggle: () => vo
   return (
     <div
       className="absolute top-0 pointer-events-none"
-      style={{ left: CORD_OFFSET_X - CORD_ANCHOR_X, width: CORD_ANCHOR_X * 2, height: 200 }}
+      style={{ left: CORD_OFFSET_X - CORD_ANCHOR_X, width: CORD_ANCHOR_X * 2, height: containerHeight }}
     >
-      <svg className="absolute top-0 left-0 overflow-visible" width={CORD_ANCHOR_X * 2} height={200} aria-hidden="true">
+      <svg className="absolute top-0 left-0 overflow-visible" width={CORD_ANCHOR_X * 2} height={containerHeight} aria-hidden="true">
         <motion.path
           d={cordPath}
           fill="none"
@@ -1019,7 +1031,7 @@ function PullCord({ sway, onToggle }: { sway: ChandelierSway; onToggle: () => vo
 
       <motion.div
         className="absolute left-0 w-[80px] flex justify-center cursor-grab active:cursor-grabbing touch-none pointer-events-auto"
-        style={{ top: CORD_HANDLE_TOP, y: dragY, x: handleX }}
+        style={{ top: restTop, y: dragY, x: handleX }}
         drag="y"
         dragConstraints={{ top: 0, bottom: CORD_MAX_PULL }}
         dragElastic={0.15}
