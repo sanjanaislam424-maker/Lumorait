@@ -467,34 +467,7 @@ function ChatMessages({ messages, loading, scrollRef, lang }: {
         </div>
       )}
       {messages.map((msg) => (
-        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-          <div
-            className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${msg.role === 'user' ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
-            style={{
-              background: msg.role === 'user'
-                ? 'linear-gradient(135deg, var(--neon-primary), var(--neon-secondary))'
-                : msg.role === 'admin'
-                ? 'rgba(245,158,11,0.15)'
-                : 'var(--neon-card-bg)',
-              color: msg.role === 'user' ? '#fff' : 'var(--neon-text)',
-              border: msg.role !== 'user' ? `1px solid var(--neon-border)` : 'none',
-            }}
-          >
-            {msg.role === 'admin' && (
-              <div className="flex items-center gap-1 mb-1 text-[10px] font-bold" style={{ color: '#f59e0b' }}>
-                <UserCog size={10} /> {lang === 'bn' ? 'অ্যাডমিন' : 'Admin'}
-              </div>
-            )}
-            <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-            {msg.image_url && (
-              <img
-                src={msg.image_url}
-                alt="attachment"
-                className="mt-2 rounded-lg max-w-full max-h-40 object-cover border border-white/10"
-              />
-            )}
-          </div>
-        </div>
+        <ChatBubble key={msg.id} msg={msg} lang={lang} />
       ))}
       {loading && (
         <div className="flex justify-start">
@@ -511,6 +484,73 @@ function ChatMessages({ messages, loading, scrollRef, lang }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ChatBubble({ msg, lang }: { msg: ChatMsg; lang: string }) {
+  const [showTime, setShowTime] = useState(false);
+  const timeStr = (() => {
+    try {
+      return new Date(msg.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  })();
+
+  return (
+    <div
+      className={`group flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      onClick={() => setShowTime((v) => !v)}
+      onMouseEnter={() => setShowTime(true)}
+      onMouseLeave={() => setShowTime(false)}
+    >
+      <div className="relative">
+        <div
+          className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${msg.role === 'user' ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
+          style={{
+            background: msg.role === 'user'
+              ? 'linear-gradient(135deg, var(--neon-primary), var(--neon-secondary))'
+              : msg.role === 'admin'
+              ? 'rgba(245,158,11,0.15)'
+              : 'var(--neon-card-bg)',
+            color: msg.role === 'user' ? '#fff' : 'var(--neon-text)',
+            border: msg.role !== 'user' ? `1px solid var(--neon-border)` : 'none',
+          }}
+        >
+          {msg.role === 'admin' && (
+            <div className="flex items-center gap-1 mb-1 text-[10px] font-bold" style={{ color: '#f59e0b' }}>
+              <UserCog size={10} /> {lang === 'bn' ? 'অ্যাডমিন' : 'Admin'}
+            </div>
+          )}
+          <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+          {msg.image_url && (
+            <img
+              src={msg.image_url}
+              alt="attachment"
+              className="mt-2 rounded-lg max-w-full max-h-40 object-cover border border-white/10"
+            />
+          )}
+        </div>
+        <AnimatePresence>
+          {showTime && timeStr && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className={`absolute z-10 top-0 ${msg.role === 'user' ? 'right-full mr-2' : 'left-full ml-2'} whitespace-nowrap pointer-events-none`}
+            >
+              <span
+                className="inline-block px-2 py-1 rounded-lg text-[10px] font-medium shadow-md"
+                style={{ background: 'rgba(15,23,42,0.92)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                {timeStr}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
