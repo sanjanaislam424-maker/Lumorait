@@ -242,7 +242,7 @@ function TreasureChest({
         {isBlasted && !cracking && (
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 1, 0.6, 0] }}
+            animate={{ opacity: [0, 1, 0.7, 0.7] }}
             transition={{ duration: 1, ease: 'easeOut' }}
             className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
             style={{
@@ -262,7 +262,7 @@ function TreasureChest({
           isBlasted && cracking
             ? { rotateX: [0, -8, 6, -10, 4, 0] }
             : isBlasted && !cracking
-            ? { rotateX: [0, -115, -100, -110, 0] }
+            ? { rotateX: [0, -115, -105, -110, -110] }
             : { rotateX: 0 }
         }
         transition={
@@ -728,10 +728,9 @@ export function Spin() {
           notify(reward.comment, 'info');
         }
 
-        // Clear floating reward and blasted box after a delay
+        // Clear floating reward after a delay; chest stays permanently open
         setTimeout(() => {
           setFloatingReward(null);
-          setBlastedBox(null);
         }, 2000);
       }, 1200);
     }, 500);
@@ -1304,6 +1303,18 @@ export function Spin() {
       )}
 
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
+
+      {/* Auto-dismiss result modal after 4 seconds */}
+      <ResultAutoDismiss result={result} setResult={setResult} />
     </div>
   );
+}
+
+function ResultAutoDismiss({ result, setResult }: { result: { reward: Reward } | null; setResult: (v: { reward: Reward } | null) => void }) {
+  useEffect(() => {
+    if (!result) return;
+    const tm = setTimeout(() => setResult(null), 4000);
+    return () => clearTimeout(tm);
+  }, [result, setResult]);
+  return null;
 }
