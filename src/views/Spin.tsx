@@ -254,22 +254,22 @@ function TreasureChest({
         )}
       </AnimatePresence>
 
-      {/* Lid — hinged at top, snaps open on blast then closes */}
+      {/* Lid — hinged at top, violently snaps open and stays broken */}
       <motion.div
         className="absolute left-0 right-0"
         style={{ top: 0, height: lidH, transformOrigin: 'top center', zIndex: 3 }}
         animate={
           isBlasted && cracking
-            ? { rotateX: [0, -8, 6, -10, 4, 0] }
+            ? { rotateX: [0, -6, 8, -12, 6, -4, 0], x: [0, -2, 2, -1, 0] }
             : isBlasted && !cracking
-            ? { rotateX: [0, -115, -105, -110, -110] }
+            ? { rotateX: [0, -8, -130, -118, -125, -125] }
             : { rotateX: 0 }
         }
         transition={
           isBlasted && cracking
             ? { duration: 0.5, ease: 'easeInOut' }
             : isBlasted && !cracking
-            ? { duration: 1.0, ease: 'easeOut' }
+            ? { duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }
             : { duration: 0.3 }
         }
       >
@@ -293,17 +293,58 @@ function TreasureChest({
           ))}
           {rivets([[4, 4], [w - 8, 4], [4, lidH - 6], [w - 8, lidH - 6], [w / 2 - 2, 4]])}
 
+          {/* Jagged crack lines across the lid during cracking */}
           {isBlasted && cracking && (
             <svg className="absolute inset-0 pointer-events-none" width={w} height={lidH}>
-              <motion.path d={`M ${w * 0.3} 2 L ${w * 0.4} ${lidH * 0.5} L ${w * 0.32} ${lidH - 2}`} stroke={cfg.accent} strokeWidth="2" fill="none"
-                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 0.8] }} transition={{ duration: 0.4 }}
+              <motion.path d={`M ${w * 0.2} 1 L ${w * 0.35} ${lidH * 0.4} L ${w * 0.25} ${lidH * 0.6} L ${w * 0.38} ${lidH - 1}`} stroke={cfg.accent} strokeWidth="2.5" fill="none"
+                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 1] }} transition={{ duration: 0.35 }}
+                style={{ filter: `drop-shadow(0 0 5px ${cfg.accent})` }} />
+              <motion.path d={`M ${w * 0.55} 1 L ${w * 0.5} ${lidH * 0.35} L ${w * 0.65} ${lidH * 0.55} L ${w * 0.55} ${lidH - 1}`} stroke={cfg.accent} strokeWidth="2" fill="none"
+                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 0.9, 0.9] }} transition={{ duration: 0.35, delay: 0.08 }}
                 style={{ filter: `drop-shadow(0 0 4px ${cfg.accent})` }} />
-              <motion.path d={`M ${w * 0.6} 2 L ${w * 0.55} ${lidH * 0.5} L ${w * 0.65} ${lidH - 2}`} stroke={cfg.accent} strokeWidth="1.5" fill="none"
-                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 0.7, 0.5] }} transition={{ duration: 0.4, delay: 0.1 }}
+              <motion.path d={`M ${w * 0.8} 1 L ${w * 0.75} ${lidH * 0.5} L ${w * 0.85} ${lidH - 1}`} stroke={cfg.accent} strokeWidth="1.5" fill="none"
+                initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 0.7, 0.7] }} transition={{ duration: 0.3, delay: 0.12 }}
                 style={{ filter: `drop-shadow(0 0 3px ${cfg.accent})` }} />
             </svg>
           )}
+
+          {/* Permanent crack lines etched into the lid after opening */}
+          {isBlasted && !cracking && (
+            <svg className="absolute inset-0 pointer-events-none" width={w} height={lidH}>
+              <path d={`M ${w * 0.2} 1 L ${w * 0.35} ${lidH * 0.4} L ${w * 0.25} ${lidH * 0.6} L ${w * 0.38} ${lidH - 1}`} stroke="#1a0f08" strokeWidth="1.5" fill="none" opacity={0.8} />
+              <path d={`M ${w * 0.55} 1 L ${w * 0.5} ${lidH * 0.35} L ${w * 0.65} ${lidH * 0.55} L ${w * 0.55} ${lidH - 1}`} stroke="#1a0f08" strokeWidth="1.2" fill="none" opacity={0.7} />
+              <path d={`M ${w * 0.8} 1 L ${w * 0.75} ${lidH * 0.5} L ${w * 0.85} ${lidH - 1}`} stroke="#1a0f08" strokeWidth="1" fill="none" opacity={0.6} />
+            </svg>
+          )}
         </div>
+
+        {/* Flying wood shard debris from the lid crack */}
+        {isBlasted && !cracking && (
+          <>
+            {Array.from({ length: 6 }).map((_, si) => {
+              const sx = (w / 6) * si + 6;
+              const angle = -60 - Math.random() * 40;
+              return (
+                <motion.div
+                  key={`shard-${si}`}
+                  className="absolute"
+                  style={{
+                    left: sx, top: 2, width: 4 + Math.random() * 4, height: 8 + Math.random() * 6,
+                    background: woodDark, borderRadius: 1, zIndex: 5,
+                  }}
+                  initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
+                  animate={{
+                    x: Math.cos((angle * Math.PI) / 180) * (20 + Math.random() * 30),
+                    y: Math.sin((angle * Math.PI) / 180) * (20 + Math.random() * 30) - 15,
+                    opacity: [1, 1, 0],
+                    rotate: (Math.random() - 0.5) * 360,
+                  }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                />
+              );
+            })}
+          </>
+        )}
       </motion.div>
 
       {/* Burst flash on open */}

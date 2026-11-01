@@ -1,8 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function CelebrationOverlay({ show, onClose, title }: { show: boolean; onClose: () => void; title: string }) {
   const [particles, setParticles] = useState<{ id: number; x: number; color: string; delay: number }[]>([]);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (show) {
@@ -14,10 +16,10 @@ export function CelebrationOverlay({ show, onClose, title }: { show: boolean; on
         delay: Math.random() * 0.5,
       }));
       setParticles(arr);
-      const tm = setTimeout(onClose, 3500);
+      const tm = setTimeout(() => onCloseRef.current(), 3500);
       return () => clearTimeout(tm);
     }
-  }, [show, onClose]);
+  }, [show]);
 
   return (
     <AnimatePresence>

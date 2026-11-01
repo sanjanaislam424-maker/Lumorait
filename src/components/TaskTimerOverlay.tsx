@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock } from 'lucide-react';
 
 export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: boolean; onExpire: () => void; taskTitle: string }) {
   const [seconds, setSeconds] = useState(300);
+  const onExpireRef = useRef(onExpire);
+  onExpireRef.current = onExpire;
 
   useEffect(() => {
     if (active) {
@@ -12,7 +14,7 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
         setSeconds((s) => {
           if (s <= 1) {
             clearInterval(iv);
-            onExpire();
+            onExpireRef.current();
             return 0;
           }
           return s - 1;
@@ -20,7 +22,7 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
       }, 1000);
       return () => clearInterval(iv);
     }
-  }, [active, onExpire]);
+  }, [active]);
 
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;

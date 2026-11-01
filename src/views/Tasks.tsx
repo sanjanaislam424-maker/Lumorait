@@ -212,7 +212,7 @@ export function Tasks() {
         <ProofModal task={proofTask} onClose={() => setProofTask(null)} onSubmit={submitProof} />
         <ChatModal task={chatTask} onClose={() => setChatTask(null)} />
         <EditTaskModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} />
-        <TaskTimerOverlay active={timer.active} onExpire={() => {}} taskTitle={timer.title} />
+        <TaskTimerOverlay active={timer.active} onExpire={() => setTimer({ active: false, title: '' })} taskTitle={timer.title} />
         <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
       </>
     );
@@ -305,7 +305,7 @@ export function Tasks() {
       <ProofModal task={proofTask} onClose={() => setProofTask(null)} onSubmit={submitProof} />
       <ChatModal task={chatTask} onClose={() => setChatTask(null)} />
       <EditTaskModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} />
-      <TaskTimerOverlay active={timer.active} onExpire={() => {}} taskTitle={timer.title} />
+      <TaskTimerOverlay active={timer.active} onExpire={() => setTimer({ active: false, title: '' })} taskTitle={timer.title} />
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
     </div>
   );
