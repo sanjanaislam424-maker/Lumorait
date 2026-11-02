@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star, Bug, Lightbulb } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
@@ -1849,6 +1849,34 @@ function SupportChatsTab() {
   const [messages, setMessages] = useState<any[]>([]);
   const [reply, setReply] = useState('');
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [subTab, setSubTab] = useState<'reports' | 'chats'>('reports');
+  const [reports, setReports] = useState<any[]>([]);
+  const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const [reportNote, setReportNote] = useState('');
+
+  const loadReports = async () => {
+    const { data } = await supabase
+      .from('support_reports')
+      .select('*, profiles!support_reports_user_id_fkey(full_name, phone, avatar_url)')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    setReports(data || []);
+  };
+  useEffect(() => { loadReports(); }, []);
+
+  const updateReportStatus = async (id: string, status: string) => {
+    await supabase.from('support_reports').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+    notify('Report updated', 'success');
+    loadReports();
+  };
+
+  const saveReportNote = async (id: string) => {
+    if (!reportNote.trim()) return;
+    await supabase.from('support_reports').update({ admin_note: reportNote.trim(), updated_at: new Date().toISOString() }).eq('id', id);
+    setReportNote('');
+    notify('Note saved', 'success');
+    loadReports();
+  };
 
   const load = async () => {
     const { data } = await supabase
@@ -1901,60 +1929,164 @@ function SupportChatsTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <div className="flex items-center gap-2 mb-3">
-          <MessageSquare size={18} className="text-amber-400" />
-          <h3 className="font-semibold text-white">Support Chats</h3>
-        </div>
-        <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
-          {sessions.length === 0 ? <EmptyState message="No support chats yet" /> : sessions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => { setSelectedSession(s.id); loadMessages(s.id); }}
-              className={`w-full text-left bg-slate-800/50 border rounded-xl p-3 transition ${selectedSession === s.id ? 'border-amber-500/50' : 'border-white/10'}`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-white font-medium truncate">
-                  {s.profiles?.full_name || s.profiles?.phone || 'User'}
-                </p>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.status === 'pending_human' ? 'bg-amber-500/20 text-amber-300' : s.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400'}`}>
-                  {s.status}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1 truncate">{s.subject || s.title}</p>
-            </button>
-          ))}
-        </div>
+      {/* Sub-tab switcher */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSubTab('reports')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition ${subTab === 'reports' ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400'}`}
+        >
+          <Bug size={14} /> Reports ({reports.length})
+        </button>
+        <button
+          onClick={() => setSubTab('chats')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition ${subTab === 'chats' ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400'}`}
+        >
+          <MessageSquare size={14} /> Live Chats
+        </button>
+      </div>
 
-        {selectedSession && (
-          <div className="border-t border-white/10 pt-4">
-            <h4 className="text-sm font-semibold text-white mb-2">Conversation</h4>
-            <div className="space-y-2 max-h-64 overflow-y-auto mb-3">
-              {loadingMsgs ? <p className="text-xs text-slate-400 text-center py-4">Loading...</p> : messages.map((m) => (
-                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : m.role === 'admin' ? 'bg-amber-500/20 text-amber-200' : 'bg-slate-700 text-slate-200'}`}>
-                    {m.role !== 'user' && <p className="text-[10px] font-bold mb-1 opacity-70">{m.role}</p>}
-                    <p>{m.content}</p>
-                    {m.image_url && (
-                      <img src={m.image_url} alt="attachment" className="mt-2 rounded-lg max-w-full max-h-40 object-cover border border-white/10" />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                placeholder="Type admin reply..."
-                className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none"
-                onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
-              />
-              <Button className="flex items-center gap-1" onClick={sendReply}><Send size={14} /> Send</Button>
-            </div>
+      {/* ===== Reports sub-tab ===== */}
+      {subTab === 'reports' && (
+        <Card>
+          <div className="flex items-center gap-2 mb-3">
+            <Bug size={18} className="text-amber-400" />
+            <h3 className="font-semibold text-white">Support & Reports</h3>
           </div>
-        )}
-      </Card>
+          <div className="space-y-3 max-h-[600px] overflow-y-auto">
+            {reports.length === 0 ? <EmptyState message="No reports submitted yet" /> : reports.map((r) => (
+              <div key={r.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3">
+                <button
+                  onClick={() => setExpandedReport(expandedReport === r.id ? null : r.id)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                      style={{
+                        background: r.type === 'bug' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                        color: r.type === 'bug' ? '#ef4444' : '#f59e0b',
+                      }}
+                    >
+                      {r.type === 'bug' ? <Bug size={16} /> : <Lightbulb size={16} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-white font-medium truncate">
+                          {r.subject || (r.type === 'bug' ? 'Bug Report' : 'Feedback')}
+                        </p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${r.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {r.profiles?.full_name || r.profiles?.phone || 'User'} · {new Date(r.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{r.description}</p>
+                    </div>
+                  </div>
+                </button>
+
+                {expandedReport === r.id && (
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap">{r.description}</p>
+                    {r.image_url && (
+                      <div className="mt-3">
+                        <a href={r.image_url} target="_blank" rel="noopener noreferrer">
+                          <img src={r.image_url} alt="Screenshot" className="rounded-xl max-h-56 object-cover border border-white/10" />
+                        </a>
+                      </div>
+                    )}
+                    {r.admin_note && (
+                      <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-xs font-bold mb-1 text-amber-300">Admin note:</p>
+                        <p className="text-xs text-slate-200">{r.admin_note}</p>
+                      </div>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        value={expandedReport === r.id ? reportNote : ''}
+                        onChange={(e) => setReportNote(e.target.value)}
+                        placeholder="Add admin note..."
+                        className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                      />
+                      <Button className="text-xs" onClick={() => saveReportNote(r.id)}><Send size={12} /></Button>
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      {r.status === 'pending' ? (
+                        <Button variant="ghost" className="text-xs" onClick={() => updateReportStatus(r.id, 'resolved')}>
+                          <Check size={12} /> Mark resolved
+                        </Button>
+                      ) : (
+                        <Button variant="ghost" className="text-xs" onClick={() => updateReportStatus(r.id, 'pending')}>
+                          Reopen
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ===== Live Chats sub-tab ===== */}
+      {subTab === 'chats' && (
+        <Card>
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquare size={18} className="text-amber-400" />
+            <h3 className="font-semibold text-white">Support Chats</h3>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
+            {sessions.length === 0 ? <EmptyState message="No support chats yet" /> : sessions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => { setSelectedSession(s.id); loadMessages(s.id); }}
+                className={`w-full text-left bg-slate-800/50 border rounded-xl p-3 transition ${selectedSession === s.id ? 'border-amber-500/50' : 'border-white/10'}`}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-white font-medium truncate">
+                    {s.profiles?.full_name || s.profiles?.phone || 'User'}
+                  </p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.status === 'pending_human' ? 'bg-amber-500/20 text-amber-300' : s.status === 'resolved' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400'}`}>
+                    {s.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 truncate">{s.subject || s.title}</p>
+              </button>
+            ))}
+          </div>
+
+          {selectedSession && (
+            <div className="border-t border-white/10 pt-4">
+              <h4 className="text-sm font-semibold text-white mb-2">Conversation</h4>
+              <div className="space-y-2 max-h-64 overflow-y-auto mb-3">
+                {loadingMsgs ? <p className="text-xs text-slate-400 text-center py-4">Loading...</p> : messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : m.role === 'admin' ? 'bg-amber-500/20 text-amber-200' : 'bg-slate-700 text-slate-200'}`}>
+                      {m.role !== 'user' && <p className="text-[10px] font-bold mb-1 opacity-70">{m.role}</p>}
+                      <p>{m.content}</p>
+                      {m.image_url && (
+                        <img src={m.image_url} alt="attachment" className="mt-2 rounded-lg max-w-full max-h-40 object-cover border border-white/10" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="Type admin reply..."
+                  className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none"
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendReply(); }}
+                />
+                <Button className="flex items-center gap-1" onClick={sendReply}><Send size={14} /> Send</Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

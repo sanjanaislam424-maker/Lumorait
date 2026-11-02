@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift, Lock, Eye } from 'lucide-react';
+import { ShieldCheck, Trash2, User as UserIcon, MessageSquare, BadgeCheck, AlertCircle, Clock, XCircle, FileWarning, Award, Megaphone, Plus, TrendingUp, Flame, Coins, Crown, Footprints, Zap, Send, LogOut, BarChart3, Star, Target, Upload, Gift, Lock, Eye, Bug } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase } from '@/lib/supabase';
 import { Card, Button, Modal, EmptyState } from '@/components/ui';
@@ -10,6 +10,7 @@ import { PublicContactCard } from '@/components/PublicContactCard';
 import { SkillsAndLinksCard } from '@/components/SkillsAndLinksCard';
 import { PortfolioManager } from '@/components/PortfolioManager';
 import { PendingReviews } from '@/components/PendingReviews';
+import { ReportHistory } from '@/components/ReportHistory';
 import { uploadBrandingImage } from '@/lib/upload';
 
 const badgeIcons: Record<string, React.ReactNode> = {
@@ -41,6 +42,7 @@ export function ProfileView() {
   const [deletePwd, setDeletePwd] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [publicUserId, setPublicUserId] = useState<string | null>(null);
+  const [reportHistoryOpen, setReportHistoryOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -334,6 +336,21 @@ export function ProfileView() {
 
       {/* ===== Advertiser Panel ===== */}
       <AdvertiserPanel userId={profile.id} />
+
+      {/* ===== Report History ===== */}
+      {reportHistoryOpen ? (
+        <ReportHistory onBack={() => setReportHistoryOpen(false)} />
+      ) : (
+        <Card>
+          <button onClick={() => setReportHistoryOpen(true)} className="flex items-center gap-2 w-full text-left">
+            <Bug size={20} className="text-amber-400" />
+            <div>
+              <h3 className="font-semibold neon-text text-sm">{lang === 'bn' ? 'রিপোর্ট হিস্টোরি' : 'Report History'}</h3>
+              <p className="text-xs neon-muted">{lang === 'bn' ? 'তোমার বাগ রিপোর্ট ও ফিডব্যাক দেখো' : 'Track your bug reports & feedback'}</p>
+            </div>
+          </button>
+        </Card>
+      )}
 
       {/* ===== Support ===== */}
       <Card>
