@@ -4,7 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"];
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
 const TIMEOUT_MS = 45_000;
 
 interface ChatMessage {

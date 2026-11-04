@@ -2300,7 +2300,11 @@ function AiContentTab() {
       }
       const d = data as any;
       if (d?.error) {
+        const errMsg = d.warning || d.error || 'Generation failed';
         console.error('regenerate: edge function returned error', d.error);
+        notify(errMsg, 'warning');
+      } else if (d?.newValue) {
+        // Update local state with the returned value
       }
       // Immediately update local state with the returned value for instant UI
       if (d?.newValue) {
