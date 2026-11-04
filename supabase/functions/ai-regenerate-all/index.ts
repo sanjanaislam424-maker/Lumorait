@@ -1,12 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders, extractText, generateContent, isTruncated, jsonResponse, loadGeminiSettings, parseModelJson } from "../_shared/gemini.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-const MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
 const TIMEOUT_MS = 20_000;
 
 const CONTENT_FALLBACK = {
@@ -32,7 +26,7 @@ const UI_FALLBACK = {
   daily_tip_bn: "প্রতিদিন নির্দিষ্ট সময়ে মানসম্মত পোস্ট করুন; অনিয়মিত প্রচারে অ্যালগরিদমও বিভ্রান্ত হয়।",
   daily_tip_en: "Post quality content consistently; irregular promotion confuses the algorithm too.",
   dashboard_alert_bn: "আজকের চেক-ইনটি সম্পন্ন করুন, কারণ ছোট অভ্যাসই বড় ফল তৈরি করে।",
-  dashboard_alert_en: "Complete today’s check-in because small habits create meaningful results.",
+  dashboard_alert_en: "Complete today's check-in because small habits create meaningful results.",
   task_available_bn: "আপনার জন্য নতুন কাজ অপেক্ষা করছে; সুযোগটি কাজে লাগান।",
   task_available_en: "A new task is waiting for you; make the opportunity count.",
   watch_tutorial_bn: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।",
@@ -42,21 +36,6 @@ const UI_FALLBACK = {
 const CONTENT_FIELDS = Object.keys(CONTENT_FALLBACK);
 const UI_FIELDS = Object.keys(UI_FALLBACK);
 
-function response(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-
-async function keys(db: any): Promise<string[]> {
-  const { data } = await db.from("app_settings").select("gemini_api_keys").eq("id", 1).maybeSingle();
-  const stored = Array.isArray(data?.gemini_api_keys) ? data.gemini_api_keys.filter(Boolean) : [];
-  const env = Deno.env.get("GEMINI_API_KEY");
-  return env && !stored.includes(env) ? [...stored, env] : stored;
-}
-
-function clean(value: string): string {
-  return value.replace(/```json/g, "").replace(/```/g, "").trim();
-}
-
 function valid(value: unknown, bangla = false): value is string {
   if (typeof value !== "string" || value.trim().split(/\s+/).length < 3) return false;
   if (bangla && !/[\u0980-\u09FF]/u.test(value)) return false;
@@ -64,42 +43,28 @@ function valid(value: unknown, bangla = false): value is string {
   return true;
 }
 
-async function ask(db: any, prompt: string): Promise<Record<string, string> | null> {
-  const allKeys = await keys(db);
-  for (const key of allKeys) {
-    for (const model of MODELS) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1.3, maxOutputTokens: 1800 } }),
-          signal: controller.signal,
-        });
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") continue;
-        const raw = data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("") || "";
-        if (!raw) continue;
-        const parsed = JSON.parse(clean(raw));
-        return parsed as Record<string, string>;
-      } catch {
-        continue;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-  }
-  return null;
+async function ask(keys: string[], prompt: string): Promise<Record<string, unknown> | null> {
+  const result = await generateContent({
+    keys,
+    body: {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 1.3, maxOutputTokens: 1800 },
+    },
+    timeoutMs: TIMEOUT_MS,
+    label: "ai-regenerate-all",
+    accept: (json) => !isTruncated(json) && parseModelJson(extractText(json)) !== null,
+  });
+  if (!result.ok) return null;
+  return parseModelJson(extractText(result.json));
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
-  if (req.method !== "POST") return response({ error: "POST only" }, 405);
+  if (req.method !== "POST") return jsonResponse({ error: "POST only" }, 405);
 
   try {
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { keys } = await loadGeminiSettings(db);
     const today = new Date().toISOString().split("T")[0];
     const prompt = `You are the ultimate chill best friend of the user on "Lumora IT", a Bangladeshi social media micro-task and SMM app.
 Your vibe: you're that hilarious, warm-hearted buddy who cracks jokes over adda, drops real growth tips like casual wisdom, and makes every interaction feel like a fun chat with your closest friend. You're witty, playful, a little sarcastic, but never mean — you roast with love.
@@ -117,9 +82,21 @@ Content keys must be funny_bn/funny_en and tip_bn/tip_en — these are daily jok
 UI keys must use the exact *_bn and *_en names listed above — these are short, punchy UI labels and messages.
 Keep each value concise, complete, and fun.`;
 
-    const generated = await ask(db, prompt);
-    const content = Object.fromEntries(CONTENT_FIELDS.map((field) => [field, valid(generated?.[field], field.endsWith("_bn")) ? generated![field].trim() : CONTENT_FALLBACK[field as keyof typeof CONTENT_FALLBACK]]));
-    const uiCopy = Object.fromEntries(UI_FIELDS.map((field) => [field, valid(generated?.[field], field.endsWith("_bn")) ? generated![field].trim() : UI_FALLBACK[field as keyof typeof UI_FALLBACK]]));
+    const generated = keys.length > 0 ? await ask(keys, prompt) : null;
+    if (keys.length === 0) console.error("ai-regenerate-all: no Gemini keys configured, saving fallback content");
+
+    const content = Object.fromEntries(
+      CONTENT_FIELDS.map((field) => [
+        field,
+        valid(generated?.[field], field.endsWith("_bn")) ? (generated![field] as string).trim() : CONTENT_FALLBACK[field as keyof typeof CONTENT_FALLBACK],
+      ]),
+    );
+    const uiCopy = Object.fromEntries(
+      UI_FIELDS.map((field) => [
+        field,
+        valid(generated?.[field], field.endsWith("_bn")) ? (generated![field] as string).trim() : UI_FALLBACK[field as keyof typeof UI_FALLBACK],
+      ]),
+    );
     const now = new Date().toISOString();
 
     const { data: contentRow } = await db.from("daily_ai_content").select("id").eq("content_date", today).maybeSingle();
@@ -136,9 +113,9 @@ Keep each value concise, complete, and fun.`;
     const { error: uiError } = await uiWrite;
     if (uiError) throw uiError;
 
-    return response({ success: true, content, uiCopy, fallback: !generated });
+    return jsonResponse({ success: true, content, uiCopy, fallback: !generated });
   } catch (err) {
-    console.error("ai-regenerate-all failed", err);
-    return response({ error: "Regeneration failed" }, 500);
+    console.error("ai-regenerate-all failed:", err);
+    return jsonResponse({ error: "Regeneration failed", detail: String(err).slice(0, 300) }, 500);
   }
 });

@@ -1,12 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders, extractText, generateContent, isTruncated, jsonResponse, loadGeminiSettings } from "../_shared/gemini.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-const MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
 const TIMEOUT_MS = 15_000;
 
 const CONTENT_ITEMS: Record<string, { desc: string; maxChars: number; fallback: string; bangla: boolean }> = {
@@ -59,17 +53,6 @@ const UI_ITEMS: Record<string, { desc: string; maxChars: number; fallback: strin
   watch_tutorial_en: { desc: "Funny call-to-action to watch a tutorial", maxChars: 100, fallback: "Watch the tutorial and start the task with confidence.", bangla: false },
 };
 
-function response(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-
-async function getKeys(db: any): Promise<string[]> {
-  const { data } = await db.from("app_settings").select("gemini_api_keys").eq("id", 1).maybeSingle();
-  const stored = Array.isArray(data?.gemini_api_keys) ? data.gemini_api_keys.filter(Boolean) : [];
-  const env = Deno.env.get("GEMINI_API_KEY");
-  return env && !stored.includes(env) ? [...stored, env] : stored;
-}
-
 function cleanText(text: string): string {
   return text
     .replace(/```[a-z]*/g, "")
@@ -88,7 +71,7 @@ function validate(text: string, bangla: boolean, maxChars: number): string | nul
   return cleaned;
 }
 
-async function generateItem(allKeys: string[], desc: string, maxChars: number, currentValue: string, field: string, bangla: boolean): Promise<string | null> {
+async function generateItem(keys: string[], desc: string, maxChars: number, currentValue: string, field: string, bangla: boolean): Promise<string | null> {
   const langInstruction = bangla
     ? "The output MUST be in PURE Bengali script (বাংলা হরফ) only. NEVER use Banglish, transliteration, or Latin script."
     : "The output MUST be in natural, professional English only. NEVER use Bengali script or non-English characters.";
@@ -107,41 +90,22 @@ Current value (do NOT repeat or paraphrase this — generate something completel
 
 Return ONLY the raw text string — no JSON, no markdown, no code fences, no quotes. Just the text itself.`;
 
-  for (const key of allKeys) {
-    for (const model of MODELS) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 1.5, maxOutputTokens: 512 },
-          }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          const errBody = await res.text();
-          console.error(`ai-regenerate: ${field} model ${model} key failed (${res.status}): ${errBody.slice(0, 200)}`);
-          continue;
-        }
-        const data = await res.json();
-        if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") continue;
-        const text = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("") || "";
-        if (!text) continue;
-        const validated = validate(text, bangla, maxChars);
-        if (validated) return validated;
-        console.error(`ai-regenerate: ${field} validation failed for: ${text.slice(0, 100)}`);
-      } catch (err) {
-        console.error(`ai-regenerate: ${field} model ${model} error:`, err);
-        continue;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-  }
-  return null;
+  const result = await generateContent({
+    keys,
+    body: {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 1.5, maxOutputTokens: 512 },
+    },
+    timeoutMs: TIMEOUT_MS,
+    label: `ai-regenerate ${field}`,
+    accept: (json) => !isTruncated(json) && validate(extractText(json), bangla, maxChars) !== null,
+  });
+  if (!result.ok) return null;
+  return validate(extractText(result.json), bangla, maxChars);
+}
+
+function response(body: unknown, status = 200): Response {
+  return jsonResponse(body, status);
 }
 
 Deno.serve(async (req: Request) => {
@@ -168,24 +132,15 @@ Deno.serve(async (req: Request) => {
 
     const today = new Date().toISOString().split("T")[0];
     const { data: row, error: rowError } = await db.from(table).select("*").eq("content_date", today).maybeSingle();
-    if (rowError) {
-      console.error(`ai-regenerate: select error for ${table}:`, rowError);
-    }
+    if (rowError) console.error(`ai-regenerate: select error for ${table}:`, rowError);
 
     const currentValue = row ? (row as Record<string, string>)[field] || "" : "";
-    const allKeys = await getKeys(db);
+    const { keys } = await loadGeminiSettings(db);
 
-    if (allKeys.length === 0) {
-      const fallbackValue = itemDef.fallback;
-      if (row) {
-        await db.from(table).update({ [field]: fallbackValue, updated_at: new Date().toISOString() }).eq("content_date", today);
-      } else {
-        await db.from(table).insert({ content_date: today, [field]: fallbackValue });
-      }
-      return response({ field, newValue: fallbackValue, table, fallback: true, warning: "No API keys configured — saved fallback content" });
-    }
-
-    const newValue = await generateItem(allKeys, itemDef.desc, itemDef.maxChars, currentValue, field, itemDef.bangla);
+    const newValue = keys.length > 0
+      ? await generateItem(keys, itemDef.desc, itemDef.maxChars, currentValue, field, itemDef.bangla)
+      : null;
+    if (keys.length === 0) console.error("ai-regenerate: no Gemini keys configured, saving fallback content");
     const finalValue = newValue || itemDef.fallback;
     const usedFallback = newValue === null;
     const now = new Date().toISOString();
@@ -198,7 +153,6 @@ Deno.serve(async (req: Request) => {
       const result = await db.from(table).insert({ content_date: today, [field]: finalValue });
       updateError = result.error;
       if (updateError) {
-        // Row may have been created by another process — try update instead
         const retry = await db.from(table).update({ [field]: finalValue, updated_at: now }).eq("content_date", today);
         updateError = retry.error;
       }
@@ -209,7 +163,6 @@ Deno.serve(async (req: Request) => {
       return response({ field, newValue: finalValue, table, fallback: usedFallback, warning: "DB update failed" });
     }
 
-    // Verify the write by reading back
     const { data: verifyRow } = await db.from(table).select(field).eq("content_date", today).maybeSingle();
     const dbValue = verifyRow ? (verifyRow as Record<string, string>)[field] : null;
 
@@ -218,10 +171,10 @@ Deno.serve(async (req: Request) => {
       newValue: dbValue || finalValue,
       table,
       fallback: usedFallback,
-      ...(usedFallback ? { warning: "AI generation failed — saved static fallback content instead" } : {}),
+      ...(usedFallback ? { warning: keys.length === 0 ? "No API keys configured — saved fallback content" : "AI generation failed — saved static fallback content instead" } : {}),
     });
   } catch (err) {
     console.error("ai-regenerate error:", err);
-    return response({ error: "Regeneration failed" }, 500);
+    return response({ error: "Regeneration failed", detail: String(err).slice(0, 300) }, 500);
   }
 });
