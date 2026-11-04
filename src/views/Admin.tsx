@@ -1708,9 +1708,6 @@ function AiKeysTab() {
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">aistudio.google.com/apikey</a>
           <span className="text-slate-500">.</span>
         </p>
-        <div className="mb-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300/90 leading-relaxed">
-          <span className="font-semibold">Important:</span> Google Gemini API keys from AI Studio start with <code className="font-mono text-amber-200">AIzaSy...</code> Keys in other formats (e.g. <code className="font-mono text-amber-200/70">AQ...</code>) are from Google Cloud Console and may need the Generative Language API enabled in your GCP project to work with Gemini.
-        </div>
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input
             value={newKey}
@@ -1758,11 +1755,6 @@ function AiKeysTab() {
                     <p className="text-xs text-slate-400 truncate">{emails[k] || 'No email set'}</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
-                      {!k.startsWith('AIzaSy') && (
-                        <span className="text-[10px] text-amber-400/80 font-medium">
-                          Non-standard format — may need GCP Generative Language API enabled
-                        </span>
-                      )}
                     </div>
                   </div>
                   {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
