@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star, Bug, Lightbulb } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star, Bug, Lightbulb, AlertTriangle } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
@@ -1583,6 +1583,10 @@ function AiKeysTab() {
     const key = newKey.trim();
     const email = newEmail.trim();
     if (!key) return;
+    if (!key.startsWith('AIzaSy') || key.length < 30) {
+      notify('Invalid Gemini API key — keys must start with "AIzaSy". Get one at aistudio.google.com/apikey', 'error');
+      return;
+    }
     const updated = [...keys, key];
     const { error } = await supabase.from('app_settings').update({ gemini_api_keys: updated }).eq('id', 1);
     if (error) { notify(error.message, 'error'); return; }
@@ -1700,6 +1704,9 @@ function AiKeysTab() {
         </div>
         <p className="text-xs text-slate-400 mb-3">
           Add multiple Gemini API keys for automatic rotation. When one key hits rate limits, the system switches to the next key instantly.
+          <span className="text-amber-400 font-medium">Keys must start with "AIzaSy" — get yours at </span>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline">aistudio.google.com/apikey</a>
+          <span className="text-amber-400 font-medium">.</span>
         </p>
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input
@@ -1746,7 +1753,14 @@ function AiKeysTab() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white font-mono truncate">{k.slice(0, 12)}...{k.slice(-4)}</p>
                     <p className="text-xs text-slate-400 truncate">{emails[k] || 'No email set'}</p>
-                    {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {i === activeIndex && <span className="text-[10px] text-emerald-400 font-bold">ACTIVE</span>}
+                      {!k.startsWith('AIzaSy') && (
+                        <span className="text-[10px] text-red-400 font-bold flex items-center gap-1">
+                          <AlertTriangle size={10} /> Invalid format — must start with AIzaSy
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {i !== activeIndex && <Button variant="ghost" className="text-xs px-2 py-1" onClick={() => setActive(i)}>Set Active</Button>}
                   <Button variant="ghost" className="text-xs px-2 py-1" aria-label="Test key" disabled={testingKey === k || testingAll} onClick={() => testSingleKey(k)}><FlaskConical size={12} /></Button>
