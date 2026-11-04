@@ -7,38 +7,48 @@ const corsHeaders = {
 };
 
 const FALLBACK_FUNNY_BN = [
-  "ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে — সে জানে তুমি কখন অনলাইন আসবে!",
-  "ভাইরাল হওয়ার আগে একটা জিনিস লাগে — তোমার কনটেন্ট নাকি তোমার হিম্মত?",
-  "ফ্রিল্যান্সিং মানে স্বাধীনতা? হ্যাঁ, ক্লায়েন্ট না দিলে ঘুমানোর স্বাধীনতা!",
-  "মাইক্রো-টাস্ক করে কোটিপতি হওয়া যায় না, কিন্তু না করলে চা-ও বানানো যায় না!",
-  "ইউটিউবে সাবস্ক্রাইব বাটন চাপলে মানুষ চলে যায়, কিন্তু ভিডিও দেখে না — অ্যালগরিদমের বিচার!",
+  "ফেসবুকের অ্যালগরিদম তোমার এক্সের চেয়ে বেশি যত্নশীল — সে তোমাকে দেখেই পুরনো মেমোরিয়াল দেখায়!",
+  "তুই ভাইরাল হতে চাস? আগে দেখ তোর কনটেন্টে আছে কি শুধু হিম্মত নাকি কিছু আছে!",
+  "ফ্রিল্যান্সিং মানে স্বাধীনতা ভাই — ক্লায়েন্ট না থাকলে রাত দুটায় ঘুমানোর পূর্ণ স্বাধীনতা!",
+  "মাইক্রো-টাস্ক করে কোটিপতি হওয়া যায় না, কিন্তু না করলে চায়ের টাকাও জোগাড় হয় না!",
+  "ইউটিউবে সাবস্ক্রাইব বাটন চাপলে মানুষ চলে যায় — ভিডিও দেখার সময় আলাদা ব্যাপার!",
+  "ফেসবুকে লাইক দিয়ে ভাবিস ভাই তোরা দোস্ত — কিন্তু কেউ ক্লিক করে না, অ্যালগরিদমের এটাই খেলা!",
+  "পেজ রিচ কম হলে ভেবেছিস অ্যালগরিদম তোর দুশমন — আসলে সে তোর কনটেন্ট দেখে হতাশ!",
+  "সোশ্যাল মিডিয়ায় সবাই সেলিব্রিটি — শুধু ফলোয়ার না থাকলে সেটা বোঝা যায় না!",
 ];
 const FALLBACK_FUNNY_EN = [
-  "Facebook's algorithm knows your ex better than you — it knows when you'll come online!",
-  "Going viral takes one thing: is it your content or your courage?",
-  "Freelancing means freedom? Yes, freedom to sleep when no client gives work!",
-  "Micro-tasks won't make you a millionaire, but without them you can't even make tea!",
-  "On YouTube people click subscribe but don't watch — the algorithm's verdict!",
+  "Facebook's algorithm cares more than your ex — it shows you old memories the moment you log in!",
+  "Wanna go viral? First check if your content has actual substance or just audacity!",
+  "Freelancing means freedom bro — total freedom to sleep at 2 AM when no client shows up!",
+  "Micro-tasks won't make you a millionaire, but skip them and you can't even afford tea!",
+  "On YouTube people smash subscribe and leave — watching the video is a whole different story!",
+  "You think likes mean friendship on Facebook? Nobody clicks through — that's the algorithm's joke!",
+  "Low page reach? You blamed the algorithm — but it's just disappointed by your content!",
+  "Everyone's a celebrity on social media — until you notice they have zero followers!",
 ];
 const FALLBACK_TIP_BN = [
-  "ফেসবুক পেজ রিচ বাড়াতে প্রতিদিন নির্দিষ্ট সময়ে পোস্ট করো — সকাল ৯টা ও রাত ৮টা সেরা সময়!",
-  "ইউটিউব শর্টস আপলোড করার সেরা সময় বিকেল ৫টা থেকে রাত ৯টা — অ্যালগরিদম তখন সবচেয়ে সক্রিয়!",
-  "টাস্ক কমপ্লিট করার প্রমাণে সবসময় ভালো মানের স্ক্রিনশট দাও — অ্যাপ্রুভ পাওয়ার সম্ভাবনা ৩x বাড়ে!",
-  "ভিডিও কনটেন্টের প্রথম ৩ সেকেন্ডে হুক রাখো — নাহলে দর্শক স্ক্রল করে চলে যাবে!",
+  "ফেসবুক পেজ রিচ বাড়াতে প্রতিদিন সকাল ৯টা ও রাত ৮টায় পোস্ট করো — অ্যালগরিদম তখন সবচেয়ে বেশি মুডে থাকে!",
+  "ইউটিউব শর্টস আপলোড করার সেরা সময় বিকেল ৫টা থেকে রাত ৯টা — মানুষ তখন স্ক্রল করতে করতে আটকে যায়!",
+  "টাস্ক কমপ্লিট করার প্রমাণে সবসময় ক্লিয়ার স্ক্রিনশট দাও — অ্যাডমিনও তো মানুষ, তারও চোখ লাগে!",
+  "ভিডিওর প্রথম ৩ সেকেন্ডে হুক রাখো — নাহলে দর্শক স্ক্রল করে পালাবে তোর হাত ধরার আগেই!",
+  "পেজে পোস্ট করার আগে ক্যাপশন দুবার পড়ো — টাইপো দেখলে মানুষ হাসে, কনটেন্ট নয়!",
+  "কনটেন্ট বানাতে গিয়ে পারফেকশনিজমে পড়িস না — বেশি ভাবলে আর পোস্টই করবি না, শুধু ভাববি!",
 ];
 const FALLBACK_TIP_EN = [
-  "Post on Facebook at 9 AM and 8 PM daily for peak reach!",
-  "Best time to upload YouTube Shorts is 5-9 PM — algorithm is most active!",
-  "High-quality screenshots as task proof triple your approval chances!",
-  "Hook viewers in the first 3 seconds of video content — or they scroll away!",
+  "Post on Facebook at 9 AM and 8 PM daily — that's when the algorithm is in the best mood!",
+  "Best time for YouTube Shorts is 5-9 PM — people are scrolling and get stuck on good stuff!",
+  "Always submit crystal-clear screenshots as task proof — admins are human too, they need to see!",
+  "Hook viewers in the first 3 seconds — or they scroll away before you can even say hi!",
+  "Read your caption twice before posting — typos make people laugh at you, not your content!",
+  "Don't fall into perfectionism when creating content — overthink it and you'll never post anything!",
 ];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.0-flash"];
-const TIMEOUT_MS = 12_000;
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
+const TIMEOUT_MS = 20_000;
 
 async function getAllKeys(supabaseClient: any): Promise<string[]> {
   const { data: settings } = await supabaseClient
@@ -239,12 +249,11 @@ Deno.serve(async (req: Request) => {
 
     const { data, error } = await supabase
       .from("daily_ai_content")
-      .insert({ content_date: today, ...content })
+      .upsert({ content_date: today, ...content }, { onConflict: "content_date" })
       .select("*")
       .single();
 
     if (error) {
-      // Race condition: another instance inserted first, fetch it
       const { data: fallback } = await supabase
         .from("daily_ai_content")
         .select("*")
@@ -255,8 +264,8 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
+      // Return the generated content even if DB insert fails
+      return new Response(JSON.stringify(content), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -265,8 +274,14 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    // Even on catastrophic error, return fallback content so the UI never breaks
+    const fallback = {
+      funny_bn: pick(FALLBACK_FUNNY_BN),
+      funny_en: pick(FALLBACK_FUNNY_EN),
+      tip_bn: pick(FALLBACK_TIP_BN),
+      tip_en: pick(FALLBACK_TIP_EN),
+    };
+    return new Response(JSON.stringify(fallback), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

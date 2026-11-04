@@ -9,10 +9,10 @@ export interface DailyAiContent {
 }
 
 const STATIC_FALLBACK: DailyAiContent = {
-  funny_bn: 'ফেসবুকের অ্যালগরিদম তোমার চেয়ে তোমার এক্সকে বেশি চেনে!',
-  funny_en: "Facebook's algorithm knows your ex better than you!",
-  tip_bn: 'ফেসবুক পেজ রিচ বাড়াতে প্রতিদিন সকাল ৯টা ও রাত ৮টায় পোস্ট করো!',
-  tip_en: 'Post on Facebook at 9 AM and 8 PM daily for peak reach!',
+  funny_bn: 'ফেসবুকের অ্যালগরিদম তোমার এক্সের চেয়ে বেশি যত্নশীল — সে তোমাকে দেখেই পুরনো মেমোরিয়াল দেখায়!',
+  funny_en: "Facebook's algorithm cares more than your ex — it shows you old memories the moment you log in!",
+  tip_bn: 'ফেসবুক পেজ রিচ বাড়াতে প্রতিদিন সকাল ৯টা ও রাত ৮টায় পোস্ট করো — অ্যালগরিদম তখন সবচেয়ে বেশি মুডে থাকে!',
+  tip_en: 'Post on Facebook at 9 AM and 8 PM daily — that\'s when the algorithm is in the best mood!',
 };
 
 const LS_KEY = 'lumora_daily_ai_content';
