@@ -1,12 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  corsHeaders,
+  jsonResponse,
+  loadGeminiSettings,
+  readGeminiStream,
+  streamGenerateContent,
+  type GeminiUsage,
+} from "../_shared/gemini.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
 const MAX_OUTPUT_TOKENS = 8192;
 const CONNECT_TIMEOUT_MS = 25_000;
 const encoder = new TextEncoder();
@@ -16,118 +17,30 @@ interface ChatMessage {
   content: string;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+const TONE_INSTRUCTIONS: Record<string, string> = {
+  buddy: "You are the user's chill best friend — witty, warm, playful, a little sarcastic but never mean. You crack jokes over adda and drop life tips like a close buddy would.",
+  mentor: "You are a professional mentor — clear, thoughtful, and practical. You give structured, calm guidance with encouraging but grounded advice.",
+  coach: "You are a witty coach — punchy, energetic, and motivating with a clever twist. You push the user forward with humor and sharp insight.",
+};
+
+function ndjsonResponse(stream: ReadableStream<Uint8Array>): Response {
+  return new Response(stream, {
+    headers: { ...corsHeaders, "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" },
   });
 }
 
-async function requestGeminiStream(
-  model: string,
-  apiKey: string,
-  systemPrompt: string,
-  contents: unknown[],
-): Promise<ReadableStream<Uint8Array> | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents,
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { temperature: 0.8, maxOutputTokens: MAX_OUTPUT_TOKENS },
-        }),
-        signal: controller.signal,
-      },
-    );
-    if (!res.ok || !res.body) {
-      const errBody = await res.text().catch(() => "");
-      console.error(`Gemini ${model} failed (${res.status}): ${errBody.slice(0, 500)}`);
-      return null;
-    }
-    return res.body;
-  } catch (err) {
-    console.error(`Gemini ${model} request error:`, err);
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function openGeminiStream(
-  keys: string[],
-  startIndex: number,
-  systemPrompt: string,
-  contents: unknown[],
-): Promise<{ body: ReadableStream<Uint8Array>; keyIndex: number } | null> {
-  for (let attempt = 0; attempt < keys.length; attempt++) {
-    const keyIndex = (startIndex + attempt) % keys.length;
-    for (const model of GEMINI_MODELS) {
-      const body = await requestGeminiStream(model, keys[keyIndex], systemPrompt, contents);
-      if (body) return { body, keyIndex };
-    }
-  }
-  return null;
-}
-
-async function* geminiTextDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newline: number;
-    while ((newline = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (!line.startsWith("data:")) continue;
-      try {
-        const data = JSON.parse(line.slice(5));
-        const text: string | undefined = data?.candidates?.[0]?.content?.parts
-          ?.map((p: { text?: string }) => p.text ?? "")
-          .join("");
-        if (text) yield text;
-      } catch (err) {
-        console.error("Could not parse Gemini stream line:", err);
-      }
-    }
-  }
-}
-
-async function* geminiTextAndUsage(
-  body: ReadableStream<Uint8Array>,
-): AsyncGenerator<{ text?: string; usage?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } }> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newline: number;
-    while ((newline = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (!line.startsWith("data:")) continue;
-      try {
-        const data = JSON.parse(line.slice(5));
-        const text: string | undefined = data?.candidates?.[0]?.content?.parts
-          ?.map((p: { text?: string }) => p.text ?? "")
-          .join("");
-        const usage = data?.usageMetadata;
-        if (text || usage) yield { text, usage };
-      } catch (err) {
-        console.error("Could not parse Gemini stream line:", err);
-      }
-    }
-  }
+function fallbackStream(lastUserMessage: string): ReadableStream<Uint8Array> {
+  const isBn = /[\u0980-\u09FF]/.test(lastUserMessage);
+  const text = isBn
+    ? "আরে ভাই, আমার মাথায় একটু গোলমাল হচ্ছে — ঠিক করে নিচ্ছি! একটু পরে আবার চেষ্টা করো, নাহলে নিচের 'মানুষের সাথে কথা বলো' বাটনে ট্যাপ করো!"
+    : "Hey buddy, my brain's a little scrambled right now — fixing it! Try again in a sec, or tap 'Talk to Human Agent' below!";
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(JSON.stringify({ type: "text", delta: text }) + "\n"));
+      controller.enqueue(encoder.encode(JSON.stringify({ type: "done", id: null }) + "\n"));
+      controller.close();
+    },
+  });
 }
 
 Deno.serve(async (req: Request) => {
@@ -141,36 +54,17 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Messages required" }, 400);
     }
 
-    const toneInstructions: Record<string, string> = {
-      buddy: "You are the user's chill best friend — witty, warm, playful, a little sarcastic but never mean. You crack jokes over adda and drop life tips like a close buddy would.",
-      mentor: "You are a professional mentor — clear, thoughtful, and practical. You give structured, calm guidance with encouraging but grounded advice.",
-      coach: "You are a witty coach — punchy, energetic, and motivating with a clever twist. You push the user forward with humor and sharp insight.",
-    };
-    const toneSuffix = toneInstructions[aiTone as string] || toneInstructions.buddy;
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const settings = await loadGeminiSettings(db);
+    const toneSuffix = TONE_INSTRUCTIONS[aiTone as string] || TONE_INSTRUCTIONS.buddy;
+    const basePrompt = settings.systemPrompt || "You are a helpful assistant.";
+    const systemPrompt = `${basePrompt}\n\n${toneSuffix}`;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const lastUserMessage = [...messages].reverse().find((m: ChatMessage) => m.role === "user")?.content || "";
 
-    const { data: settings } = await supabase
-      .from("app_settings")
-      .select("gemini_api_keys, ai_system_prompt, ai_active_key_index")
-      .eq("id", 1)
-      .maybeSingle();
-
-    const apiKeys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
-    const basePrompt: string = settings?.ai_system_prompt || "You are a helpful assistant.";
-    const systemPrompt: string = `${basePrompt}\n\n${toneSuffix}`;
-    const activeIndex: number = settings?.ai_active_key_index ?? 0;
-
-    const allKeys = apiKeys.filter(Boolean);
-    const envKey = Deno.env.get("GEMINI_API_KEY");
-    if (envKey && !allKeys.includes(envKey)) allKeys.push(envKey);
-
-    if (allKeys.length === 0) {
-      console.error("ai-chat: no Gemini keys configured");
-      return jsonResponse({ error: "no_keys" }, 503);
+    if (settings.keys.length === 0) {
+      console.error("ai-chat: no Gemini keys configured, sending fallback reply");
+      return ndjsonResponse(fallbackStream(lastUserMessage));
     }
 
     const contents = messages.map((m: ChatMessage) => ({
@@ -178,27 +72,24 @@ Deno.serve(async (req: Request) => {
       parts: [{ text: m.content }],
     }));
 
-    const upstream = await openGeminiStream(allKeys, activeIndex % allKeys.length, systemPrompt, contents);
-    if (!upstream) {
-      const lastUserMsg = [...messages].reverse().find((m: ChatMessage) => m.role === "user")?.content || "";
-      const isBn = /[\u0980-\u09FF]/.test(lastUserMsg);
-      const fallbackMsg = isBn
-        ? "আরে ভাই, আমার মাথায় একটু গোলমাল হচ্ছে — ঠিক করে নিচ্ছি! একটু পরে আবার চেষ্টা করো, নাহলে নিচের 'মানুষের সাথে কথা বলো' বাটনে ট্যাপ করো!"
-        : "Hey buddy, my brain's a little scrambled right now — fixing it! Try again in a sec, or tap 'Talk to Human Agent' below!";
-      const fallbackStream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(encoder.encode(JSON.stringify({ type: "text", delta: fallbackMsg }) + "\n"));
-          controller.enqueue(encoder.encode(JSON.stringify({ type: "done", id: null }) + "\n"));
-          controller.close();
-        },
-      });
-      return new Response(fallbackStream, {
-        headers: { ...corsHeaders, "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" },
-      });
+    const upstream = await streamGenerateContent({
+      keys: settings.keys,
+      startIndex: settings.activeIndex % settings.keys.length,
+      body: {
+        contents,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.8, maxOutputTokens: MAX_OUTPUT_TOKENS },
+      },
+      timeoutMs: CONNECT_TIMEOUT_MS,
+      label: "ai-chat",
+    });
+    if (!upstream.ok) {
+      console.error(`ai-chat: all keys and models failed (${upstream.failure.status ?? "no status"}): ${upstream.failure.message}`);
+      return ndjsonResponse(fallbackStream(lastUserMessage));
     }
 
-    if (upstream.keyIndex !== activeIndex % allKeys.length) {
-      await supabase.from("app_settings").update({ ai_active_key_index: upstream.keyIndex }).eq("id", 1);
+    if (upstream.keyIndex !== settings.activeIndex % settings.keys.length) {
+      await db.from("app_settings").update({ ai_active_key_index: upstream.keyIndex }).eq("id", 1);
     }
 
     const stream = new ReadableStream<Uint8Array>({
@@ -207,9 +98,9 @@ Deno.serve(async (req: Request) => {
           controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
         };
         let fullReply = "";
-        let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | null = null;
+        let lastUsage: GeminiUsage | null = null;
         try {
-          for await (const { text, usage } of geminiTextAndUsage(upstream.body)) {
+          for await (const { text, usage } of readGeminiStream(upstream.body)) {
             if (text) {
               fullReply += text;
               send({ type: "text", delta: text });
@@ -218,17 +109,17 @@ Deno.serve(async (req: Request) => {
           }
           if (!fullReply.trim()) throw new Error("Gemini returned an empty reply");
 
-          const usedKey = allKeys[upstream.keyIndex];
+          const usedKey = settings.keys[upstream.keyIndex];
           const promptTokens = lastUsage?.promptTokenCount ?? 0;
           const outputTokens = lastUsage?.candidatesTokenCount ?? 0;
           if (usedKey && (promptTokens || outputTokens)) {
-            const { error: rpcError } = await supabase.rpc("increment_gemini_key_usage", {
+            const { error: rpcError } = await db.rpc("increment_gemini_key_usage", {
               p_key: usedKey,
               p_prompt: promptTokens,
               p_output: outputTokens,
             });
             if (rpcError) console.error("Could not save key usage:", rpcError);
-            const { error: dailyError } = await supabase.rpc("increment_gemini_daily_usage", {
+            const { error: dailyError } = await db.rpc("increment_gemini_daily_usage", {
               p_prompt: promptTokens,
               p_output: outputTokens,
             });
@@ -237,7 +128,7 @@ Deno.serve(async (req: Request) => {
 
           let savedId: string | null = null;
           if (sessionId) {
-            const { data, error } = await supabase
+            const { data, error } = await db
               .from("chat_messages")
               .insert({ session_id: sessionId, role: "assistant", content: fullReply })
               .select("id")
@@ -255,9 +146,7 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    return new Response(stream, {
-      headers: { ...corsHeaders, "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" },
-    });
+    return ndjsonResponse(stream);
   } catch (err) {
     console.error("ai-chat error:", err);
     return jsonResponse({ error: "server_error" }, 500);

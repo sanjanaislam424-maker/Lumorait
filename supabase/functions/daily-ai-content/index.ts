@@ -1,10 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { corsHeaders, extractText, generateContent, isTruncated as isTruncatedJson, loadGeminiSettings, parseModelJson } from "../_shared/gemini.ts";
 
 const FALLBACK_FUNNY_BN = [
   "ফেসবুকের অ্যালগরিদম তোমার এক্সের চেয়ে বেশি যত্নশীল — সে তোমাকে দেখেই পুরনো মেমোরিয়াল দেখায়!",
@@ -47,21 +42,7 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
 const TIMEOUT_MS = 20_000;
-
-async function getAllKeys(supabaseClient: any): Promise<string[]> {
-  const { data: settings } = await supabaseClient
-    .from("app_settings")
-    .select("gemini_api_keys, ai_active_key_index")
-    .eq("id", 1)
-    .maybeSingle();
-  const keys: string[] = Array.isArray(settings?.gemini_api_keys) ? settings.gemini_api_keys : [];
-  const allKeys = keys.filter(Boolean);
-  const envKey = Deno.env.get("GEMINI_API_KEY");
-  if (envKey && !allKeys.includes(envKey)) allKeys.push(envKey);
-  return allKeys;
-}
 
 function isTruncated(text: string): boolean {
   const trimmed = text.trim();
@@ -83,7 +64,7 @@ async function generateWithAI(
   supabaseClient: any,
   recentFunnyBn: string[], recentFunnyEn: string[], recentTipBn: string[], recentTipEn: string[],
 ): Promise<{ funny_bn: string; funny_en: string; tip_bn: string; tip_en: string } | null> {
-  const allKeys = await getAllKeys(supabaseClient);
+  const { keys: allKeys } = await loadGeminiSettings(supabaseClient);
   if (allKeys.length === 0) {
     console.error("daily-ai-content: no Gemini API keys configured");
     return null;
@@ -136,68 +117,34 @@ BAD examples (NEVER do this — these are broken fragments):
 
 Make it fresh and different each time. Be creative, specific, and hilarious.`;
 
-  for (let k = 0; k < allKeys.length; k++) {
-    for (const model of GEMINI_MODELS) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-goog-api-key": allKeys[k] },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 1.4, maxOutputTokens: 1200 },
-            }),
-            signal: controller.signal,
-          },
-        );
-        if (!res.ok) {
-          const errBody = await res.text();
-          console.error(`daily-ai-content: Gemini ${model} key#${k} failed (${res.status}): ${errBody.slice(0, 300)}`);
-          continue;
-        }
-        const data = await res.json();
-        const finishReason = data?.candidates?.[0]?.finishReason;
-        if (finishReason === "MAX_TOKENS") {
-          console.error(`daily-ai-content: Gemini ${model} key#${k} hit MAX_TOKENS (output truncated)`);
-          continue;
-        }
-        const text = data?.candidates?.[0]?.content?.parts
-          ?.map((p: { text?: string }) => p.text ?? "")
-          .join("") || "";
-        if (!text) {
-          console.error(`daily-ai-content: Gemini ${model} key#${k} returned empty reply`);
-          continue;
-        }
-        const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(cleaned);
-        if (
-          parsed.funny_bn && parsed.funny_en && parsed.tip_bn && parsed.tip_en &&
-          isCompleteSentence(parsed.funny_bn) && isCompleteSentence(parsed.funny_en) &&
-          isCompleteSentence(parsed.tip_bn) && isCompleteSentence(parsed.tip_en)
-        ) {
-          return parsed;
-        }
-        console.error(`daily-ai-content: Gemini ${model} key#${k} returned incomplete content (fragments detected), trying next`);
-        continue;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          console.error(`daily-ai-content: Gemini ${model} key#${k} timed out after ${TIMEOUT_MS}ms`);
-        } else if (err instanceof SyntaxError) {
-          console.error(`daily-ai-content: Gemini ${model} key#${k} returned invalid JSON:`, err);
-        } else {
-          console.error(`daily-ai-content: Gemini ${model} key#${k} error:`, err);
-        }
-        continue;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
+  const result = await generateContent({
+    keys: allKeys,
+    body: {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 1.4, maxOutputTokens: 1200 },
+    },
+    timeoutMs: TIMEOUT_MS,
+    label: "daily-ai-content",
+    accept: (json) => {
+      if (isTruncatedJson(json)) return false;
+      const parsed = parseModelJson(extractText(json));
+      return !!parsed && hasCompleteContent(parsed);
+    },
+  });
+  if (!result.ok) {
+    console.error("daily-ai-content: all keys and models failed, using static fallback");
+    return null;
   }
-  console.error("daily-ai-content: All keys and models exhausted, using static fallback");
-  return null;
+  const parsed = parseModelJson(extractText(result.json));
+  return parsed && hasCompleteContent(parsed) ? parsed : null;
+}
+
+function hasCompleteContent(
+  p: Record<string, unknown>,
+): p is { funny_bn: string; funny_en: string; tip_bn: string; tip_en: string } {
+  return ["funny_bn", "funny_en", "tip_bn", "tip_en"].every(
+    (k) => typeof p[k] === "string" && isCompleteSentence(p[k] as string),
+  );
 }
 
 Deno.serve(async (req: Request) => {

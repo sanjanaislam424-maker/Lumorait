@@ -1,16 +1,6 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { corsHeaders, extractText, generateContent, jsonResponse, type GeminiFailure } from "../_shared/gemini.ts";
 
-const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
-const TIMEOUT_MS = 45_000;
-
-interface ChatMessage {
-  role: string;
-  content: string;
-}
+const TIMEOUT_MS = 20_000;
 
 type KeyStatus = "valid" | "rate_limited" | "quota_exceeded" | "invalid_key" | "timeout" | "server_error" | "empty";
 
@@ -22,34 +12,36 @@ interface KeyTestResult {
   usage?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | null;
 }
 
-function classifyError(status: number, errorBody: string): KeyTestResult {
-  const body = errorBody.toLowerCase();
-  if (status === 400 && body.includes("api key not valid")) {
-    return { ok: false, status: "invalid_key", message: "API key not valid — Gemini keys from AI Studio start with AIzaSy..." };
+function classifyFailure({ status, message }: GeminiFailure): KeyTestResult {
+  const text = message.toLowerCase();
+  if (status === null && text.startsWith("timed out")) {
+    return { ok: false, status: "timeout", message: "Request timed out" };
   }
-  if (status === 403 || body.includes("permission") || body.includes("forbidden")) {
-    if (body.includes("quota") || body.includes("limit") || body.includes("exceeded")) {
+  if (status === null) {
+    return { ok: false, status: "server_error", message: "Network error reaching Gemini" };
+  }
+  if (status === 400 && text.includes("api key not valid")) {
+    return { ok: false, status: "invalid_key", message: "API key not valid — check the key was copied in full" };
+  }
+  if (status === 401) {
+    return { ok: false, status: "invalid_key", message: "Key rejected by Gemini (401) — generate a new key in AI Studio" };
+  }
+  if (status === 403) {
+    if (text.includes("quota") || text.includes("limit") || text.includes("exceeded")) {
       return { ok: false, status: "quota_exceeded", message: "Today's limit exceeded" };
     }
-    return { ok: false, status: "invalid_key", message: "Key not authorized — if this is a GCP key, enable the Generative Language API in Google Cloud Console" };
+    return { ok: false, status: "invalid_key", message: "Key not authorized — enable the Generative Language API for this key's project" };
   }
-  if (status === 404 && body.includes("not found")) {
-    return { ok: false, status: "invalid_key", message: "Model not found or key lacks Gemini access — use an AI Studio key (AIzaSy...)" };
+  if (status === 404) {
+    return { ok: false, status: "invalid_key", message: "Model not found for this key — the app's model list may need updating" };
   }
-  if (status === 429 || body.includes("rate") || body.includes("resource") || body.includes("exhausted")) {
+  if (status === 429 || text.includes("rate") || text.includes("exhausted")) {
     return { ok: false, status: "rate_limited", message: "Rate limited — try again shortly" };
   }
-  if (body.includes("quota") || body.includes("limit") || body.includes("exceeded") || body.includes("billing")) {
+  if (text.includes("quota") || text.includes("billing")) {
     return { ok: false, status: "quota_exceeded", message: "Today's limit exceeded" };
   }
-  return { ok: false, status: "server_error", message: `Error ${status}` };
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return { ok: false, status: "server_error", message: `Gemini error ${status}: ${message.slice(0, 120)}` };
 }
 
 Deno.serve(async (req: Request) => {
@@ -58,79 +50,45 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { messages, apiKey, systemPrompt, testAll } = await req.json();
-    if (!apiKey || typeof apiKey !== "string") {
-      return jsonResponse({ error: "apiKey required" }, 400);
+    const { messages, apiKey, testAll } = await req.json();
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      return jsonResponse({ ok: false, status: "invalid_key", message: "No API key provided" }, 400);
     }
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return jsonResponse({ error: "messages required" }, 400);
+      return jsonResponse({ ok: false, status: "server_error", message: "No test message provided" }, 400);
     }
 
-    const prompt = systemPrompt || "You are a helpful assistant.";
-    const contents = messages.map((m: ChatMessage) => ({
-      role: m.role === "assistant" || m.role === "admin" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+    const result = await generateContent({
+      keys: [apiKey.trim()],
+      body: {
+        contents: messages.map((m: { role: string; content: string }) => ({
+          role: m.role === "assistant" || m.role === "admin" ? "model" : "user",
+          parts: [{ text: m.content }],
+        })),
+        generationConfig: { temperature: 0.8, maxOutputTokens: 256 },
+      },
+      timeoutMs: TIMEOUT_MS,
+      label: "ai-test-key",
+      accept: (json) => extractText(json).trim().length > 0,
+    });
 
-    let lastResult: KeyTestResult | null = null;
-
-    for (const model of GEMINI_MODELS) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-            body: JSON.stringify({
-              contents,
-              systemInstruction: { parts: [{ text: prompt }] },
-              generationConfig: { temperature: 0.8, maxOutputTokens: 256 },
-            }),
-            signal: controller.signal,
-          },
-        );
-        if (!res.ok) {
-          const errorBody = await res.text();
-          const classified = classifyError(res.status, errorBody);
-          lastResult = classified;
-          if (classified.status === "invalid_key" || classified.status === "quota_exceeded") break;
-          continue;
-        }
-        const json = await res.json();
-        const text: string = json?.candidates?.[0]?.content?.parts
-          ?.map((p: { text?: string }) => p.text ?? "")
-          .join("") || "";
-        const usage = json?.usageMetadata || null;
-        if (text) {
-          const tokens = usage?.totalTokenCount ?? 0;
-          return jsonResponse({
-            ok: true,
-            status: "valid",
-            message: testAll ? "Valid" : `Valid${tokens ? ` (${tokens} tokens)` : ""} — ${model}`,
-            model,
-            usage,
-          });
-        }
-        lastResult = { ok: false, status: "empty", message: "Empty reply from model" };
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          lastResult = { ok: false, status: "timeout", message: "Request timed out" };
-        } else if (err instanceof TypeError) {
-          lastResult = { ok: false, status: "server_error", message: "Network error" };
-        } else {
-          lastResult = { ok: false, status: "server_error", message: String(err).slice(0, 200) };
-        }
-        continue;
-      } finally {
-        clearTimeout(timer);
-      }
+    if (!result.ok) {
+      const failed = classifyFailure(result.failure);
+      return jsonResponse(failed, 200);
     }
 
-    const result = lastResult || { ok: false, status: "server_error" as KeyStatus, message: "All models failed" };
-    return jsonResponse(result, result.status === "valid" ? 200 : 502);
+    const usage = result.json?.usageMetadata ?? null;
+    const tokens = usage?.totalTokenCount ?? 0;
+    const keyResult: KeyTestResult = {
+      ok: true,
+      status: "valid",
+      message: testAll ? "Valid" : `Valid${tokens ? ` (${tokens} tokens)` : ""} — ${result.model}`,
+      model: result.model,
+      usage,
+    };
+    return jsonResponse(keyResult, 200);
   } catch (err) {
-    return jsonResponse({ ok: false, status: "server_error", message: "Server error" }, 500);
+    console.error("ai-test-key error:", err);
+    return jsonResponse({ ok: false, status: "server_error", message: "Server error while testing key" }, 500);
   }
 });

@@ -1,13 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders, extractText, generateContent, isTruncated as isTruncatedJson, jsonResponse, loadGeminiSettings, parseModelJson } from "../_shared/gemini.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-const MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
-const TIMEOUT_MS = 12_000;
+const TIMEOUT_MS = 20_000;
 
 const FALLBACK: Record<string, string> = {
   tasks_header_bn: "কাজের তালিকা প্রস্তুত আছে, এবার একটু পরিশ্রম করলে উপার্জনও হবে।",
@@ -25,7 +19,7 @@ const FALLBACK: Record<string, string> = {
   daily_tip_bn: "প্রতিদিন নির্দিষ্ট সময়ে মানসম্মত পোস্ট করুন; অনিয়মিত প্রচারে অ্যালগরিদমও বিভ্রান্ত হয়।",
   daily_tip_en: "Post quality content consistently; irregular promotion confuses the algorithm too.",
   dashboard_alert_bn: "আজকের চেক-ইনটি সম্পন্ন করুন, কারণ ছোট অভ্যাসই বড় ফল তৈরি করে।",
-  dashboard_alert_en: "Complete today's check-in because small habits create meaningful results.",
+  dashboard_alert_en: "Complete today’s check-in because small habits create meaningful results.",
   task_available_bn: "আপনার জন্য নতুন কাজ অপেক্ষা করছে; সুযোগটি কাজে লাগান।",
   task_available_en: "A new task is waiting for you; make the opportunity count.",
   watch_tutorial_bn: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।",
@@ -43,22 +37,7 @@ function isTruncated(text: string): boolean {
   return false;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-
-async function getAllKeys(db: any): Promise<string[]> {
-  const { data } = await db.from("app_settings").select("gemini_api_keys").eq("id", 1).maybeSingle();
-  const stored = Array.isArray(data?.gemini_api_keys) ? data.gemini_api_keys.filter(Boolean) : [];
-  const env = Deno.env.get("GEMINI_API_KEY");
-  return env && !stored.includes(env) ? [...stored, env] : stored;
-}
-
-async function generateUICopy(db: any): Promise<Record<string, string> | null> {
-  const allKeys = await getAllKeys(db);
-  if (allKeys.length === 0) return null;
-
-  const prompt = `You are the ultimate chill best friend of the user on "Lumora IT", a Bangladeshi micro-task and SMM app.
+const PROMPT = `You are the ultimate chill best friend of the user on "Lumora IT", a Bangladeshi micro-task and SMM app.
 Your vibe: you're that hilarious, warm-hearted buddy who cracks jokes over adda, drops real growth tips like casual wisdom, and makes every interaction feel like a fun chat with your closest friend. You're witty, playful, a little sarcastic, but never mean — you roast with love.
 
 Generate 20 short UI copy lines as bilingual pairs. Every *_bn value MUST be in PURE Bengali script (বাংলা হরফ) only — like how friends actually talk in Bangla, warm and fun, never stiff or robotic. NEVER use Banglish or transliteration. Every *_en value MUST be in natural, friendly, casual English — like texting your best friend. Each bn/en pair must express the same meaning with the same playful energy.
@@ -95,42 +74,26 @@ Return ONLY valid JSON, no markdown, no code fences. Format:
 
 No emoji.`;
 
-  for (const key of allKeys) {
-    for (const model of MODELS) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1.4, maxOutputTokens: 1800 } }),
-          signal: controller.signal,
-        });
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") continue;
-        const text = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("") || "";
-        if (!text) continue;
-        const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(cleaned);
-        const result: Record<string, string> = {};
-        for (const field of FIELDS) {
-          const val = typeof parsed[field] === "string" ? parsed[field].trim() : "";
-          if (val && val.split(/\s+/).length >= 3 && !isTruncated(val)) {
-            result[field] = val;
-          } else {
-            result[field] = FALLBACK[field];
-          }
-        }
-        return result;
-      } catch {
-        continue;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
+async function generateUICopy(keys: string[]): Promise<Record<string, string> | null> {
+  if (keys.length === 0) return null;
+  const result = await generateContent({
+    keys,
+    body: {
+      contents: [{ parts: [{ text: PROMPT }] }],
+      generationConfig: { temperature: 1.4, maxOutputTokens: 1800 },
+    },
+    timeoutMs: TIMEOUT_MS,
+    label: "ai-ui-copy",
+    accept: (json) => !isTruncatedJson(json) && parseModelJson(extractText(json)) !== null,
+  });
+  if (!result.ok) return null;
+  const parsed = parseModelJson(extractText(result.json)) ?? {};
+  const output: Record<string, string> = {};
+  for (const field of FIELDS) {
+    const value = typeof parsed[field] === "string" ? (parsed[field] as string).trim() : "";
+    output[field] = value && value.split(/\s+/).length >= 3 && !isTruncated(value) ? value : FALLBACK[field];
   }
-  return null;
+  return output;
 }
 
 Deno.serve(async (req: Request) => {
@@ -143,11 +106,13 @@ Deno.serve(async (req: Request) => {
     const { data: existing } = await db.from("daily_ai_ui_copy").select("*").eq("content_date", today).maybeSingle();
     if (existing) return jsonResponse(existing);
 
-    const aiResult = await generateUICopy(db);
-    const content = aiResult ?? FALLBACK;
+    const { keys } = await loadGeminiSettings(db);
+    if (keys.length === 0) console.error("ai-ui-copy: no Gemini keys configured, saving fallback copy");
+    const content = (await generateUICopy(keys)) ?? FALLBACK;
 
     const { data, error } = await db.from("daily_ai_ui_copy").insert({ content_date: today, ...content }).select("*").single();
     if (error) {
+      console.error("ai-ui-copy: insert failed:", error);
       const { data: fallback } = await db.from("daily_ai_ui_copy").select("*").eq("content_date", today).maybeSingle();
       if (fallback) return jsonResponse(fallback);
       return jsonResponse(content);

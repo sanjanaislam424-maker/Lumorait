@@ -7,27 +7,27 @@
     },
     "ai-chat": {
       "hasChanged": false,
-      "hash": "c9bc9fcd53fdf7c4112bd641f8a073fcc63c4e4662167eacdb82e49bbc7dac40"
+      "hash": "40569ef6a83ffd104fb044a89ae6e17a35ebc4a2cc08f6f21323834c207dfe2f7ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "ai-regenerate": {
       "hasChanged": false,
-      "hash": "18a98a4c770684d5c3982be8ee83cdc703302496479bf74573b0786d52c9088d"
+      "hash": "f7f8a5dfd109d8f1bfd6fa85e3926cc381c1bddf322b22bbd8c0fec3e6b360517ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "ai-regenerate-all": {
       "hasChanged": false,
-      "hash": "381721d08e813356509ebd3d76e346bc957f33911c45e37281f2e0848a13bce4"
+      "hash": "abaa3437d38f2a114b0f816ba2cf8e4106874a803f35b5c0bf77571b746315e77ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "ai-test-key": {
       "hasChanged": false,
-      "hash": "f244a657adc53c6b55069c225d1a8cafaa4b8e6c19d30d6094db074b86c06f44"
+      "hash": "23caf2187583f98c9c77045243f280c1765c61ae0dc632aa209cd169d36989187ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "ai-ui-copy": {
       "hasChanged": false,
-      "hash": "48f5f5fcd9a2360e0507a012a5d0112648f8e4b77c4e01cb2004a34ff1eab1bb"
+      "hash": "f4319f68b8f59aa09ea9eb3aac902d16b1881a1dbd65bafcf7abc7fdf56b12fe7ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "daily-ai-content": {
       "hasChanged": false,
-      "hash": "d89ade4ba4052c08704f304ef2bb1ac2ab114f99794971c32c092ad39e0bb339"
+      "hash": "6a84ed740e0fe4ccc606c79bbac55cb2cd2c44d1cf5576c6eb03fc9a843c3ebd7ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "delete-user-account": {
       "hasChanged": false,
