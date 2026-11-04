@@ -9,7 +9,7 @@ import { createTypewriter } from '@/lib/typewriter';
 import type { ChatMessageRow as ChatMsg, ChatSessionSummary } from '@/lib/chatSessions';
 import { ChatHistoryDrawer } from '@/components/ChatHistoryDrawer';
 
-const AI_FALLBACK = "আমি এখন একটু ব্যস্ত আছি, একটু পরে আবার চেষ্টা করো — অথবা মানুষের সাথে কথা বলতে নিচের বাটনে ট্যাপ করো! 😊";
+const AI_FALLBACK = "আরে ভাই, আমার মাথায় একটু গোলমাল হচ্ছে — ঠিক করে নিচ্ছি! একটু পরে আবার চেষ্টা করো, নাহলে নিচের 'মানুষের সাথে কথা বলো' বাটনে ট্যাপ করো!";
 
 interface QuotaState {
   activeCount: number;

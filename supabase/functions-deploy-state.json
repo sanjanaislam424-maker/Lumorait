@@ -1,9 +1,13 @@
 {
   "projectId": "72223063",
   "functions": {
+    "admin-reset-password": {
+      "hasChanged": false,
+      "hash": "e41b0fab48a941186e3ce7a73d1e53c205e96c015644399e06a10280e3532ed3"
+    },
     "ai-chat": {
       "hasChanged": false,
-      "hash": "b45df67fbce9857bf984fa2bb866384d896ac5f1b4876cd4e75fd1006749b133"
+      "hash": "c9bc9fcd53fdf7c4112bd641f8a073fcc63c4e4662167eacdb82e49bbc7dac40"
     },
     "ai-regenerate": {
       "hasChanged": false,
@@ -23,7 +27,7 @@
     },
     "daily-ai-content": {
       "hasChanged": false,
-      "hash": "0e8b93cd4d95b2d7ebe0092694b120cd7cd672ace918f13e3dc43aa748128d1d"
+      "hash": "d89ade4ba4052c08704f304ef2bb1ac2ab114f99794971c32c092ad39e0bb339"
     },
     "delete-user-account": {
       "hasChanged": false,
@@ -32,10 +36,6 @@
     "process-promotion-charges": {
       "hasChanged": false,
       "hash": "637c9994edbb1441c6b1a090bb74fec131f0bbcbc60a257d14db373ba52b60aa"
-    },
-    "admin-reset-password": {
-      "hasChanged": false,
-      "hash": "e41b0fab48a941186e3ce7a73d1e53c205e96c015644399e06a10280e3532ed3"
     }
   }
 }

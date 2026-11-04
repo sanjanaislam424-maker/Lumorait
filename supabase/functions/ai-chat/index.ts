@@ -180,7 +180,21 @@ Deno.serve(async (req: Request) => {
 
     const upstream = await openGeminiStream(allKeys, activeIndex % allKeys.length, systemPrompt, contents);
     if (!upstream) {
-      return jsonResponse({ error: "upstream_unavailable" }, 503);
+      const lastUserMsg = [...messages].reverse().find((m: ChatMessage) => m.role === "user")?.content || "";
+      const isBn = /[\u0980-\u09FF]/.test(lastUserMsg);
+      const fallbackMsg = isBn
+        ? "আরে ভাই, আমার মাথায় একটু গোলমাল হচ্ছে — ঠিক করে নিচ্ছি! একটু পরে আবার চেষ্টা করো, নাহলে নিচের 'মানুষের সাথে কথা বলো' বাটনে ট্যাপ করো!"
+        : "Hey buddy, my brain's a little scrambled right now — fixing it! Try again in a sec, or tap 'Talk to Human Agent' below!";
+      const fallbackStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(JSON.stringify({ type: "text", delta: fallbackMsg }) + "\n"));
+          controller.enqueue(encoder.encode(JSON.stringify({ type: "done", id: null }) + "\n"));
+          controller.close();
+        },
+      });
+      return new Response(fallbackStream, {
+        headers: { ...corsHeaders, "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" },
+      });
     }
 
     if (upstream.keyIndex !== activeIndex % allKeys.length) {
