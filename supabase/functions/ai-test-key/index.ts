@@ -25,13 +25,16 @@ interface KeyTestResult {
 function classifyError(status: number, errorBody: string): KeyTestResult {
   const body = errorBody.toLowerCase();
   if (status === 400 && body.includes("api key not valid")) {
-    return { ok: false, status: "invalid_key", message: "Invalid API key" };
+    return { ok: false, status: "invalid_key", message: "API key not valid — Gemini keys from AI Studio start with AIzaSy..." };
   }
   if (status === 403 || body.includes("permission") || body.includes("forbidden")) {
     if (body.includes("quota") || body.includes("limit") || body.includes("exceeded")) {
       return { ok: false, status: "quota_exceeded", message: "Today's limit exceeded" };
     }
-    return { ok: false, status: "invalid_key", message: "Key not authorized" };
+    return { ok: false, status: "invalid_key", message: "Key not authorized — if this is a GCP key, enable the Generative Language API in Google Cloud Console" };
+  }
+  if (status === 404 && body.includes("not found")) {
+    return { ok: false, status: "invalid_key", message: "Model not found or key lacks Gemini access — use an AI Studio key (AIzaSy...)" };
   }
   if (status === 429 || body.includes("rate") || body.includes("resource") || body.includes("exhausted")) {
     return { ok: false, status: "rate_limited", message: "Rate limited — try again shortly" };
