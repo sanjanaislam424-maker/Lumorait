@@ -474,8 +474,7 @@ export function Spin() {
   const [floatingReward, setFloatingReward] = useState<{ reward: Reward; boxIndex: number } | null>(null);
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(15);
-  const [showTaskPicker, setShowTaskPicker] = useState(false);
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);  const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [winners, setWinners] = useState<WinnerRow[]>([]);
   const [superEvent, setSuperEvent] = useState<SuperEvent | null>(null);
   const [superClaimed, setSuperClaimed] = useState(false);
@@ -487,6 +486,7 @@ export function Spin() {
   const [tutorialUrl, setTutorialUrl] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showTaskHub, setShowTaskHub] = useState(false);
   const [p2pTasks, setP2pTasks] = useState<P2pTaskRow[]>([]);
   const [addTaskForm, setAddTaskForm] = useState({ title: '', description: '', platform: 'youtube', target_url: '', cost_coins: 25 });
   const [addTaskBusy, setAddTaskBusy] = useState(false);
@@ -1778,15 +1778,15 @@ export function Spin() {
         )}
       </AnimatePresence>
 
-      {/* ===== TUTORIAL BUTTON + ADD TASK (visible above boxes) ===== */}
+      {/* ===== TUTORIAL BUTTON + TASKS HUB BUTTON (visible above boxes) ===== */}
       <div className="flex items-center justify-center gap-2 mb-4">
         {tutorialUrl && youtubeEmbedUrl(tutorialUrl) && (
           <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowTutorial(true)}>
             <Play size={14} /> {lang === 'bn' ? 'কিভাবে খেলবেন?' : 'Tutorial'}
           </Button>
         )}
-        <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowAddTask(true)}>
-          <Plus size={14} /> {lang === 'bn' ? 'টাস্ক যোগ করো' : 'Add Task'}
+        <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowTaskHub(true)}>
+          <ListChecks size={14} /> {lang === 'bn' ? 'টাস্ক' : 'Tasks'}
         </Button>
       </div>
 
@@ -1819,135 +1819,156 @@ export function Spin() {
         );
       })()}
 
-      {/* ===== ADD TASK MODAL (publish P2P box task) ===== */}
-      {showAddTask && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => setShowAddTask(false)}>
+      {/* ===== TASK HUB MODAL (encapsulates all P2P task features) ===== */}
+      {showTaskHub && (
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => setShowTaskHub(false)}>
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             onClick={(e) => e.stopPropagation()}
             className="bg-slate-800 rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto"
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Plus size={18} className="text-amber-400" />
-                <h3 className="font-bold text-white">{lang === 'bn' ? 'নিজের টাস্ক বানাও' : 'Create a Box Task'}</h3>
+                <ListChecks size={20} className="text-amber-400" />
+                <h3 className="font-bold text-white">{lang === 'bn' ? 'টাস্ক হাব' : 'Task Hub'}</h3>
               </div>
-              <button onClick={() => setShowAddTask(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowTaskHub(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
-            <p className="text-xs text-amber-300/80 mb-4">
-              {lang === 'bn'
-                ? 'টাস্ক পাবলিশ করলেই তোমার +১ মিস্ট্রি বক্স স্লট! যেই বন্ধু টাস্কটা কমপ্লিট করবে সে-ও +১ স্লট + রিওয়ার্ড কয়েন পাবে। টাস্ক একজনই কমপ্লিট করতে পারবে।'
-                : 'Publishing a task instantly earns you +1 Mystery Box slot! Whoever completes it also gets +1 slot plus your reward coins. Only ONE person can complete it.'}
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">{t('title')}</label>
-                <input value={addTaskForm.title} onChange={(e) => setAddTaskForm({ ...addTaskForm, title: e.target.value })} maxLength={120} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্ল্যাটফর্ম' : 'Platform'}</label>
-                <select value={addTaskForm.platform} onChange={(e) => setAddTaskForm({ ...addTaskForm, platform: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
-                  <option value="youtube">YouTube</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="tiktok">TikTok</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'টাস্ক লিংক (বাধ্যতামূলক)' : 'Task Link (required)'} <span className="text-red-400">*</span></label>
-                <input value={addTaskForm.target_url} onChange={(e) => setAddTaskForm({ ...addTaskForm, target_url: e.target.value })} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'ছবি / স্ক্রিনশট (সর্বোচ্চ ৩টি)' : 'Photos / Screenshots (up to 3)'}</label>
-                <input
-                  ref={taskPhotoInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTaskPhoto(f); e.target.value = ''; }}
-                  className="hidden"
-                />
-                <div className="flex items-center gap-2 flex-wrap">
-                  {addTaskPhotos.map((url, idx) => (
-                    <div key={idx} className="relative inline-block">
-                      <img src={url} alt={`Preview ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
-                      <button
-                        onClick={() => setAddTaskPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white"
-                      >
-                        <X size={12} />
-                      </button>
+
+            {/* Toggle between Create form and Task list */}
+            <div className="flex gap-2 mb-4 bg-slate-700/40 rounded-xl p-1">
+              <button
+                onClick={() => setShowAddTask(false)}
+                className={`flex-1 text-xs font-medium py-2 rounded-lg transition ${!showAddTask ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400'}`}
+              >
+                <Users size={14} className="inline mr-1" /> {lang === 'bn' ? 'বন্ধুদের টাস্ক' : 'Buddy Tasks'}
+              </button>
+              <button
+                onClick={() => setShowAddTask(true)}
+                className={`flex-1 text-xs font-medium py-2 rounded-lg transition ${showAddTask ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400'}`}
+              >
+                <Plus size={14} className="inline mr-1" /> {lang === 'bn' ? 'টাস্ক বানাও' : 'Create Task'}
+              </button>
+            </div>
+
+            {/* ---- CREATE TASK FORM ---- */}
+            {showAddTask ? (
+              <>
+                <p className="text-xs text-amber-300/80 mb-4">
+                  {lang === 'bn'
+                    ? 'টাস্ক পাবলিশ করলেই তোমার +১ মিস্ট্রি বক্স স্লট! যেই বন্ধু টাস্কটা কমপ্লিট করবে সে-ও +১ স্লট + রিওয়ার্ড কয়েন পাবে। টাস্ক একজনই কমপ্লিট করতে পারবে।'
+                    : 'Publishing a task instantly earns you +1 Mystery Box slot! Whoever completes it also gets +1 slot plus your reward coins. Only ONE person can complete it.'}
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">{t('title')}</label>
+                    <input value={addTaskForm.title} onChange={(e) => setAddTaskForm({ ...addTaskForm, title: e.target.value })} maxLength={120} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্ল্যাটফর্ম' : 'Platform'}</label>
+                    <select value={addTaskForm.platform} onChange={(e) => setAddTaskForm({ ...addTaskForm, platform: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
+                      <option value="youtube">YouTube</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="tiktok">TikTok</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'টাস্ক লিংক (বাধ্যতামূলক)' : 'Task Link (required)'} <span className="text-red-400">*</span></label>
+                    <input value={addTaskForm.target_url} onChange={(e) => setAddTaskForm({ ...addTaskForm, target_url: e.target.value })} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'ছবি / স্ক্রিনশট (সর্বোচ্চ ৩টি)' : 'Photos / Screenshots (up to 3)'}</label>
+                    <input
+                      ref={taskPhotoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTaskPhoto(f); e.target.value = ''; }}
+                      className="hidden"
+                    />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {addTaskPhotos.map((url, idx) => (
+                        <div key={idx} className="relative inline-block">
+                          <img src={url} alt={`Preview ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
+                          <button
+                            onClick={() => setAddTaskPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      {addTaskPhotos.length < 3 && !photoUploading && (
+                        <button
+                          onClick={() => taskPhotoInputRef.current?.click()}
+                          className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      )}
+                      {photoUploading && (
+                        <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>
+                      )}
                     </div>
-                  ))}
-                  {addTaskPhotos.length < 3 && !photoUploading && (
-                    <button
-                      onClick={() => taskPhotoInputRef.current?.click()}
-                      className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition"
-                    >
-                      <Plus size={18} />
-                    </button>
-                  )}
-                  {photoUploading && (
-                    <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>
-                  )}
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'বর্ণনা (অপশনাল)' : 'Description (optional)'}</label>
+                    <textarea value={addTaskForm.description} onChange={(e) => setAddTaskForm({ ...addTaskForm, description: e.target.value })} rows={2} maxLength={1000} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'রিওয়ার্ড কয়েন (তোমার খরচ)' : 'Reward Coins (your cost)'}</label>
+                    <input type="number" min={0} max={100000} value={addTaskForm.cost_coins} onChange={(e) => setAddTaskForm({ ...addTaskForm, cost_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+                  </div>
+                  <div className="bg-slate-700/40 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">{t('lumoraCoins')}</span>
+                    <span className="text-sm font-bold text-amber-300">{(profile?.lumora_coins ?? 0) + (profile?.bonus_coins ?? 0)} 🪙</span>
+                  </div>
+                  <Button className="w-full" disabled={addTaskBusy} onClick={publishBoxTask}>
+                    {addTaskBusy ? (lang === 'bn' ? 'পাবলিশ হচ্ছে...' : 'Publishing...') : (lang === 'bn' ? 'পাবলিশ করো (+১ বক্স স্লট)' : 'Publish (+1 Box Slot)')}
+                  </Button>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'বর্ণনা (অপশনাল)' : 'Description (optional)'}</label>
-                <textarea value={addTaskForm.description} onChange={(e) => setAddTaskForm({ ...addTaskForm, description: e.target.value })} rows={2} maxLength={1000} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'রিওয়ার্ড কয়েন (তোমার খরচ)' : 'Reward Coins (your cost)'}</label>
-                <input type="number" min={0} max={100000} value={addTaskForm.cost_coins} onChange={(e) => setAddTaskForm({ ...addTaskForm, cost_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
-              </div>
-              <div className="bg-slate-700/40 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-                <span className="text-xs text-slate-400">{t('lumoraCoins')}</span>
-                <span className="text-sm font-bold text-amber-300">{(profile?.lumora_coins ?? 0) + (profile?.bonus_coins ?? 0)} 🪙</span>
-              </div>
-              <Button className="w-full" disabled={addTaskBusy} onClick={publishBoxTask}>
-                {addTaskBusy ? (lang === 'bn' ? 'পাবলিশ হচ্ছে...' : 'Publishing...') : (lang === 'bn' ? 'পাবলিশ করো (+১ বক্স স্লট)' : 'Publish (+1 Box Slot)')}
-              </Button>
-            </div>
+              </>
+            ) : (
+              /* ---- ACTIVE TASKS LIST ---- */
+              <>
+                <p className="text-[10px] text-slate-400 mb-3">
+                  {lang === 'bn' ? 'যেকোনো একটা কমপ্লিট করে +১ বক্স স্লট + কয়েন জেতো! প্রতিটা টাস্ক শুধু একবারই কমপ্লিট হয়।' : 'Complete any one to earn +1 box slot + coins! Each task can only be completed once.'}
+                </p>
+                {p2pTasks.length === 0 ? (
+                  <p className="text-slate-400 text-sm text-center py-8">{lang === 'bn' ? 'এখনও কোনো টাস্ক নেই।' : 'No active tasks yet.'}</p>
+                ) : (
+                  <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                    {p2pTasks.map((task) => {
+                      const isOwn = task.creator_id === profile?.id;
+                      return (
+                      <div key={task.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white font-medium truncate">{task.title}</p>
+                          <p className="text-xs text-amber-300/80">{task.reward_coins} 🪙 · {task.platform}</p>
+                          {isOwn && (
+                            <p className="text-[10px] text-blue-300/80 mt-0.5">
+                              {lang === 'bn' ? 'আপনার নিজের পোস্ট করা টাস্ক — অন্য কেউ কমপ্লিট করলে আপনিও বক্স পাবেন' : 'Your own posted task — you earn a box when someone else completes it'}
+                            </p>
+                          )}
+                        </div>
+                        {isOwn ? (
+                          <span className="text-[10px] text-slate-500 italic px-3 py-1.5 shrink-0">{lang === 'bn' ? 'আপনার নিজের' : 'Yours'}</span>
+                        ) : (
+                          <Button className="text-xs py-1.5 px-3" disabled={completingTaskId === task.id} onClick={() => completeBoxTask(task)}>
+                            {completingTaskId === task.id ? '...' : (lang === 'bn' ? 'করো' : 'Do it')}
+                          </Button>
+                        )}
+                      </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+            <Button variant="ghost" className="w-full mt-4" onClick={() => setShowTaskHub(false)}>{t('close')}</Button>
           </motion.div>
         </div>
-      )}
-
-      {/* ===== P2P BOX TASKS LIST ===== */}
-      {p2pTasks.length > 0 && (
-        <Card className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Users size={18} className="text-amber-400" />
-            <h3 className="text-sm font-bold text-white">{lang === 'bn' ? 'বন্ধুদের বক্স টাস্ক' : 'Buddy Box Tasks'}</h3>
-          </div>
-          <p className="text-[10px] text-slate-400 mb-3">
-            {lang === 'bn' ? 'যেকোনো একটা কমপ্লিট করে +১ বক্স স্লট + কয়েন জেতো! প্রতিটা টাস্ক শুধু একবারই কমপ্লিট হয়।' : 'Complete any one to earn +1 box slot + coins! Each task can only be completed once.'}
-          </p>
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {p2pTasks.map((task) => {
-              const isOwn = task.creator_id === profile?.id;
-              return (
-              <div key={task.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{task.title}</p>
-                  <p className="text-xs text-amber-300/80">{task.reward_coins} 🪙 · {task.platform}</p>
-                  {isOwn && (
-                    <p className="text-[10px] text-blue-300/80 mt-0.5">
-                      {lang === 'bn' ? 'আপনার নিজের পোস্ট করা টাস্ক — অন্য কেউ কমপ্লিট করলে আপনিও বক্স পাবেন' : 'Your own posted task — you earn a box when someone else completes it'}
-                    </p>
-                  )}
-                </div>
-                {isOwn ? (
-                  <span className="text-[10px] text-slate-500 italic px-3 py-1.5 shrink-0">{lang === 'bn' ? 'আপনার নিজের' : 'Yours'}</span>
-                ) : (
-                  <Button className="text-xs py-1.5 px-3" disabled={completingTaskId === task.id} onClick={() => completeBoxTask(task)}>
-                    {completingTaskId === task.id ? '...' : (lang === 'bn' ? 'করো' : 'Do it')}
-                  </Button>
-                )}
-              </div>
-              );
-            })}
-          </div>
-        </Card>
       )}
 
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
