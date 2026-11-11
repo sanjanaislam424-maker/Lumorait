@@ -592,6 +592,34 @@ export function Spin() {
     return () => { supabase.removeChannel(ch); };
   }, [loadWinners]);
 
+  // Realtime: toast the creator when someone completes their P2P box task
+  useEffect(() => {
+    if (!profile?.id) return;
+    const ch = supabase
+      .channel('p2p_box_tasks_watch')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tasks', filter: `creator_id=eq.${profile.id}` },
+        (payload) => {
+          const oldRow = payload.old as { status?: string } | null;
+          const newRow = payload.new as { status?: string; title?: string } | null;
+          if (newRow?.status === 'closed' && oldRow?.status === 'open') {
+            loadP2pTasks();
+            if (soundOn) playFanfare();
+            setCelebrate(true);
+            notify(
+              lang === 'bn'
+                ? `দারুণ খবর! কেউ তোমার "${newRow.title || 'টাস্ক'}" টাস্ক কমপ্লিট করেছে — তোমার +১ বোনাস মিস্ট্রি বক্স যোগ হয়ে গেছে!`
+                : `Great news! Someone completed your task "${newRow.title || 'task'}" — your +1 bonus Mystery Box has been added!`,
+              'success'
+            );
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [profile?.id, lang, soundOn, loadP2pTasks, notify]);
+
   // Tick every second for countdown
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -1050,7 +1078,7 @@ export function Spin() {
       await refreshProfile();
       loadP2pTasks();
       if (soundOn) playFanfare();
-      notify(lang === 'bn' ? 'টাস্ক পাবলিশ হয়ে গেছে! +১ মিস্ট্রি বক্স স্লট তোমার!' : 'Task published! +1 Mystery Box slot is yours!', 'success');
+      notify(lang === 'bn' ? 'টাস্ক পাবলিশ হয়ে গেছে! কেউ কমপ্লিট করলেই তুমি +১ মিস্ট্রি বক্স পাবে!' : 'Task published! You will earn +1 Mystery Box when someone completes it!', 'success');
     } catch (e: unknown) {
       console.error('DETAILED TASK PUBLISH ERROR:', e);
       const err = e as { message?: string; code?: string; details?: string; hint?: string };
@@ -1096,10 +1124,11 @@ export function Spin() {
       await refreshProfile();
       loadP2pTasks();
       if (soundOn) playFanfare();
+      setCelebrate(true);
       notify(
         lang === 'bn'
-          ? `দুর্দান্ত! টাস্ক কমপ্লিট + ${task.reward_coins} কয়েন + ১ মিস্ট্রি বক্স স্লট জিতেছ!`
-          : `Awesome! Task done + ${task.reward_coins} coins + 1 Mystery Box slot earned!`,
+          ? `দুর্দান্ত! টাস্ক কমপ্লিট + ${task.reward_coins} কয়েন + ১ বোনাস মিস্ট্রি বক্স জিতেছ!`
+          : `Awesome! Task done + ${task.reward_coins} coins + 1 bonus Mystery Box earned!`,
         'success'
       );
     } catch (e: unknown) {
