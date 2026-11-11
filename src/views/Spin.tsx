@@ -1160,7 +1160,7 @@ export function Spin() {
             const isBlasted = blastedBoxes.has(i);
             const isCracking = crackingBox === i;
             const isRepairing = repairingBoxes.has(i);
-            const disabled = blasting || isBlasted || blastsLeft <= 0;
+            const disabled = blasting || isBlasted;
             return (
               <div key={i} className="flex justify-center items-end relative" style={{ minHeight: boxSize + 40 }}>
                 {/* Ground shadow */}
@@ -1260,7 +1260,8 @@ export function Spin() {
           className="mb-4"
         >
           <p className="text-center text-amber-300 font-medium text-sm mb-3">{t('getMoreBlasts')}</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${boxUnlock.task && boxUnlock.video ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {boxUnlock.task && (
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
@@ -1278,6 +1279,8 @@ export function Spin() {
                 <span className="text-xs text-green-400/60 flex items-center gap-1"><Sparkles size={10} /> +1</span>
               </div>
             </motion.button>
+            )}
+            {boxUnlock.video && (
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
@@ -1295,6 +1298,7 @@ export function Spin() {
                 <span className="text-xs text-blue-400/60 flex items-center gap-1"><Star size={10} /> +1</span>
               </div>
             </motion.button>
+            )}
           </div>
         </motion.div>
       )}
