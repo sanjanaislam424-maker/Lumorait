@@ -999,7 +999,8 @@ export function Spin() {
     }, 10000);
   };
 
-  // ---- P2P BOX TASKS: publish + complete ----  const uploadTaskPhoto = async (file: File) => {
+  // ---- P2P BOX TASKS: publish + complete ----
+  const uploadTaskPhoto = async (file: File) => {
     if (!file.type.startsWith('image/')) return;
     if (addTaskPhotos.length >= 3) return;
     setPhotoUploading(true);

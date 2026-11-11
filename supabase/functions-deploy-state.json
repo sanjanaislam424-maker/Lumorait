@@ -11,11 +11,11 @@
     },
     "ai-regenerate": {
       "hasChanged": false,
-      "hash": "8bfb53b63ec5cf1b58672d4717b47df8d7b9cc28c7ce276b9b4694560dd945897ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
+      "hash": "7456888bc3fa511fb0f6bc382723c58e535944669ae53874eabd8d8d6115cfd47ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "ai-regenerate-all": {
       "hasChanged": false,
-      "hash": "98c8fea5e5634f0c552ee80dcdecc4bb58ee383eaf1de3c35735ef0aef22684c7ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
+      "hash": "5c0f6ff2f2baece4e804a9e6fd1c483decb3e746b48a2f7d23fc363c87851fd67ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "ai-test-key": {
       "hasChanged": false,
@@ -23,7 +23,7 @@
     },
     "ai-ui-copy": {
       "hasChanged": false,
-      "hash": "006c743da786cd030ee9d583eace5cbd15121e50de852e3a7afb1c4c7dc37cc07ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
+      "hash": "7d9f89d4976469d254c764a20fc8ca58ab4e5778cb0485920a20e06cbbe3d1407ac4d35d60f91a17a51602f0e73774322a87a0859f6f123826ff83be5330b989"
     },
     "daily-ai-content": {
       "hasChanged": false,
