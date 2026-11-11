@@ -552,7 +552,6 @@ export function Spin() {
       .eq('is_admin_task', false)
       .eq('status', 'open')
       .eq('filled', 0)
-      .neq('creator_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(20);
     setP2pTasks((data as P2pTaskRow[]) || []);
@@ -1924,17 +1923,29 @@ export function Spin() {
             {lang === 'bn' ? 'যেকোনো একটা কমপ্লিট করে +১ বক্স স্লট + কয়েন জেতো! প্রতিটা টাস্ক শুধু একবারই কমপ্লিট হয়।' : 'Complete any one to earn +1 box slot + coins! Each task can only be completed once.'}
           </p>
           <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {p2pTasks.map((task) => (
+            {p2pTasks.map((task) => {
+              const isOwn = task.creator_id === profile?.id;
+              return (
               <div key={task.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white font-medium truncate">{task.title}</p>
                   <p className="text-xs text-amber-300/80">{task.reward_coins} 🪙 · {task.platform}</p>
+                  {isOwn && (
+                    <p className="text-[10px] text-blue-300/80 mt-0.5">
+                      {lang === 'bn' ? 'আপনার নিজের পোস্ট করা টাস্ক — অন্য কেউ কমপ্লিট করলে আপনিও বক্স পাবেন' : 'Your own posted task — you earn a box when someone else completes it'}
+                    </p>
+                  )}
                 </div>
-                <Button className="text-xs py-1.5 px-3" disabled={completingTaskId === task.id} onClick={() => completeBoxTask(task)}>
-                  {completingTaskId === task.id ? '...' : (lang === 'bn' ? 'করো' : 'Do it')}
-                </Button>
+                {isOwn ? (
+                  <span className="text-[10px] text-slate-500 italic px-3 py-1.5 shrink-0">{lang === 'bn' ? 'আপনার নিজের' : 'Yours'}</span>
+                ) : (
+                  <Button className="text-xs py-1.5 px-3" disabled={completingTaskId === task.id} onClick={() => completeBoxTask(task)}>
+                    {completingTaskId === task.id ? '...' : (lang === 'bn' ? 'করো' : 'Do it')}
+                  </Button>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
