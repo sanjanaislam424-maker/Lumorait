@@ -1052,13 +1052,33 @@ export function Spin() {
       if (soundOn) playFanfare();
       notify(lang === 'bn' ? 'টাস্ক পাবলিশ হয়ে গেছে! +১ মিস্ট্রি বক্স স্লট তোমার!' : 'Task published! +1 Mystery Box slot is yours!', 'success');
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'error';
+      console.error('DETAILED TASK PUBLISH ERROR:', e);
+      const err = e as { message?: string; code?: string; details?: string; hint?: string };
+      const msg = err?.message || (e instanceof Error ? e.message : 'unknown');
+      const code = err?.code || '';
+      const hint = err?.hint || '';
+      const fullDetail = `${msg}${code ? ` [${code}]` : ''}${hint ? ` — ${hint}` : ''}`;
+
       if (msg.includes('insufficient_coins')) {
         notify(lang === 'bn' ? 'কয়েন যথেষ্ট নেই দোস্ত! আগে টাকা ভরো বা টাস্ক করো।' : 'Not enough coins, buddy! Deposit or do tasks first.', 'error');
       } else if (msg.includes('missing_url') || msg.includes('invalid_url')) {
         notify(lang === 'bn' ? 'টাস্ক লিংক সঠিক নয়!' : 'Please provide a valid task link!', 'error');
+      } else if (msg.includes('not_authenticated')) {
+        notify(lang === 'bn' ? 'লগইন করা নেই! আবার লগইন করো।' : 'Not authenticated! Please log in again.', 'error');
+      } else if (msg.includes('profile_not_found')) {
+        notify(lang === 'bn' ? 'প্রোফাইল পাওয়া যায়নি! পেজ রিফ্রেশ করো।' : 'Profile not found! Please refresh the page.', 'error');
+      } else if (msg.includes('invalid_title')) {
+        notify(lang === 'bn' ? 'টাস্কের নাম ৩-১২০ অক্ষরের মধ্যে দাও।' : 'Task title must be 3-120 characters.', 'error');
+      } else if (msg.includes('invalid_cost')) {
+        notify(lang === 'bn' ? 'রিওয়ার্ড কয়েন সঠিক নয়!' : 'Invalid reward coins amount!', 'error');
+      } else if (code === '42501' || msg.includes('permission') || msg.includes('RLS') || msg.includes('policy')) {
+        notify(lang === 'bn' ? `ডাটাবেস পারমিশন এরর: ${fullDetail}` : `Database permission error: ${fullDetail}`, 'error');
+      } else if (code === '42703' || msg.includes('column') || msg.includes('does not exist')) {
+        notify(lang === 'bn' ? `ডাটাবেস কলাম সমস্যা: ${fullDetail}` : `Database column issue: ${fullDetail}`, 'error');
+      } else if (code === '42883' || msg.includes('function') || msg.includes('does not exist')) {
+        notify(lang === 'bn' ? `ফাংশন সমস্যা: ${fullDetail}` : `Database function issue: ${fullDetail}`, 'error');
       } else {
-        notify(lang === 'bn' ? 'পাবলিশ করা যায়নি, আবার চেষ্টা করো।' : 'Could not publish, please try again.', 'error');
+        notify(`${lang === 'bn' ? 'পাবলিশ ব্যর্থ: ' : 'Publish failed: '}${fullDetail}`, 'error');
       }
     } finally { setAddTaskBusy(false); }
   };
@@ -1082,8 +1102,17 @@ export function Spin() {
           : `Awesome! Task done + ${task.reward_coins} coins + 1 Mystery Box slot earned!`,
         'success'
       );
-    } catch {
-      notify(lang === 'bn' ? 'সেই টাস্কটা ইতিমধ্যে কেউ নিয়ে নিয়েছে! তাড়াহুড়ো করো দোস্ত।' : 'Someone already grabbed that task! Be quicker next time, buddy.', 'error');
+    } catch (e: unknown) {
+      console.error('DETAILED TASK COMPLETE ERROR:', e);
+      const err = e as { message?: string; code?: string };
+      const msg = err?.message || (e instanceof Error ? e.message : 'unknown');
+      if (msg.includes('task_unavailable')) {
+        notify(lang === 'bn' ? 'সেই টাস্কটা ইতিমধ্যে কেউ নিয়ে নিয়েছে! তাড়াহুড়ো করো দোস্ত।' : 'Someone already grabbed that task! Be quicker next time, buddy.', 'error');
+      } else if (msg.includes('not_authenticated')) {
+        notify(lang === 'bn' ? 'লগইন করা নেই! আবার লগইন করো।' : 'Not authenticated! Please log in again.', 'error');
+      } else {
+        notify(`${lang === 'bn' ? 'কমপ্লিট ব্যর্থ: ' : 'Complete failed: '}${msg}`, 'error');
+      }
       loadP2pTasks();
     } finally { setCompletingTaskId(null); }
   };
