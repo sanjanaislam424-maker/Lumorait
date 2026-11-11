@@ -463,7 +463,6 @@ export function Spin() {
 
   const [lastBlastTs, setLastBlastTs] = useState<number>(0);
   const [now, setNow] = useState<number>(Date.now());
-  const [extraBlasts, setExtraBlasts] = useState(0); // extra blasts from ads/tasks
   const [blasting, setBlasting] = useState(false);
   const [crackingBox, setCrackingBox] = useState<number | null>(null);
   const [soundOn, setSoundOn] = useState(true);
@@ -504,7 +503,6 @@ export function Spin() {
   // Load persisted cooldown on mount / profile change
   useEffect(() => {
     setLastBlastTs(getStoredLastBlast());
-    setExtraBlasts(0);
   }, [profile?.id]);
 
   // Load public winners feed
@@ -629,7 +627,7 @@ export function Spin() {
   const cooldownRemaining = Math.max(0, (lastBlastTs + COOLDOWN_MS) - now);
   const freeBoxReady = cooldownRemaining === 0;
   const bonusSlots = profile?.box_slots ?? 0;
-  const blastsLeft = (freeBoxReady ? 1 : 0) + extraBlasts + bonusSlots;
+  const blastsLeft = (freeBoxReady ? 1 : 0) + bonusSlots;
 
   // Format countdown
   const formatCountdown = (ms: number) => {
@@ -888,29 +886,16 @@ export function Spin() {
       // Show floating coin reveal immediately as box shatters
       setFloatingReward({ reward, boxIndex });
 
-      // Persist cooldown if this was the free blast
+      // Persist cooldown if this was the free blast; otherwise spend a bonus box via RPC
       if (usingFree) {
         const ts = Date.now();
         setStoredLastBlast(ts);
         setLastBlastTs(ts);
       } else {
-        setExtraBlasts((prev) => {
-          if (prev > 0) return prev - 1;
-          // No earned blasts left — spend a banked bonus box slot
-          (async () => {
-            const { data: fresh } = await supabase
-              .from('profiles')
-              .select('box_slots')
-              .eq('id', profile.id)
-              .maybeSingle();
-            const slots = fresh?.box_slots ?? 0;
-            if (slots > 0) {
-              await supabase.from('profiles').update({ box_slots: slots - 1 }).eq('id', profile.id);
-              await refreshProfile();
-            }
-          })();
-          return prev;
-        });
+        (async () => {
+          const { error: spendError } = await supabase.rpc('spend_bonus_box');
+          if (!spendError) await refreshProfile();
+        })();
       }
 
       // After explosion settles, update DB and show modal
@@ -985,7 +970,10 @@ export function Spin() {
     setTimeout(() => {
       clearInterval(countdown);
       setAdWatching(false);
-      setExtraBlasts((prev) => prev + 1);
+      (async () => {
+        const { error } = await supabase.rpc('earn_bonus_box', { p_source: 'ad' });
+        if (!error) await refreshProfile();
+      })();
       if (soundOn) playFanfare();
       notify(t('adDoneBlast'), 'success');
     }, 15000);
@@ -1002,7 +990,10 @@ export function Spin() {
     setTimeout(() => {
       clearInterval(countdown);
       setVideoUnlockWatching(false);
-      setExtraBlasts((prev) => prev + 1);
+      (async () => {
+        const { error } = await supabase.rpc('earn_bonus_box', { p_source: 'video_unlock' });
+        if (!error) { await refreshProfile(); }
+      })();
       setShowLimitPopup(false);
       if (soundOn) playFanfare();
       notify(lang === 'bn' ? 'ভিডিও দেখা শেষ! +১ মিস্ট্রি বক্স আনলক হয়েছে, দোস্ত!' : 'Video done! +1 Mystery Box unlocked, buddy!', 'success');
@@ -1030,7 +1021,8 @@ export function Spin() {
       notes: 'Completed for extra box blast', status: 'approved',
     });
     setShowTaskPicker(false);
-    setExtraBlasts((prev) => prev + 1);
+    const { error } = await supabase.rpc('earn_bonus_box', { p_source: 'admin_task' });
+    if (!error) await refreshProfile();
     if (soundOn) playFanfare();
     notify(t('extraBlastEarned'), 'success');
   };
@@ -1272,12 +1264,6 @@ export function Spin() {
           </div>
         )}
 
-        {extraBlasts > 0 && (
-          <p className="text-xs text-blue-300 mt-2">
-            {lang === 'bn' ? `অতিরিক্ত ব্লাস্ট: ${extraBlasts}` : `Extra blasts: ${extraBlasts}`}
-          </p>
-        )}
-
         {/* Bonus box slots — earned via rewarded video, admin tasks & P2P task loop */}
         <motion.div
           key={bonusSlots}
@@ -1500,8 +1486,8 @@ export function Spin() {
         </div>
       </div>
 
-      {/* ===== EXTRA-BLAST ACTION CARDS (always visible if no free box ready) ===== */}
-      {blastsLeft === 0 && !blasting && (
+      {/* ===== EXTRA-BLAST ACTION CARDS (always visible; admin toggles hide them) ===== */}
+      {(boxUnlock.task || boxUnlock.video) && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
