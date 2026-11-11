@@ -491,6 +491,9 @@ export function Spin() {
   const [p2pTasks, setP2pTasks] = useState<P2pTaskRow[]>([]);
   const [addTaskForm, setAddTaskForm] = useState({ title: '', description: '', platform: 'youtube', target_url: '', cost_coins: 25 });
   const [addTaskBusy, setAddTaskBusy] = useState(false);
+  const [addTaskPhotos, setAddTaskPhotos] = useState<string[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const taskPhotoInputRef = useRef<HTMLInputElement>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -994,11 +997,40 @@ export function Spin() {
     notify(t('extraBlastEarned'), 'success');
   };
 
+  const uploadTaskPhoto = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (addTaskPhotos.length >= 3) return;
+    setPhotoUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const fileName = `box-tasks/${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('support-screenshots')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('support-screenshots').getPublicUrl(fileName);
+      setAddTaskPhotos((prev) => [...prev, data.publicUrl]);
+    } catch {
+      notify(lang === 'bn' ? 'ছবি আপলোড করা যায়নি।' : 'Could not upload photo.', 'error');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   // ---- P2P BOX TASKS: publish + complete ----
   const publishBoxTask = async () => {
     if (addTaskBusy || !profile) return;
     if (addTaskForm.title.trim().length < 3) {
       notify(lang === 'bn' ? 'টাস্কের একটা নাম দাও দোস্ত!' : 'Give your task a name, buddy!', 'error');
+      return;
+    }
+    const url = addTaskForm.target_url.trim();
+    if (!url) {
+      notify(lang === 'bn' ? 'টাস্ক লিংক দেওয়া বাধ্যতামূলক দোস্ত!' : 'Task link is required, buddy!', 'error');
+      return;
+    }
+    if (!/^https?:\/\/.+\..+/.test(url)) {
+      notify(lang === 'bn' ? 'একটা সঠিক লিংক দাও (https://...)!' : 'Please enter a valid URL (https://...)!', 'error');
       return;
     }
     setAddTaskBusy(true);
@@ -1007,11 +1039,13 @@ export function Spin() {
         p_title: addTaskForm.title.trim(),
         p_description: addTaskForm.description.trim(),
         p_platform: addTaskForm.platform,
-        p_target_url: addTaskForm.target_url.trim() || null,
+        p_target_url: url,
         p_cost_coins: Math.max(0, addTaskForm.cost_coins),
+        p_photo_urls: addTaskPhotos,
       });
       if (error) throw error;
       setAddTaskForm({ title: '', description: '', platform: 'youtube', target_url: '', cost_coins: 25 });
+      setAddTaskPhotos([]);
       setShowAddTask(false);
       await refreshProfile();
       loadP2pTasks();
@@ -1021,6 +1055,8 @@ export function Spin() {
       const msg = e instanceof Error ? e.message : 'error';
       if (msg.includes('insufficient_coins')) {
         notify(lang === 'bn' ? 'কয়েন যথেষ্ট নেই দোস্ত! আগে টাকা ভরো বা টাস্ক করো।' : 'Not enough coins, buddy! Deposit or do tasks first.', 'error');
+      } else if (msg.includes('missing_url') || msg.includes('invalid_url')) {
+        notify(lang === 'bn' ? 'টাস্ক লিংক সঠিক নয়!' : 'Please provide a valid task link!', 'error');
       } else {
         notify(lang === 'bn' ? 'পাবলিশ করা যায়নি, আবার চেষ্টা করো।' : 'Could not publish, please try again.', 'error');
       }
@@ -1743,8 +1779,42 @@ export function Spin() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'লিংক (অপশনাল)' : 'Link (optional)'}</label>
+                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'টাস্ক লিংক (বাধ্যতামূলক)' : 'Task Link (required)'} <span className="text-red-400">*</span></label>
                 <input value={addTaskForm.target_url} onChange={(e) => setAddTaskForm({ ...addTaskForm, target_url: e.target.value })} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'ছবি / স্ক্রিনশট (সর্বোচ্চ ৩টি)' : 'Photos / Screenshots (up to 3)'}</label>
+                <input
+                  ref={taskPhotoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadTaskPhoto(f); e.target.value = ''; }}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  {addTaskPhotos.map((url, idx) => (
+                    <div key={idx} className="relative inline-block">
+                      <img src={url} alt={`Preview ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
+                      <button
+                        onClick={() => setAddTaskPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  {addTaskPhotos.length < 3 && !photoUploading && (
+                    <button
+                      onClick={() => taskPhotoInputRef.current?.click()}
+                      className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  )}
+                  {photoUploading && (
+                    <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'বর্ণনা (অপশনাল)' : 'Description (optional)'}</label>
