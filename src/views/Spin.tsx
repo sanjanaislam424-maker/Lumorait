@@ -37,6 +37,18 @@ type P2pTaskRow = {
   creator_id: string;
   status: string;
   filled: number;
+  photo_urls: string[] | null;
+};
+
+type PendingSubmission = {
+  id: string;
+  task_id: string;
+  doer_id: string;
+  doer_name: string | null;
+  proof_urls: string[];
+  notes: string;
+  status: string;
+  task_title: string;
 };
 
 function youtubeEmbedUrl(url: string): string | null {
@@ -75,6 +87,20 @@ function pickWeightedIndex(): number {
   let r = Math.random() * total;
   for (let i = 0; i < WEIGHTED_ODDS.length; i++) {
     r -= WEIGHTED_ODDS[i];
+    if (r <= 0) return i;
+  }
+  return 0;
+}
+
+// Guaranteed reward for Bonus Mystery Boxes — never zero, minimum 5 coins.
+const BONUS_REWARDS: Reward[] = REWARDS.filter((r) => r.value >= 5);
+const BONUS_WEIGHTS = [25, 22, 18, 12, 8, 5, 3, 2];
+
+function pickBonusRewardIndex(): number {
+  const total = BONUS_WEIGHTS.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < BONUS_WEIGHTS.length; i++) {
+    r -= BONUS_WEIGHTS[i];
     if (r <= 0) return i;
   }
   return 0;
@@ -494,6 +520,13 @@ export function Spin() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const taskPhotoInputRef = useRef<HTMLInputElement>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [detailTask, setDetailTask] = useState<P2pTaskRow | null>(null);
+  const [proofPhotos, setProofPhotos] = useState<string[]>([]);
+  const [proofUploading, setProofUploading] = useState(false);
+  const proofPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [submittingProof, setSubmittingProof] = useState(false);
+  const [pendingSubs, setPendingSubs] = useState<PendingSubmission[]>([]);
+  const [reviewBusyId, setReviewBusyId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -548,16 +581,54 @@ export function Spin() {
     if (!profile?.id) return;
     const { data } = await supabase
       .from('tasks')
-      .select('id, title, description, platform, target_url, reward_coins, cost_coins, creator_id, status, filled')
+      .select('id, title, description, platform, target_url, reward_coins, cost_coins, creator_id, status, filled, photo_urls')
       .eq('is_admin_task', false)
-      .eq('status', 'open')
-      .eq('filled', 0)
+      .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: false })
       .limit(20);
     setP2pTasks((data as P2pTaskRow[]) || []);
   }, [profile?.id]);
 
-  useEffect(() => { loadP2pTasks(); }, [loadP2pTasks]);
+  // Load pending submissions for tasks the current user created
+  const loadPendingSubs = useCallback(async () => {
+    if (!profile?.id) return;
+    const { data } = await supabase
+      .from('task_submissions')
+      .select('id, task_id, doer_id, proof_urls, notes, status, tasks!inner(title, creator_id)')
+      .eq('status', 'pending')
+      .eq('tasks.creator_id', profile.id)
+      .order('created_at', { ascending: false });
+    if (data) {
+      const mapped: PendingSubmission[] = (data as any[]).map((r) => ({
+        id: r.id,
+        task_id: r.task_id,
+        doer_id: r.doer_id,
+        doer_name: null,
+        proof_urls: r.proof_urls || [],
+        notes: r.notes || '',
+        status: r.status,
+        task_title: r.tasks?.title || '',
+      }));
+      // Fetch doer names
+      const doerIds = [...new Set(mapped.map((m) => m.doer_id))];
+      if (doerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, phone')
+          .in('id', doerIds);
+        const nameMap = new Map<string, string>();
+        (profiles || []).forEach((p: any) => {
+          nameMap.set(p.id, p.full_name || p.phone || 'Lumora User');
+        });
+        mapped.forEach((m) => { m.doer_name = nameMap.get(m.doer_id) || 'Lumora User'; });
+      }
+      setPendingSubs(mapped);
+    } else {
+      setPendingSubs([]);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => { loadP2pTasks(); loadPendingSubs(); }, [loadP2pTasks, loadPendingSubs]);
 
   // Check if current user already claimed the super reward
   useEffect(() => {
@@ -1086,39 +1157,101 @@ export function Spin() {
     } finally { setAddTaskBusy(false); }
   };
 
-  const completeBoxTask = async (task: P2pTaskRow) => {
-    if (completingTaskId || !profile) return;
-    setCompletingTaskId(task.id);
+  const uploadProofPhoto = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (proofPhotos.length >= 3) return;
+    setProofUploading(true);
     try {
-      const { data, error } = await supabase.rpc('complete_box_task', {
-        p_task_id: task.id,
-        p_notes: 'Completed from Mystery Box',
-        p_proof_urls: [],
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const fileName = `box-proofs/${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('support-screenshots')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('support-screenshots').getPublicUrl(fileName);
+      setProofPhotos((prev) => [...prev, data.publicUrl]);
+    } catch {
+      notify(lang === 'bn' ? 'ছবি আপলোড করা যায়নি।' : 'Could not upload photo.', 'error');
+    } finally {
+      setProofUploading(false);
+    }
+  };
+
+  const submitTaskProof = async () => {
+    if (submittingProof || !profile || !detailTask) return;
+    if (proofPhotos.length < 1) {
+      notify(lang === 'bn' ? 'প্রমাণ হিসেবে অন্তত ১টা স্ক্রিনশট দাও!' : 'Please upload at least 1 screenshot as proof!', 'error');
+      return;
+    }
+    setSubmittingProof(true);
+    try {
+      const { error } = await supabase.rpc('submit_box_task_proof', {
+        p_task_id: detailTask.id,
+        p_proof_urls: proofPhotos,
+        p_notes: 'Submitted from Mystery Box',
       });
       if (error) throw error;
       await refreshProfile();
       loadP2pTasks();
+      setDetailTask(null);
+      setProofPhotos([]);
       if (soundOn) playFanfare();
-      setCelebrate(true);
       notify(
         lang === 'bn'
-          ? `দুর্দান্ত! টাস্ক কমপ্লিট + ${task.reward_coins} কয়েন + ১ বোনাস মিস্ট্রি বক্স জিতেছ!`
-          : `Awesome! Task done + ${task.reward_coins} coins + 1 bonus Mystery Box earned!`,
+          ? 'প্রমাণ জমা হয়েছে! টাস্ক ক্রিয়েটর অনুমোদন করলেই তুমি +১ বোনাস মিস্ট্রি বক্স পাবে!'
+          : 'Proof submitted! You will get +1 Bonus Mystery Box when the creator approves!',
         'success'
       );
     } catch (e: unknown) {
-      console.error('DETAILED TASK COMPLETE ERROR:', e);
-      const err = e as { message?: string; code?: string };
+      const err = e as { message?: string };
       const msg = err?.message || (e instanceof Error ? e.message : 'unknown');
-      if (msg.includes('task_unavailable')) {
-        notify(lang === 'bn' ? 'সেই টাস্কটা ইতিমধ্যে কেউ নিয়ে নিয়েছে! তাড়াহুড়ো করো দোস্ত।' : 'Someone already grabbed that task! Be quicker next time, buddy.', 'error');
+      if (msg.includes('proof_required')) {
+        notify(lang === 'bn' ? 'প্রমাণ হিসেবে অন্তত ১টা স্ক্রিনশট দাও!' : 'At least 1 screenshot is required!', 'error');
+      } else if (msg.includes('cannot_complete_own_task')) {
+        notify(lang === 'bn' ? 'নিজের টাস্ক কমপ্লিট করা যায় না!' : 'You cannot complete your own task!', 'error');
+      } else if (msg.includes('task_unavailable')) {
+        notify(lang === 'bn' ? 'এই টাস্কটা আর পাওয়া যাচ্ছে না!' : 'This task is no longer available!', 'error');
       } else if (msg.includes('not_authenticated')) {
         notify(lang === 'bn' ? 'লগইন করা নেই! আবার লগইন করো।' : 'Not authenticated! Please log in again.', 'error');
       } else {
-        notify(`${lang === 'bn' ? 'কমপ্লিট ব্যর্থ: ' : 'Complete failed: '}${msg}`, 'error');
+        notify(`${lang === 'bn' ? 'জমা ব্যর্থ: ' : 'Submit failed: '}${msg}`, 'error');
       }
+    } finally { setSubmittingProof(false); }
+  };
+
+  const approveSubmission = async (subId: string) => {
+    if (reviewBusyId || !profile) return;
+    setReviewBusyId(subId);
+    try {
+      const { error } = await supabase.rpc('approve_box_task_submission', { p_submission_id: subId });
+      if (error) throw error;
+      await refreshProfile();
       loadP2pTasks();
-    } finally { setCompletingTaskId(null); }
+      loadPendingSubs();
+      if (soundOn) playFanfare();
+      setCelebrate(true);
+      notify(lang === 'bn' ? 'অনুমোদন হয়েছে! তুমি ও তোমার বন্ধু দুজনেই +১ বোনাস মিস্ট্রি বক্স পেয়েছ!' : 'Approved! Both you and your buddy got +1 Bonus Mystery Box!', 'success');
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      const msg = err?.message || (e instanceof Error ? e.message : 'unknown');
+      notify(`${lang === 'bn' ? 'অনুমোদন ব্যর্থ: ' : 'Approve failed: '}${msg}`, 'error');
+    } finally { setReviewBusyId(null); }
+  };
+
+  const rejectSubmission = async (subId: string) => {
+    if (reviewBusyId || !profile) return;
+    setReviewBusyId(subId);
+    try {
+      const { error } = await supabase.rpc('reject_box_task_submission', { p_submission_id: subId });
+      if (error) throw error;
+      loadP2pTasks();
+      loadPendingSubs();
+      notify(lang === 'bn' ? 'প্রমাণ বাতিল করা হয়েছে। টাস্কটা আবার খোলা হয়েছে।' : 'Proof rejected. Task reopened for others.', 'info');
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      const msg = err?.message || (e instanceof Error ? e.message : 'unknown');
+      notify(`${lang === 'bn' ? 'বাতিল ব্যর্থ: ' : 'Reject failed: '}${msg}`, 'error');
+    } finally { setReviewBusyId(null); }
   };
 
   // ---- SUPER MYSTERY BOX CLAIM ----
