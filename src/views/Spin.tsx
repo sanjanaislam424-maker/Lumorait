@@ -862,12 +862,14 @@ export function Spin() {
         setStoredLastBlast(ts);
         setLastBlastTs(ts);
       } else {
-        setExtraBlasts((prev) => Math.max(0, prev - 1));
-      }
-
-      // Persist spent box slot if the user had banked slots
-      if (!usingFree && (profile?.box_slots ?? 0) > 0) {
-        supabase.from('profiles').update({ box_slots: (profile?.box_slots ?? 0) - 1 }).eq('id', profile.id);
+        setExtraBlasts((prev) => {
+          if (prev > 0) return prev - 1;
+          // No earned blasts left — spend a banked box slot instead
+          if (profile && (profile.box_slots ?? 0) > 0) {
+            supabase.from('profiles').update({ box_slots: profile.box_slots - 1 }).eq('id', profile.id);
+          }
+          return prev;
+        });
       }
 
       // After explosion settles, update DB and show modal

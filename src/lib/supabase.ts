@@ -58,7 +58,6 @@ export type Profile = {
   notify_promo: boolean;
   level_reward_claimed: number;
   deletion_requested_at: string | null;
-  box_slots: number;
   avg_rating: number;
   total_tasks_completed: number;
   created_at: string;
