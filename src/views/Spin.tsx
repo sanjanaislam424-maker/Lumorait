@@ -950,8 +950,8 @@ export function Spin() {
       if (soundOn) playExplosion();
       triggerExplosion(boxEl, BOX_CONFIGS[boxIndex].accent);
 
-      const winIdx = pickWeightedIndex();
-      const reward = REWARDS[winIdx];
+      const winIdx = usingFree ? pickWeightedIndex() : pickBonusRewardIndex();
+      const reward = usingFree ? REWARDS[winIdx] : BONUS_REWARDS[winIdx];
 
       // Show floating coin reveal immediately as box shatters
       setFloatingReward({ reward, boxIndex });
