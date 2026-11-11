@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap, Plus, Users } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
+import { createMicrocopy } from '@/lib/microcopy';
 import { supabase, TaskRow } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
@@ -1498,8 +1499,7 @@ export function Spin() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.02 }}
-              onClick={openTaskPicker}
-              disabled={adWatching}
+              onClick={() => { setShowTaskHub(true); setShowAddTask(false); }}
               className="flex flex-col items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-2xl py-5 text-green-300 disabled:opacity-40 transition relative overflow-hidden group"
               style={{ boxShadow: '0 0 15px rgba(34,197,94,0.15)' }}
             >
@@ -1739,7 +1739,7 @@ export function Spin() {
                 {boxUnlock.task && (
                   <motion.button
                     whileTap={{ scale: 0.97 }}
-                    onClick={() => { setShowLimitPopup(false); openTaskPicker(); }}
+                    onClick={() => { setShowLimitPopup(false); setShowTaskHub(true); setShowAddTask(false); }}
                     className="w-full flex items-center gap-3 bg-green-500/10 border border-green-500/30 rounded-2xl p-3.5 text-left hover:bg-green-500/20 transition"
                   >
                     <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">

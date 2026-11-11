@@ -24,6 +24,10 @@ const FALLBACK: Record<string, string> = {
   task_available_en: "A new task is waiting for you; make the opportunity count.",
   watch_tutorial_bn: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।",
   watch_tutorial_en: "Watch the tutorial and start the task with confidence.",
+  box_btn_task_bn: "টাস্ক পূরণ করে আরেকটি বক্স ফাটান",
+  box_btn_task_en: "Blast another box by doing a task!",
+  box_btn_ad_bn: "অ্যাড দেখে আরেকটি বক্স ফাটান",
+  box_btn_ad_en: "Blast another box by watching an ad!",
 };
 
 const FIELDS = Object.keys(FALLBACK);
@@ -69,7 +73,11 @@ Return ONLY valid JSON, no markdown, no code fences. Format:
   "task_available_bn": "fun message in Bengali script, max 90 chars",
   "task_available_en": "same message in casual English, max 90 chars",
   "watch_tutorial_bn": "fun CTA in Bengali script, max 100 chars",
-  "watch_tutorial_en": "same CTA in casual English, max 100 chars"
+  "watch_tutorial_en": "same CTA in casual English, max 100 chars",
+  "box_btn_task_bn": "funny witty button text inviting the user to complete a task to earn another Mystery Box, in Bengali script, max 80 chars",
+  "box_btn_task_en": "same button text in casual funny English, max 70 chars",
+  "box_btn_ad_bn": "funny witty button text inviting the user to watch an ad to earn another Mystery Box, in Bengali script, max 80 chars",
+  "box_btn_ad_en": "same button text in casual funny English, max 70 chars"
 }
 
 No emoji.`;
