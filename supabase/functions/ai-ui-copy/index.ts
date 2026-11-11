@@ -80,7 +80,7 @@ async function generateUICopy(keys: string[]): Promise<Record<string, string> | 
     keys,
     body: {
       contents: [{ parts: [{ text: PROMPT }] }],
-      generationConfig: { temperature: 1.4, maxOutputTokens: 1800 },
+      generationConfig: { temperature: 1.4, maxOutputTokens: 8192 },
     },
     timeoutMs: TIMEOUT_MS,
     label: "ai-ui-copy",

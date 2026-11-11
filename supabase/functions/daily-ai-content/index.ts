@@ -121,7 +121,7 @@ Make it fresh and different each time. Be creative, specific, and hilarious.`;
     keys: allKeys,
     body: {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 1.4, maxOutputTokens: 1200 },
+      generationConfig: { temperature: 1.4, maxOutputTokens: 8192 },
     },
     timeoutMs: TIMEOUT_MS,
     label: "daily-ai-content",

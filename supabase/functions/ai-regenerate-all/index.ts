@@ -48,7 +48,7 @@ async function ask(keys: string[], prompt: string): Promise<Record<string, unkno
     keys,
     body: {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 1.3, maxOutputTokens: 1800 },
+      generationConfig: { temperature: 1.3, maxOutputTokens: 8192 },
     },
     timeoutMs: TIMEOUT_MS,
     label: "ai-regenerate-all",

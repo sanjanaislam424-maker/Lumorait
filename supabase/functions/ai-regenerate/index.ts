@@ -94,7 +94,7 @@ Return ONLY the raw text string — no JSON, no markdown, no code fences, no quo
     keys,
     body: {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 1.5, maxOutputTokens: 512 },
+      generationConfig: { temperature: 1.5, maxOutputTokens: 8192 },
     },
     timeoutMs: TIMEOUT_MS,
     label: `ai-regenerate ${field}`,

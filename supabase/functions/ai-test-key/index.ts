@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
           role: m.role === "assistant" || m.role === "admin" ? "model" : "user",
           parts: [{ text: m.content }],
         })),
-        generationConfig: { temperature: 0.8, maxOutputTokens: 256 },
+        generationConfig: { temperature: 0.8, maxOutputTokens: 8192 },
       },
       timeoutMs: TIMEOUT_MS,
       label: "ai-test-key",
