@@ -452,6 +452,10 @@ export function Spin() {
   const [superEvent, setSuperEvent] = useState<SuperEvent | null>(null);
   const [superClaimed, setSuperClaimed] = useState(false);
   const [superBusy, setSuperBusy] = useState(false);
+  const [boxUnlock, setBoxUnlock] = useState({ task: true, video: true });
+  const [showLimitPopup, setShowLimitPopup] = useState(false);
+  const [videoUnlockWatching, setVideoUnlockWatching] = useState(false);
+  const [videoUnlockCountdown, setVideoUnlockCountdown] = useState(10);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -482,6 +486,21 @@ export function Spin() {
       .eq('id', 1)
       .maybeSingle();
     setSuperEvent((data as SuperEvent) || null);
+  }, []);
+
+  // Load admin-controlled unlock toggles
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('box_unlock_task_enabled, box_unlock_video_enabled')
+        .eq('id', 1)
+        .maybeSingle();
+      if (data) setBoxUnlock({
+        task: data.box_unlock_task_enabled !== false,
+        video: data.box_unlock_video_enabled !== false,
+      });
+    })();
   }, []);
 
   // Check if current user already claimed the super reward
@@ -749,7 +768,13 @@ export function Spin() {
 
   // ---- CORE: blast a box ----
   const blastBox = async (boxIndex: number, boxEl: HTMLElement) => {
-    if (blasting || crackingBox !== null || blastsLeft <= 0 || !profile) return;
+    if (blasting || crackingBox !== null || !profile) return;
+    if (blastsLeft <= 0) {
+      // Out of blasts — show the funny best-friend limit popup instead of opening the box
+      setShowLimitPopup(true);
+      if (soundOn) playLose();
+      return;
+    }
 
     // Determine if this is a free blast or extra blast
     const usingFree = freeBoxReady;
@@ -860,6 +885,24 @@ export function Spin() {
       if (soundOn) playFanfare();
       notify(t('adDoneBlast'), 'success');
     }, 15000);
+  };
+
+  // ---- VIDEO UNLOCK from the limit popup ----
+  const startVideoUnlock = () => {
+    if (videoUnlockWatching) return;
+    setVideoUnlockWatching(true);
+    setVideoUnlockCountdown(10);
+    const countdown = setInterval(() => {
+      setVideoUnlockCountdown((p) => { if (p <= 1) { clearInterval(countdown); return 0; } return p - 1; });
+    }, 1000);
+    setTimeout(() => {
+      clearInterval(countdown);
+      setVideoUnlockWatching(false);
+      setExtraBlasts((prev) => prev + 1);
+      setShowLimitPopup(false);
+      if (soundOn) playFanfare();
+      notify(lang === 'bn' ? 'ভিডিও দেখা শেষ! +১ মিস্ট্রি বক্স আনলক হয়েছে, দোস্ত!' : 'Video done! +1 Mystery Box unlocked, buddy!', 'success');
+    }, 10000);
   };
 
   // ---- EXTRA BLAST: Complete task ----
@@ -1413,6 +1456,90 @@ export function Spin() {
           </motion.div>
         </div>
       )}
+
+      {/* ===== BOX LIMIT POPUP (funny best-friend style) ===== */}
+      <AnimatePresence>
+        {showLimitPopup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            style={{ background: 'rgba(2, 6, 23, 0.75)', backdropFilter: 'blur(8px)' }}
+            onClick={() => setShowLimitPopup(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.7, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.7, y: 30, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-sm w-full text-center bg-slate-800/90 border border-amber-500/40 rounded-3xl p-6"
+              style={{ boxShadow: '0 0 50px rgba(251, 191, 36, 0.2), 0 12px 40px rgba(0,0,0,0.5)' }}
+            >
+              <button
+                onClick={() => setShowLimitPopup(false)}
+                className="absolute top-3 right-3 text-slate-500 hover:text-white transition"
+              >
+                <X size={20} />
+              </button>
+              <motion.div
+                animate={{ rotate: [0, -8, 8, -5, 0] }}
+                transition={{ duration: 0.6, delay: 0.15 }}
+                className="text-5xl mb-3"
+              >
+                😅
+              </motion.div>
+              <h3 className="text-lg font-bold text-amber-300 mb-2">
+                {lang === 'bn' ? 'আরে ভাই/দোস্ত! এত তাড়াহুড়ো কিসের?' : 'Whoa buddy! What is the rush?'}
+              </h3>
+              <p className="text-sm text-slate-200 leading-relaxed mb-4">
+                {lang === 'bn'
+                  ? 'আজকের মিস্ট্রি বক্সের বারোটা বাজাইয়া দিছিস! নতুন বক্স পাইতে চাইলে এবার একটু খাটাখাটনি কর — টাস্ক কমপ্লিট কর অথবা ভিডিও দেখ!'
+                  : "You have used up today's Mystery Boxes! Want a new one? Time to put in a little work — complete a task or watch a video!"}
+              </p>
+              <div className="space-y-2">
+                {boxUnlock.task && (
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => { setShowLimitPopup(false); openTaskPicker(); }}
+                    className="w-full flex items-center gap-3 bg-green-500/10 border border-green-500/30 rounded-2xl p-3.5 text-left hover:bg-green-500/20 transition"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
+                      <ListChecks size={20} className="text-green-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-green-300">{lang === 'bn' ? 'টাস্ক কমপ্লিট করো' : 'Complete a Task'}</p>
+                      <p className="text-[11px] text-green-400/70">+1 {t('mysteryBlast')}</p>
+                    </div>
+                    <Sparkles size={14} className="text-green-400/60 shrink-0" />
+                  </motion.button>
+                )}
+                {boxUnlock.video && (
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={startVideoUnlock}
+                    disabled={videoUnlockWatching}
+                    className="w-full flex items-center gap-3 bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3.5 text-left hover:bg-blue-500/20 transition disabled:opacity-50"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <Play size={20} className="text-blue-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-blue-300">
+                        {videoUnlockWatching ? `${lang === 'bn' ? 'ভিডিও চলছে...' : 'Video playing...'} ${videoUnlockCountdown}s` : lang === 'bn' ? 'ভিডিও দেখে আনলক করো' : 'Watch a Video'}
+                      </p>
+                      <p className="text-[11px] text-blue-400/70">+1 {t('mysteryBlast')}</p>
+                    </div>
+                    <Star size={14} className="text-blue-400/60 shrink-0" />
+                  </motion.button>
+                )}
+              </div>
+              <Button variant="ghost" className="w-full mt-4" onClick={() => setShowLimitPopup(false)}>{t('close')}</Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
 

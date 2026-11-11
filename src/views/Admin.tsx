@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star, Bug, Lightbulb } from 'lucide-react';
+import { Users, ShieldCheck, DollarSign, Gavel, Settings, Bell, BarChart3, Check, X, Ticket, FileWarning, Search, Lock, UserCog, ListChecks, Pause, Play, Trash2, Edit2, Plus, Upload, Image as ImageIcon, Video, Zap, Crown, Bot, Key, MessageSquare, Megaphone, Award, Send, Activity, FlaskConical, Sparkles, RefreshCw, Star, Bug, Lightbulb, Gift } from 'lucide-react';
 import { UsageChart } from '@/components/UsageChart';
 import { useApp } from '@/lib/AppContext';
 import { supabase, Profile, TxRow } from '@/lib/supabase';
@@ -616,6 +616,7 @@ function SettingsTab() {
   const [newTier, setNewTier] = useState({ duration_days: 1, label: '', free_cost: 50, pro_cost: 40, vip_cost: 25, daily_rate_after_lock_free: 0, daily_rate_after_lock_pro: 0, daily_rate_after_lock_vip: 0 });
   const [superEvt, setSuperEvt] = useState<any>(null);
   const [superForm, setSuperForm] = useState({ is_active: false, activation_at: '', winner_limit: 10, reward_coins: 1000 });
+  const [boxUnlock, setBoxUnlock] = useState({ task: true, video: true });
   const [lighting, setLighting] = useState<LoginBranding>(loginBranding);
   const lightingDirty = useRef(false);
 
@@ -669,6 +670,11 @@ function SettingsTab() {
           reward_coins: se.reward_coins,
         });
       }
+      const { data: as } = await supabase.from('app_settings').select('box_unlock_task_enabled, box_unlock_video_enabled').eq('id', 1).maybeSingle();
+      if (as) setBoxUnlock({
+        task: as.box_unlock_task_enabled !== false,
+        video: as.box_unlock_video_enabled !== false,
+      });
     })();
   }, []);
 
@@ -980,6 +986,49 @@ function SettingsTab() {
           await supabase.from('app_settings').update({ promotion_tiers: promoTiers }).eq('id', 1);
           notify(t('saved'), 'success');
         }}>{t('save')}</Button>
+      </div>
+    </Card>
+
+    {/* Mystery Box Unlock Options Control */}
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <Gift size={18} className="text-amber-400" />
+        <h3 className="font-semibold text-white">Mystery Box Unlock Options</h3>
+      </div>
+      <p className="text-xs text-slate-400 mb-3">
+        Control which options users see when they run out of Mystery Box attempts. Turning an option OFF hides that button from the user's limit popup instantly.
+      </p>
+      <div className="space-y-2">
+        <button
+          onClick={async () => {
+            const next = !boxUnlock.task;
+            setBoxUnlock((p) => ({ ...p, task: next }));
+            const { error } = await supabase.from('app_settings').update({ box_unlock_task_enabled: next }).eq('id', 1);
+            if (error) { notify(error.message, 'error'); setBoxUnlock((p) => ({ ...p, task: !next })); return; }
+            notify(t('saved'), 'success');
+          }}
+          className="w-full flex items-center justify-between bg-slate-800/50 border border-white/10 rounded-xl p-3.5 hover:border-white/25 transition"
+        >
+          <span className="text-sm text-white font-medium">Enable Task Unlock Option</span>
+          <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${boxUnlock.task ? 'bg-green-500' : 'bg-slate-600'}`}>
+            <span className={`inline-block h-4.5 w-4.5 h-[18px] w-[18px] transform rounded-full bg-white transition ${boxUnlock.task ? 'translate-x-[24px]' : 'translate-x-[4px]'}`} />
+          </span>
+        </button>
+        <button
+          onClick={async () => {
+            const next = !boxUnlock.video;
+            setBoxUnlock((p) => ({ ...p, video: next }));
+            const { error } = await supabase.from('app_settings').update({ box_unlock_video_enabled: next }).eq('id', 1);
+            if (error) { notify(error.message, 'error'); setBoxUnlock((p) => ({ ...p, video: !next })); return; }
+            notify(t('saved'), 'success');
+          }}
+          className="w-full flex items-center justify-between bg-slate-800/50 border border-white/10 rounded-xl p-3.5 hover:border-white/25 transition"
+        >
+          <span className="text-sm text-white font-medium">Enable Video Unlock Option</span>
+          <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${boxUnlock.video ? 'bg-green-500' : 'bg-slate-600'}`}>
+            <span className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white transition ${boxUnlock.video ? 'translate-x-[24px]' : 'translate-x-[4px]'}`} />
+          </span>
+        </button>
       </div>
     </Card>
 
