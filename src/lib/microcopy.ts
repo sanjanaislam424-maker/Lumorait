@@ -24,6 +24,10 @@ const STATIC_FALLBACKS: Record<string, string> = {
   taskAvailable_en: "A new task is waiting for you; make the opportunity count.",
   watchTutorial_bn: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।",
   watchTutorial_en: "Watch the tutorial and start the task with confidence.",
+  boxBtnTask_bn: "টাস্ক পূরণ করে আরেকটি বক্স ফাটান",
+  boxBtnTask_en: "Blast another box by doing a task!",
+  boxBtnAd_bn: "অ্যাড দেখে আরেকটি বক্স ফাটান",
+  boxBtnAd_en: "Blast another box by watching an ad!",
 };
 
 const DB_FIELD_MAP: Record<string, string> = {
@@ -37,6 +41,8 @@ const DB_FIELD_MAP: Record<string, string> = {
   dashboardAlert: 'dashboard_alert',
   taskAvailable: 'task_available',
   watchTutorial: 'watch_tutorial',
+  boxBtnTask: 'box_btn_task',
+  boxBtnAd: 'box_btn_ad',
 };
 
 type CopyKey = keyof typeof DB_FIELD_MAP;
@@ -309,6 +315,8 @@ export function createMicrocopy(lang: Lang, tone: AiTone = 'buddy') {
     dailyTip: () => pick(currentCopy, 'dailyTip', lang),
     dashboardAlert: () => pick(currentCopy, 'dashboardAlert', lang),
     watchTutorial: () => pick(currentCopy, 'watchTutorial', lang),
+    boxBtnTask: () => pick(currentCopy, 'boxBtnTask', lang),
+    boxBtnAd: () => pick(currentCopy, 'boxBtnAd', lang),
   };
 }
 

@@ -31,6 +31,10 @@ const UI_FALLBACK = {
   task_available_en: "A new task is waiting for you; make the opportunity count.",
   watch_tutorial_bn: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।",
   watch_tutorial_en: "Watch the tutorial and start the task with confidence.",
+  box_btn_task_bn: "টাস্ক পূরণ করে আরেকটি বক্স ফাটান",
+  box_btn_task_en: "Blast another box by doing a task!",
+  box_btn_ad_bn: "অ্যাড দেখে আরেকটি বক্স ফাটান",
+  box_btn_ad_en: "Blast another box by watching an ad!",
 };
 
 const CONTENT_FIELDS = Object.keys(CONTENT_FALLBACK);
@@ -80,6 +84,8 @@ CRITICAL QUALITY RULES:
 JSON keys: ${[...CONTENT_FIELDS, ...UI_FIELDS].join(", ")}
 Content keys must be funny_bn/funny_en and tip_bn/tip_en — these are daily jokes and growth tips.
 UI keys must use the exact *_bn and *_en names listed above — these are short, punchy UI labels and messages.
+The box_btn_task_* keys are the funny call-to-action text for the "do a task" button on the Mystery Box screen.
+The box_btn_ad_* keys are the funny call-to-action text for the "watch an ad" button on the Mystery Box screen.
 Keep each value concise, complete, and fun.`;
 
     const generated = keys.length > 0 ? await ask(keys, prompt) : null;

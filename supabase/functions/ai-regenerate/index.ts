@@ -51,6 +51,10 @@ const UI_ITEMS: Record<string, { desc: string; maxChars: number; fallback: strin
   task_available_en: { desc: "Funny message announcing a new task is available", maxChars: 90, fallback: "A new task is waiting for you; make the opportunity count.", bangla: false },
   watch_tutorial_bn: { desc: "Funny call-to-action to watch a tutorial", maxChars: 100, fallback: "টিউটোরিয়ালটি দেখে কাজটি আরও আত্মবিশ্বাসের সঙ্গে শুরু করুন।", bangla: true },
   watch_tutorial_en: { desc: "Funny call-to-action to watch a tutorial", maxChars: 100, fallback: "Watch the tutorial and start the task with confidence.", bangla: false },
+  box_btn_task_bn: { desc: "Funny witty button text for the P2P task option on the Mystery Box screen — invites the user to complete a task to earn another box", maxChars: 80, fallback: "টাস্ক পূরণ করে আরেকটি বক্স ফাটান", bangla: true },
+  box_btn_task_en: { desc: "Funny witty button text for the P2P task option on the Mystery Box screen — invites the user to complete a task to earn another box", maxChars: 70, fallback: "Blast another box by doing a task!", bangla: false },
+  box_btn_ad_bn: { desc: "Funny witty button text for the rewarded video option on the Mystery Box screen — invites the user to watch an ad to earn another box", maxChars: 80, fallback: "অ্যাড দেখে আরেকটি বক্স ফাটান", bangla: true },
+  box_btn_ad_en: { desc: "Funny witty button text for the rewarded video option on the Mystery Box screen — invites the user to watch an ad to earn another box", maxChars: 70, fallback: "Blast another box by watching an ad!", bangla: false },
 };
 
 function cleanText(text: string): string {
