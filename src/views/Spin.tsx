@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap } from 'lucide-react';
+import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap, Plus, Users } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
@@ -24,6 +24,35 @@ type SuperEvent = {
   reward_coins: number;
   claimers_count: number;
 };
+
+type P2pTaskRow = {
+  id: string;
+  title: string;
+  description: string;
+  platform: string;
+  target_url: string | null;
+  reward_coins: number;
+  cost_coins: number;
+  creator_id: string;
+  status: string;
+  filled: number;
+};
+
+function youtubeEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      const v = u.searchParams.get('v');
+      if (v) return `https://www.youtube.com/embed/${v}`;
+      if (u.pathname.startsWith('/shorts/')) return `https://www.youtube.com/embed/${u.pathname.split('/')[2]}`;
+      if (u.pathname.startsWith('/embed/')) return url;
+    }
+    if (u.hostname === 'youtu.be') {
+      return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    }
+  } catch { /* not a url */ }
+  return null;
+}
 
 // ---- Reward tiers with distinct funny comments ----
 type Reward = { value: number; label: string; color: string; comment: string; emoji: string };
@@ -456,6 +485,13 @@ export function Spin() {
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [videoUnlockWatching, setVideoUnlockWatching] = useState(false);
   const [videoUnlockCountdown, setVideoUnlockCountdown] = useState(10);
+  const [tutorialUrl, setTutorialUrl] = useState<string | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [p2pTasks, setP2pTasks] = useState<P2pTaskRow[]>([]);
+  const [addTaskForm, setAddTaskForm] = useState({ title: '', description: '', platform: 'youtube', target_url: '', cost_coins: 25 });
+  const [addTaskBusy, setAddTaskBusy] = useState(false);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -488,20 +524,40 @@ export function Spin() {
     setSuperEvent((data as SuperEvent) || null);
   }, []);
 
-  // Load admin-controlled unlock toggles
+  // Load admin-controlled unlock toggles + tutorial URL
   useEffect(() => {
     (async () => {
       const { data } = await supabase
         .from('app_settings')
-        .select('box_unlock_task_enabled, box_unlock_video_enabled')
+        .select('box_unlock_task_enabled, box_unlock_video_enabled, box_tutorial_url')
         .eq('id', 1)
         .maybeSingle();
-      if (data) setBoxUnlock({
-        task: data.box_unlock_task_enabled !== false,
-        video: data.box_unlock_video_enabled !== false,
-      });
+      if (data) {
+        setBoxUnlock({
+          task: data.box_unlock_task_enabled !== false,
+          video: data.box_unlock_video_enabled !== false,
+        });
+        setTutorialUrl(data.box_tutorial_url || null);
+      }
     })();
   }, []);
+
+  // Load open P2P box tasks from other users
+  const loadP2pTasks = useCallback(async () => {
+    if (!profile?.id) return;
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, title, description, platform, target_url, reward_coins, cost_coins, creator_id, status, filled')
+      .eq('is_admin_task', false)
+      .eq('status', 'open')
+      .eq('filled', 0)
+      .neq('creator_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setP2pTasks((data as P2pTaskRow[]) || []);
+  }, [profile?.id]);
+
+  useEffect(() => { loadP2pTasks(); }, [loadP2pTasks]);
 
   // Check if current user already claimed the super reward
   useEffect(() => {
@@ -541,7 +597,7 @@ export function Spin() {
 
   const cooldownRemaining = Math.max(0, (lastBlastTs + COOLDOWN_MS) - now);
   const freeBoxReady = cooldownRemaining === 0;
-  const blastsLeft = (freeBoxReady ? 1 : 0) + extraBlasts;
+  const blastsLeft = (freeBoxReady ? 1 : 0) + extraBlasts + (profile?.box_slots ?? 0);
 
   // Format countdown
   const formatCountdown = (ms: number) => {
@@ -809,6 +865,11 @@ export function Spin() {
         setExtraBlasts((prev) => Math.max(0, prev - 1));
       }
 
+      // Persist spent box slot if the user had banked slots
+      if (!usingFree && (profile?.box_slots ?? 0) > 0) {
+        supabase.from('profiles').update({ box_slots: (profile?.box_slots ?? 0) - 1 }).eq('id', profile.id);
+      }
+
       // After explosion settles, update DB and show modal
       setTimeout(async () => {
         setBlasting(false);
@@ -929,6 +990,64 @@ export function Spin() {
     setExtraBlasts((prev) => prev + 1);
     if (soundOn) playFanfare();
     notify(t('extraBlastEarned'), 'success');
+  };
+
+  // ---- P2P BOX TASKS: publish + complete ----
+  const publishBoxTask = async () => {
+    if (addTaskBusy || !profile) return;
+    if (addTaskForm.title.trim().length < 3) {
+      notify(lang === 'bn' ? 'টাস্কের একটা নাম দাও দোস্ত!' : 'Give your task a name, buddy!', 'error');
+      return;
+    }
+    setAddTaskBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('publish_box_task', {
+        p_title: addTaskForm.title.trim(),
+        p_description: addTaskForm.description.trim(),
+        p_platform: addTaskForm.platform,
+        p_target_url: addTaskForm.target_url.trim() || null,
+        p_cost_coins: Math.max(0, addTaskForm.cost_coins),
+      });
+      if (error) throw error;
+      setAddTaskForm({ title: '', description: '', platform: 'youtube', target_url: '', cost_coins: 25 });
+      setShowAddTask(false);
+      await refreshProfile();
+      loadP2pTasks();
+      if (soundOn) playFanfare();
+      notify(lang === 'bn' ? 'টাস্ক পাবলিশ হয়ে গেছে! +১ মিস্ট্রি বক্স স্লট তোমার!' : 'Task published! +1 Mystery Box slot is yours!', 'success');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'error';
+      if (msg.includes('insufficient_coins')) {
+        notify(lang === 'bn' ? 'কয়েন যথেষ্ট নেই দোস্ত! আগে টাকা ভরো বা টাস্ক করো।' : 'Not enough coins, buddy! Deposit or do tasks first.', 'error');
+      } else {
+        notify(lang === 'bn' ? 'পাবলিশ করা যায়নি, আবার চেষ্টা করো।' : 'Could not publish, please try again.', 'error');
+      }
+    } finally { setAddTaskBusy(false); }
+  };
+
+  const completeBoxTask = async (task: P2pTaskRow) => {
+    if (completingTaskId || !profile) return;
+    setCompletingTaskId(task.id);
+    try {
+      const { data, error } = await supabase.rpc('complete_box_task', {
+        p_task_id: task.id,
+        p_notes: 'Completed from Mystery Box',
+        p_proof_urls: [],
+      });
+      if (error) throw error;
+      await refreshProfile();
+      loadP2pTasks();
+      if (soundOn) playFanfare();
+      notify(
+        lang === 'bn'
+          ? `দুর্দান্ত! টাস্ক কমপ্লিট + ${task.reward_coins} কয়েন + ১ মিস্ট্রি বক্স স্লট জিতেছ!`
+          : `Awesome! Task done + ${task.reward_coins} coins + 1 Mystery Box slot earned!`,
+        'success'
+      );
+    } catch {
+      notify(lang === 'bn' ? 'সেই টাস্কটা ইতিমধ্যে কেউ নিয়ে নিয়েছে! তাড়াহুড়ো করো দোস্ত।' : 'Someone already grabbed that task! Be quicker next time, buddy.', 'error');
+      loadP2pTasks();
+    } finally { setCompletingTaskId(null); }
   };
 
   // ---- SUPER MYSTERY BOX CLAIM ----
@@ -1544,6 +1663,132 @@ export function Spin() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ===== TUTORIAL BUTTON + ADD TASK (visible above boxes) ===== */}
+      <div className="flex items-center justify-center gap-2 mb-4">
+        {tutorialUrl && youtubeEmbedUrl(tutorialUrl) && (
+          <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowTutorial(true)}>
+            <Play size={14} /> {lang === 'bn' ? 'কিভাবে খেলবেন?' : 'Tutorial'}
+          </Button>
+        )}
+        <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowAddTask(true)}>
+          <Plus size={14} /> {lang === 'bn' ? 'টাস্ক যোগ করো' : 'Add Task'}
+        </Button>
+      </div>
+
+      {/* ===== TUTORIAL MODAL (YouTube player) ===== */}
+      {showTutorial && tutorialUrl && (() => {
+        const embed = youtubeEmbedUrl(tutorialUrl);
+        if (!embed) return null;
+        return (
+          <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => setShowTutorial(false)}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-800 rounded-2xl p-3 w-full max-w-2xl"
+            >
+              <div className="flex items-center justify-between mb-2 px-1">
+                <h3 className="font-bold text-white text-sm">{lang === 'bn' ? 'কিভাবে খেলবেন?' : 'How to Play'}</h3>
+                <button onClick={() => setShowTutorial(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              </div>
+              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                <iframe
+                  src={`${embed}?autoplay=1`}
+                  title="Mystery Box Tutorial"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full rounded-xl"
+                />
+              </div>
+            </motion.div>
+          </div>
+        );
+      })()}
+
+      {/* ===== ADD TASK MODAL (publish P2P box task) ===== */}
+      {showAddTask && (
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => setShowAddTask(false)}>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800 rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Plus size={18} className="text-amber-400" />
+                <h3 className="font-bold text-white">{lang === 'bn' ? 'নিজের টাস্ক বানাও' : 'Create a Box Task'}</h3>
+              </div>
+              <button onClick={() => setShowAddTask(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+            <p className="text-xs text-amber-300/80 mb-4">
+              {lang === 'bn'
+                ? 'টাস্ক পাবলিশ করলেই তোমার +১ মিস্ট্রি বক্স স্লট! যেই বন্ধু টাস্কটা কমপ্লিট করবে সে-ও +১ স্লট + রিওয়ার্ড কয়েন পাবে। টাস্ক একজনই কমপ্লিট করতে পারবে।'
+                : 'Publishing a task instantly earns you +1 Mystery Box slot! Whoever completes it also gets +1 slot plus your reward coins. Only ONE person can complete it.'}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">{t('title')}</label>
+                <input value={addTaskForm.title} onChange={(e) => setAddTaskForm({ ...addTaskForm, title: e.target.value })} maxLength={120} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্ল্যাটফর্ম' : 'Platform'}</label>
+                <select value={addTaskForm.platform} onChange={(e) => setAddTaskForm({ ...addTaskForm, platform: e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm">
+                  <option value="youtube">YouTube</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'লিংক (অপশনাল)' : 'Link (optional)'}</label>
+                <input value={addTaskForm.target_url} onChange={(e) => setAddTaskForm({ ...addTaskForm, target_url: e.target.value })} placeholder="https://..." className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'বর্ণনা (অপশনাল)' : 'Description (optional)'}</label>
+                <textarea value={addTaskForm.description} onChange={(e) => setAddTaskForm({ ...addTaskForm, description: e.target.value })} rows={2} maxLength={1000} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'রিওয়ার্ড কয়েন (তোমার খরচ)' : 'Reward Coins (your cost)'}</label>
+                <input type="number" min={0} max={100000} value={addTaskForm.cost_coins} onChange={(e) => setAddTaskForm({ ...addTaskForm, cost_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+              </div>
+              <div className="bg-slate-700/40 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                <span className="text-xs text-slate-400">{t('lumoraCoins')}</span>
+                <span className="text-sm font-bold text-amber-300">{(profile?.lumora_coins ?? 0) + (profile?.bonus_coins ?? 0)} 🪙</span>
+              </div>
+              <Button className="w-full" disabled={addTaskBusy} onClick={publishBoxTask}>
+                {addTaskBusy ? (lang === 'bn' ? 'পাবলিশ হচ্ছে...' : 'Publishing...') : (lang === 'bn' ? 'পাবলিশ করো (+১ বক্স স্লট)' : 'Publish (+1 Box Slot)')}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ===== P2P BOX TASKS LIST ===== */}
+      {p2pTasks.length > 0 && (
+        <Card className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={18} className="text-amber-400" />
+            <h3 className="text-sm font-bold text-white">{lang === 'bn' ? 'বন্ধুদের বক্স টাস্ক' : 'Buddy Box Tasks'}</h3>
+          </div>
+          <p className="text-[10px] text-slate-400 mb-3">
+            {lang === 'bn' ? 'যেকোনো একটা কমপ্লিট করে +১ বক্স স্লট + কয়েন জেতো! প্রতিটা টাস্ক শুধু একবারই কমপ্লিট হয়।' : 'Complete any one to earn +1 box slot + coins! Each task can only be completed once.'}
+          </p>
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {p2pTasks.map((task) => (
+              <div key={task.id} className="bg-slate-800/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{task.title}</p>
+                  <p className="text-xs text-amber-300/80">{task.reward_coins} 🪙 · {task.platform}</p>
+                </div>
+                <Button className="text-xs py-1.5 px-3" disabled={completingTaskId === task.id} onClick={() => completeBoxTask(task)}>
+                  {completingTaskId === task.id ? '...' : (lang === 'bn' ? 'করো' : 'Do it')}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
 

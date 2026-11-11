@@ -30,6 +30,7 @@ export type Profile = {
   spin_used_today: number;
   spin_reset_date: string | null;
   banned: boolean;
+  box_slots: number;
   referral_step2_paid: boolean;
   referral_activated_at: string | null;
   cash_balance: number;
@@ -57,6 +58,7 @@ export type Profile = {
   notify_promo: boolean;
   level_reward_claimed: number;
   deletion_requested_at: string | null;
+  box_slots: number;
   avg_rating: number;
   total_tasks_completed: number;
   created_at: string;

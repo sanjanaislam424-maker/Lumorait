@@ -993,11 +993,34 @@ function SettingsTab() {
     <Card>
       <div className="flex items-center gap-2 mb-3">
         <Gift size={18} className="text-amber-400" />
-        <h3 className="font-semibold text-white">Mystery Box Unlock Options</h3>
+        <h3 className="font-semibold text-white">Mystery Box Settings</h3>
       </div>
       <p className="text-xs text-slate-400 mb-3">
-        Control which options users see when they run out of Mystery Box attempts. Turning an option OFF hides that button from the user's limit popup instantly.
+        Control the Mystery Box experience: tutorial video, unlock options, and more.
       </p>
+
+      {/* YouTube Tutorial URL */}
+      <div className="mb-4 pb-4 border-b border-white/10">
+        <label className="text-xs text-slate-400 block mb-1">Mystery Box YouTube Tutorial URL</label>
+        <div className="flex gap-2">
+          <input
+            value={s.box_tutorial_url || ''}
+            onChange={(e) => setS((prev: any) => ({ ...prev, box_tutorial_url: e.target.value }))}
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="flex-1 bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm"
+          />
+          <Button
+            className="text-xs px-3 py-2"
+            onClick={async () => {
+              const { error } = await supabase.from('app_settings').update({ box_tutorial_url: (s.box_tutorial_url || '').trim() || null }).eq('id', 1);
+              if (error) { notify(error.message, 'error'); return; }
+              notify(t('saved'), 'success');
+            }}
+          >{t('save')}</Button>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-1">YouTube watch, share, or Shorts link. Shown to users as the "Tutorial" button in the Mystery Box.</p>
+      </div>
+
       <div className="space-y-2">
         <button
           onClick={async () => {
