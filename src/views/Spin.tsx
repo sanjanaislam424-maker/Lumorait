@@ -628,7 +628,8 @@ export function Spin() {
 
   const cooldownRemaining = Math.max(0, (lastBlastTs + COOLDOWN_MS) - now);
   const freeBoxReady = cooldownRemaining === 0;
-  const blastsLeft = (freeBoxReady ? 1 : 0) + extraBlasts + (profile?.box_slots ?? 0);
+  const bonusSlots = profile?.box_slots ?? 0;
+  const blastsLeft = (freeBoxReady ? 1 : 0) + extraBlasts + bonusSlots;
 
   // Format countdown
   const formatCountdown = (ms: number) => {
@@ -895,10 +896,19 @@ export function Spin() {
       } else {
         setExtraBlasts((prev) => {
           if (prev > 0) return prev - 1;
-          // No earned blasts left — spend a banked box slot instead
-          if (profile && (profile.box_slots ?? 0) > 0) {
-            supabase.from('profiles').update({ box_slots: profile.box_slots - 1 }).eq('id', profile.id);
-          }
+          // No earned blasts left — spend a banked bonus box slot
+          (async () => {
+            const { data: fresh } = await supabase
+              .from('profiles')
+              .select('box_slots')
+              .eq('id', profile.id)
+              .maybeSingle();
+            const slots = fresh?.box_slots ?? 0;
+            if (slots > 0) {
+              await supabase.from('profiles').update({ box_slots: slots - 1 }).eq('id', profile.id);
+              await refreshProfile();
+            }
+          })();
           return prev;
         });
       }
@@ -1267,6 +1277,29 @@ export function Spin() {
             {lang === 'bn' ? `অতিরিক্ত ব্লাস্ট: ${extraBlasts}` : `Extra blasts: ${extraBlasts}`}
           </p>
         )}
+
+        {/* Bonus box slots — earned via rewarded video, admin tasks & P2P task loop */}
+        <motion.div
+          key={bonusSlots}
+          initial={{ scale: 1.25, opacity: 0.6 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+          className={`mt-3 inline-flex items-center gap-2 px-4 py-1.5 rounded-full border ${
+            bonusSlots > 0
+              ? 'bg-fuchsia-500/10 border-fuchsia-500/30'
+              : 'bg-slate-700/30 border-white/10'
+          }`}
+        >
+          <Gift size={14} className={bonusSlots > 0 ? 'text-fuchsia-400' : 'text-slate-500'} />
+          <span className={`text-sm font-medium ${bonusSlots > 0 ? 'text-fuchsia-300' : 'text-slate-400'}`}>
+            {lang === 'bn' ? 'বোনাস মিস্ট্রি বক্স' : 'Bonus Mystery Boxes'}
+          </span>
+          <span
+            className={`text-sm font-bold tabular-nums ${bonusSlots > 0 ? 'text-fuchsia-200' : 'text-slate-500'}`}
+          >
+            {bonusSlots}
+          </span>
+        </motion.div>
       </Card>
 
       {/* ===== SUPER MYSTERY BOX EVENT BANNER ===== */}
