@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap, Plus, Users } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { createMicrocopy } from '@/lib/microcopy';
-import { supabase, TaskRow } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
@@ -475,7 +475,6 @@ export function Spin() {
   const [floatingReward, setFloatingReward] = useState<{ reward: Reward; boxIndex: number } | null>(null);
   const [adWatching, setAdWatching] = useState(false);
   const [adCountdown, setAdCountdown] = useState(15);
-  const [showTaskPicker, setShowTaskPicker] = useState(false);  const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [winners, setWinners] = useState<WinnerRow[]>([]);
   const [superEvent, setSuperEvent] = useState<SuperEvent | null>(null);
   const [superClaimed, setSuperClaimed] = useState(false);
@@ -1000,34 +999,7 @@ export function Spin() {
     }, 10000);
   };
 
-  // ---- EXTRA BLAST: Complete task ----
-  const openTaskPicker = async () => {
-    if (!profile) return;
-    const { data } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('status', 'open')
-      .eq('is_admin_task', true)
-      .order('created_at', { ascending: false })
-      .limit(10);
-    setTasks((data as TaskRow[]) || []);
-    setShowTaskPicker(true);
-  };
-
-  const completeTaskForBlast = async (task: TaskRow) => {
-    if (!profile) return;
-    await supabase.from('task_submissions').insert({
-      task_id: task.id, doer_id: profile.id, proof_urls: ['[]'],
-      notes: 'Completed for extra box blast', status: 'approved',
-    });
-    setShowTaskPicker(false);
-    const { error } = await supabase.rpc('earn_bonus_box', { p_source: 'admin_task' });
-    if (!error) await refreshProfile();
-    if (soundOn) playFanfare();
-    notify(t('extraBlastEarned'), 'success');
-  };
-
-  const uploadTaskPhoto = async (file: File) => {
+  // ---- P2P BOX TASKS: publish + complete ----  const uploadTaskPhoto = async (file: File) => {
     if (!file.type.startsWith('image/')) return;
     if (addTaskPhotos.length >= 3) return;
     setPhotoUploading(true);
@@ -1226,8 +1198,9 @@ export function Spin() {
 
   if (!profile) return null;
 
-  const btnLabelTask = lang === 'bn' ? 'টাস্ক করে আরেকটি বক্স ফোটাও' : t('taskForBlastBtn');
-  const btnLabelAd = lang === 'bn' ? 'অ্যাড দেখে আরেকটি বক্স ফোটাও' : t('adWatchBlastBtn');
+  const microcopy = createMicrocopy(lang);
+  const btnLabelTask = microcopy.boxBtnTask();
+  const btnLabelAd = microcopy.boxBtnAd();
   const boxSize = 110;
 
   return (
@@ -1662,38 +1635,6 @@ export function Spin() {
         )}
       </AnimatePresence>
 
-      {/* ===== TASK PICKER ===== */}
-      {showTaskPicker && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/80 flex items-center justify-center p-4" onClick={() => setShowTaskPicker(false)}>
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-slate-800 rounded-2xl p-5 w-full max-w-md max-h-[70vh] overflow-y-auto"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <ListChecks size={20} className="text-green-400" />
-              <h3 className="font-bold text-white">{btnLabelTask}</h3>
-            </div>
-            {tasks.length === 0 ? (
-              <p className="text-slate-400 text-sm text-center py-8">{t('noTasks')}</p>
-            ) : (
-              <div className="space-y-2">
-                {tasks.map((task) => (
-                  <div key={task.id} className="bg-slate-700/50 border border-white/10 rounded-xl p-3 flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white font-medium truncate">{task.title}</p>
-                      <p className="text-xs text-slate-500 flex items-center gap-1"><Sparkles size={10} /> {t('extraBlastEarned')}</p>
-                    </div>
-                    <Button className="text-xs py-1.5 px-3" onClick={() => completeTaskForBlast(task)}>{t('accept')}</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button variant="ghost" className="w-full mt-3" onClick={() => setShowTaskPicker(false)}>{t('close')}</Button>
-          </motion.div>
-        </div>
-      )}
-
       {/* ===== BOX LIMIT POPUP (funny best-friend style) ===== */}
       <AnimatePresence>
         {showLimitPopup && (
@@ -1778,17 +1719,14 @@ export function Spin() {
         )}
       </AnimatePresence>
 
-      {/* ===== TUTORIAL BUTTON + TASKS HUB BUTTON (visible above boxes) ===== */}
-      <div className="flex items-center justify-center gap-2 mb-4">
-        {tutorialUrl && youtubeEmbedUrl(tutorialUrl) && (
+      {/* ===== TUTORIAL BUTTON (visible below boxes) ===== */}
+      {tutorialUrl && youtubeEmbedUrl(tutorialUrl) && (
+        <div className="flex items-center justify-center mb-4">
           <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowTutorial(true)}>
             <Play size={14} /> {lang === 'bn' ? 'কিভাবে খেলবেন?' : 'Tutorial'}
           </Button>
-        )}
-        <Button variant="ghost" className="text-xs px-3 py-2 flex items-center gap-1.5" onClick={() => setShowTaskHub(true)}>
-          <ListChecks size={14} /> {lang === 'bn' ? 'টাস্ক' : 'Tasks'}
-        </Button>
-      </div>
+        </div>
+      )}
 
       {/* ===== TUTORIAL MODAL (YouTube player) ===== */}
       {showTutorial && tutorialUrl && (() => {
@@ -1847,7 +1785,7 @@ export function Spin() {
                 onClick={() => setShowAddTask(true)}
                 className={`flex-1 text-xs font-medium py-2 rounded-lg transition ${showAddTask ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400'}`}
               >
-                <Plus size={14} className="inline mr-1" /> {lang === 'bn' ? 'টাস্ক বানাও' : 'Create Task'}
+                <Plus size={14} className="inline mr-1" /> {lang === 'bn' ? 'টাস্ক তৈরি করুন' : 'Create Task'}
               </button>
             </div>
 

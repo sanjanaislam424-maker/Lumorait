@@ -2343,6 +2343,8 @@ function AiContentTab() {
   ];
 
   const UI_COPY_FIELDS: { key: string; labelBn: string; labelEn: string }[] = [
+    { key: 'box_btn_task', labelBn: 'বক্স বাটন — টাস্ক (মিস্ট্রি বক্স)', labelEn: 'Box Button — Task (Mystery Box)' },
+    { key: 'box_btn_ad', labelBn: 'বক্স বাটন — অ্যাড (মিস্ট্রি বক্স)', labelEn: 'Box Button — Ad (Mystery Box)' },
     { key: 'tasks_header', labelBn: 'টাস্ক হেডার', labelEn: 'Tasks Header' },
     { key: 'loading_tasks', labelBn: 'লোডিং মেসেজ', labelEn: 'Loading Tasks' },
     { key: 'category_empty', labelBn: 'ক্যাটাগরি খালি', labelEn: 'Category Empty' },
