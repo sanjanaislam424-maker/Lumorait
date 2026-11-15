@@ -519,7 +519,6 @@ export function Spin() {
   const [addTaskPhotos, setAddTaskPhotos] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const taskPhotoInputRef = useRef<HTMLInputElement>(null);
-  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [detailTask, setDetailTask] = useState<P2pTaskRow | null>(null);
   const [proofPhotos, setProofPhotos] = useState<string[]>([]);
   const [proofUploading, setProofUploading] = useState(false);
@@ -2027,8 +2026,8 @@ export function Spin() {
                         {isOwn ? (
                           <span className="text-[10px] text-slate-500 italic px-3 py-1.5 shrink-0">{lang === 'bn' ? 'আপনার নিজের' : 'Yours'}</span>
                         ) : (
-                          <Button className="text-xs py-1.5 px-3" disabled={completingTaskId === task.id} onClick={() => completeBoxTask(task)}>
-                            {completingTaskId === task.id ? '...' : (lang === 'bn' ? 'করো' : 'Do it')}
+                          <Button className="text-xs py-1.5 px-3" onClick={() => setDetailTask(task)}>
+                            {lang === 'bn' ? 'বিস্তারিত দেখো' : 'View Details'}
                           </Button>
                         )}
                       </div>
@@ -2039,6 +2038,128 @@ export function Spin() {
               </>
             )}
             <Button variant="ghost" className="w-full mt-4" onClick={() => setShowTaskHub(false)}>{t('close')}</Button>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ===== DETAILED TASK INSTRUCTIONS MODAL ===== */}
+      {detailTask && (
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => { setDetailTask(null); setProofPhotos([]); }}>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800 rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ListChecks size={20} className="text-amber-400" />
+                <h3 className="font-bold text-white">{lang === 'bn' ? 'টাস্ক বিস্তারিত' : 'Task Details'}</h3>
+              </div>
+              <button onClick={() => { setDetailTask(null); setProofPhotos([]); }} className="text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+
+            {/* Task title */}
+            <div className="mb-3">
+              <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">{lang === 'bn' ? 'টাস্কের নাম' : 'Task Title'}</label>
+              <p className="text-sm font-bold text-white bg-slate-700/40 rounded-lg px-3 py-2">{detailTask.title}</p>
+            </div>
+
+            {/* Platform + reward */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">{lang === 'bn' ? 'প্ল্যাটফর্ম' : 'Platform'}</label>
+                <p className="text-sm text-amber-300 bg-slate-700/40 rounded-lg px-3 py-2 capitalize">{detailTask.platform}</p>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">{lang === 'bn' ? 'রিওয়ার্ড' : 'Reward'}</label>
+                <p className="text-sm text-amber-300 bg-slate-700/40 rounded-lg px-3 py-2">{detailTask.reward_coins} 🪙</p>
+              </div>
+            </div>
+
+            {/* Target URL — the link completers must follow */}
+            {detailTask.target_url && (
+              <div className="mb-3">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">{lang === 'bn' ? 'টাস্ক লিংক (এখানে যাও)' : 'Task Link (go here)'}</label>
+                <a href={detailTask.target_url} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 underline bg-slate-700/40 rounded-lg px-3 py-2 break-all hover:text-blue-300 transition">
+                  {detailTask.target_url}
+                </a>
+              </div>
+            )}
+
+            {/* Full description / instructions from creator */}
+            {detailTask.description && (
+              <div className="mb-3">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">{lang === 'bn' ? 'সম্পূর্ণ নির্দেশনামা' : 'Full Instructions'}</label>
+                <div className="text-sm text-slate-200 bg-slate-700/40 rounded-lg px-3 py-3 leading-relaxed whitespace-pre-wrap">{detailTask.description}</div>
+              </div>
+            )}
+
+            {/* Creator's reference photos / screenshots */}
+            {detailTask.photo_urls && detailTask.photo_urls.length > 0 && (
+              <div className="mb-3">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">{lang === 'bn' ? 'তথ্যসূত্র ছবি' : 'Reference Photos'}</label>
+                <div className="flex gap-2 flex-wrap">
+                  {detailTask.photo_urls.map((url, idx) => (
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                      <img src={url} alt={`Reference ${idx + 1}`} className="rounded-lg w-20 h-20 object-cover border border-white/10 hover:border-amber-400/50 transition" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Info banner */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-3">
+              <p className="text-xs text-amber-300/90 leading-relaxed">
+                {lang === 'bn'
+                  ? 'উপরের নির্দেশনামা ও লিংক অনুসরণ করে টাস্কটি সম্পন্ন করো, তারপর ৩টি স্ক্রিনশট প্রমাণ হিসেবে আপলোড করো। ক্রিয়েটর অনুমোদন করলে তুমি +১ বোনাস মিস্ট্রি বক্স + রিওয়ার্ড কয়েন পাবে।'
+                  : 'Follow the instructions and link above to complete the task, then upload 3 screenshots as proof. Once the creator approves, you will earn +1 Bonus Mystery Box + reward coins.'}
+              </p>
+            </div>
+
+            {/* Proof photo upload section */}
+            <div className="mb-3">
+              <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্রমাণ স্ক্রিনশট (৩টি বাধ্যতামূলক)' : 'Proof Screenshots (3 required)'}</label>
+              <input
+                ref={proofPhotoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProofPhoto(f); e.target.value = ''; }}
+                className="hidden"
+              />
+              <div className="flex items-center gap-2 flex-wrap">
+                {proofPhotos.map((url, idx) => (
+                  <div key={idx} className="relative inline-block">
+                    <img src={url} alt={`Proof ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
+                    <button
+                      onClick={() => setProofPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                {proofPhotos.length < 3 && !proofUploading && (
+                  <button
+                    onClick={() => proofPhotoInputRef.current?.click()}
+                    className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition"
+                  >
+                    <Plus size={18} />
+                  </button>
+                )}
+                {proofUploading && (
+                  <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">{proofPhotos.length}/3 {lang === 'bn' ? 'স্ক্রিনশট আপলোড হয়েছে' : 'uploaded'}</p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => { setDetailTask(null); setProofPhotos([]); }}>{t('cancel')}</Button>
+              <Button className="flex-1" disabled={submittingProof || proofPhotos.length < 1} onClick={submitTaskProof}>
+                {submittingProof ? (lang === 'bn' ? 'জমা হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'প্রমাণ জমা দাও' : 'Submit Proof')}
+              </Button>
+            </div>
           </motion.div>
         </div>
       )}
