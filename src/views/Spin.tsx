@@ -49,7 +49,13 @@ type PendingSubmission = {
   notes: string;
   status: string;
   task_title: string;
+  created_at: string;
 };
+
+type TaskTimer = { active: boolean; taskId: string; startTime: number; title: string };
+
+const TASK_TIMEOUT_MS = 15 * 60 * 1000;
+const WARNING_THRESHOLD_MS = 2 * 60 * 1000;
 
 function youtubeEmbedUrl(url: string): string | null {
   try {
@@ -526,6 +532,8 @@ export function Spin() {
   const [submittingProof, setSubmittingProof] = useState(false);
   const [pendingSubs, setPendingSubs] = useState<PendingSubmission[]>([]);
   const [reviewBusyId, setReviewBusyId] = useState<string | null>(null);
+  const [taskTimer, setTaskTimer] = useState<TaskTimer | null>(null);
+  const [taskAccepted, setTaskAccepted] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -607,6 +615,7 @@ export function Spin() {
         notes: r.notes || '',
         status: r.status,
         task_title: r.tasks?.title || '',
+        created_at: r.created_at || '',
       }));
       // Fetch doer names
       const doerIds = [...new Set(mapped.map((m) => m.doer_id))];
@@ -1182,6 +1191,17 @@ export function Spin() {
       notify(lang === 'bn' ? 'প্রমাণ হিসেবে অন্তত ১টা স্ক্রিনশট দাও!' : 'Please upload at least 1 screenshot as proof!', 'error');
       return;
     }
+    if (!taskAccepted || !taskTimer) {
+      notify(lang === 'bn' ? 'আগে টাস্কটি গ্রহণ করো!' : 'Please accept the task first!', 'error');
+      return;
+    }
+    const elapsed = Date.now() - taskTimer.startTime;
+    if (elapsed > TASK_TIMEOUT_MS) {
+      notify(lang === 'bn' ? 'সময় শেষ! ১৫ মিনিটের মধ্যে জমা দিতে হবে ছিল।' : 'Time is up! You had to submit within 15 minutes.', 'error');
+      setTaskAccepted(false);
+      setTaskTimer(null);
+      return;
+    }
     setSubmittingProof(true);
     try {
       const { error } = await supabase.rpc('submit_box_task_proof', {
@@ -1194,7 +1214,8 @@ export function Spin() {
       loadP2pTasks();
       setDetailTask(null);
       setProofPhotos([]);
-      if (soundOn) playFanfare();
+      setTaskAccepted(false);
+      setTaskTimer(null);
       notify(
         lang === 'bn'
           ? 'প্রমাণ জমা হয়েছে! টাস্ক ক্রিয়েটর অনুমোদন করলেই তুমি +১ বোনাস মিস্ট্রি বক্স পাবে!'
@@ -1251,6 +1272,21 @@ export function Spin() {
       const msg = err?.message || (e instanceof Error ? e.message : 'unknown');
       notify(`${lang === 'bn' ? 'বাতিল ব্যর্থ: ' : 'Reject failed: '}${msg}`, 'error');
     } finally { setReviewBusyId(null); }
+  };
+
+  const acceptP2pTask = () => {
+    if (!detailTask) return;
+    setTaskAccepted(true);
+    setTaskTimer({ active: true, taskId: detailTask.id, startTime: Date.now(), title: detailTask.title });
+    if (soundOn) playFanfare();
+    notify(lang === 'bn' ? 'টাস্ক গ্রহণ হয়েছে! ১৫ মিনিট সময় — দ্রুত করো!' : 'Task accepted! 15 minutes on the clock — hurry up!', 'info');
+  };
+
+  const cancelP2pTask = () => {
+    setTaskAccepted(false);
+    setTaskTimer(null);
+    setDetailTask(null);
+    setProofPhotos([]);
   };
 
   // ---- SUPER MYSTERY BOX CLAIM ----
@@ -1392,6 +1428,16 @@ export function Spin() {
             {bonusSlots}
           </span>
         </motion.div>
+
+        {/* Guaranteed reward notice for bonus boxes */}
+        {bonusSlots > 0 && (
+          <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+            <Sparkles size={12} className="text-emerald-400" />
+            <span className="text-xs text-emerald-300 font-semibold">
+              {lang === 'bn' ? 'বোনাস মিস্ট্রি বক্সে নিশ্চিত পুরস্কার!' : 'Guaranteed reward in Bonus Boxes!'}
+            </span>
+          </div>
+        )}
       </Card>
 
       {/* ===== SUPER MYSTERY BOX EVENT BANNER ===== */}
@@ -2044,7 +2090,7 @@ export function Spin() {
 
       {/* ===== DETAILED TASK INSTRUCTIONS MODAL ===== */}
       {detailTask && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => { setDetailTask(null); setProofPhotos([]); }}>
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 flex items-center justify-center p-4" onClick={() => { if (!taskAccepted) { setDetailTask(null); setProofPhotos([]); } }}>
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             onClick={(e) => e.stopPropagation()}
@@ -2055,7 +2101,7 @@ export function Spin() {
                 <ListChecks size={20} className="text-amber-400" />
                 <h3 className="font-bold text-white">{lang === 'bn' ? 'টাস্ক বিস্তারিত' : 'Task Details'}</h3>
               </div>
-              <button onClick={() => { setDetailTask(null); setProofPhotos([]); }} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => { setDetailTask(null); setProofPhotos([]); setTaskAccepted(false); setTaskTimer(null); }} className="text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
 
             {/* Task title */}
@@ -2112,56 +2158,82 @@ export function Spin() {
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-3">
               <p className="text-xs text-amber-300/90 leading-relaxed">
                 {lang === 'bn'
-                  ? 'উপরের নির্দেশনামা ও লিংক অনুসরণ করে টাস্কটি সম্পন্ন করো, তারপর ৩টি স্ক্রিনশট প্রমাণ হিসেবে আপলোড করো। ক্রিয়েটর অনুমোদন করলে তুমি +১ বোনাস মিস্ট্রি বক্স + রিওয়ার্ড কয়েন পাবে।'
-                  : 'Follow the instructions and link above to complete the task, then upload 3 screenshots as proof. Once the creator approves, you will earn +1 Bonus Mystery Box + reward coins.'}
+                  ? 'নির্দেশনামা ও লিংক অনুসরণ করে টাস্কটি সম্পন্ন করো, তারপর ৩টি স্ক্রিনশট প্রমাণ হিসেবে আপলোড করো। ক্রিয়েটর অনুমোদন করলে তুমি +১ বোনাস মিস্ট্রি বক্স পাবে। মনে রেখ — টাস্ক গ্রহণ করার পর ১৫ মিনিটের মধ্যে জমা দিতে হবে!'
+                  : 'Follow the instructions and link above to complete the task, then upload 3 screenshots as proof. Once the creator approves, you will earn +1 Bonus Mystery Box. Remember — you must submit within 15 minutes of accepting!'}
               </p>
             </div>
 
-            {/* Proof photo upload section */}
-            <div className="mb-3">
-              <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্রমাণ স্ক্রিনশট (৩টি বাধ্যতামূলক)' : 'Proof Screenshots (3 required)'}</label>
-              <input
-                ref={proofPhotoInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProofPhoto(f); e.target.value = ''; }}
-                className="hidden"
-              />
-              <div className="flex items-center gap-2 flex-wrap">
-                {proofPhotos.map((url, idx) => (
-                  <div key={idx} className="relative inline-block">
-                    <img src={url} alt={`Proof ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
-                    <button
-                      onClick={() => setProofPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-                {proofPhotos.length < 3 && !proofUploading && (
-                  <button
-                    onClick={() => proofPhotoInputRef.current?.click()}
-                    className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition"
-                  >
-                    <Plus size={18} />
-                  </button>
-                )}
-                {proofUploading && (
-                  <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>
-                )}
+            {/* Accept button — shown before task is accepted */}
+            {!taskAccepted ? (
+              <div className="flex gap-2">
+                <Button variant="ghost" className="flex-1" onClick={() => { setDetailTask(null); setProofPhotos([]); }}>{t('cancel')}</Button>
+                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={acceptP2pTask}>
+                  {lang === 'bn' ? 'টাস্ক গ্রহণ করো (১৫ মিনিট)' : 'Accept Task (15 min)'}
+                </Button>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">{proofPhotos.length}/3 {lang === 'bn' ? 'স্ক্রিনশট আপলোড হয়েছে' : 'uploaded'}</p>
-            </div>
+            ) : (
+              <>
+                {/* In-task timer display */}
+                {taskTimer && (
+                  <TaskTimerDisplay
+                    timer={taskTimer}
+                    lang={lang}
+                    onExpire={() => { setTaskAccepted(false); setTaskTimer(null); notify(lang === 'bn' ? 'সময় শেষ! টাস্ক বাতিল হয়েছে।' : 'Time is up! Task cancelled.', 'error'); }}
+                  />
+                )}
 
-            <div className="flex gap-2">
-              <Button variant="ghost" className="flex-1" onClick={() => { setDetailTask(null); setProofPhotos([]); }}>{t('cancel')}</Button>
-              <Button className="flex-1" disabled={submittingProof || proofPhotos.length < 1} onClick={submitTaskProof}>
-                {submittingProof ? (lang === 'bn' ? 'জমা হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'প্রমাণ জমা দাও' : 'Submit Proof')}
-              </Button>
-            </div>
+                {/* Proof photo upload section */}
+                <div className="mb-3 mt-3">
+                  <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্রমাণ স্ক্রিনশট (৩টি বাধ্যতামূলক)' : 'Proof Screenshots (3 required)'}</label>
+                  <input
+                    ref={proofPhotoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProofPhoto(f); e.target.value = ''; }}
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {proofPhotos.map((url, idx) => (
+                      <div key={idx} className="relative inline-block">
+                        <img src={url} alt={`Proof ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
+                        <button
+                          onClick={() => setProofPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {proofPhotos.length < 3 && !proofUploading && (
+                      <button
+                        onClick={() => proofPhotoInputRef.current?.click()}
+                        className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    )}
+                    {proofUploading && (
+                      <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">{proofPhotos.length}/3 {lang === 'bn' ? 'স্ক্রিনশট আপলোড হয়েছে' : 'uploaded'}</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="ghost" className="flex-1" onClick={cancelP2pTask}>{t('cancel')}</Button>
+                  <Button className="flex-1" disabled={submittingProof || proofPhotos.length < 1 || !taskTimer || (Date.now() - taskTimer.startTime) > TASK_TIMEOUT_MS} onClick={submitTaskProof}>
+                    {submittingProof ? (lang === 'bn' ? 'জমা হচ্ছে...' : 'Submitting...') : (lang === 'bn' ? 'প্রমাণ জমা দাও' : 'Submit Proof')}
+                  </Button>
+                </div>
+              </>
+            )}
           </motion.div>
         </div>
+      )}
+
+      {/* ===== FLOATING TASK TIMER (display-over-apps style) ===== */}
+      {taskTimer && taskTimer.active && (
+        <FloatingTaskTimer timer={taskTimer} lang={lang} onClose={() => { setTaskTimer({ ...taskTimer, active: false }); }} />
       )}
 
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
@@ -2179,4 +2251,98 @@ function ResultAutoDismiss({ result, setResult }: { result: { reward: Reward } |
     return () => clearTimeout(tm);
   }, [result, setResult]);
   return null;
+}
+
+function formatTimerString(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function getTimerColor(remaining: number): 'green' | 'yellow' | 'red' {
+  if (remaining <= 0) return 'red';
+  if (remaining <= WARNING_THRESHOLD_MS) return 'yellow';
+  return 'green';
+}
+
+function TaskTimerDisplay({ timer, lang, onExpire }: { timer: TaskTimer; lang: string; onExpire: () => void }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  const elapsed = Date.now() - timer.startTime;
+  const remaining = TASK_TIMEOUT_MS - elapsed;
+  const color = getTimerColor(remaining);
+  const expired = remaining <= 0;
+  useEffect(() => {
+    if (expired) onExpire();
+  }, [expired, onExpire]);
+  const colorClasses = {
+    green: 'bg-green-500/15 border-green-500/40 text-green-300',
+    yellow: 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300',
+    red: 'bg-red-500/15 border-red-500/40 text-red-300',
+  };
+  return (
+    <div className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 mb-3 ${colorClasses[color]}`}>
+      <Clock size={16} />
+      <span className="text-sm font-bold tabular-nums">
+        {expired
+          ? (lang === 'bn' ? 'সময় শেষ!' : 'Time is up!')
+          : `${lang === 'bn' ? 'বাকি' : 'Left'}: ${formatTimerString(remaining)}`}
+      </span>
+    </div>
+  );
+}
+
+function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: string; onClose: () => void }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  const elapsed = Date.now() - timer.startTime;
+  const remaining = TASK_TIMEOUT_MS - elapsed;
+  const color = getTimerColor(remaining);
+  const expired = remaining <= 0;
+  const colorStyles: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+    green: { bg: 'rgba(34,197,94,0.92)', border: 'rgba(34,197,94,1)', text: '#ffffff', glow: '0 4px 20px rgba(34,197,94,0.5)' },
+    yellow: { bg: 'rgba(234,179,8,0.95)', border: 'rgba(234,179,8,1)', text: '#1a1a1a', glow: '0 4px 20px rgba(234,179,8,0.5)' },
+    red: { bg: 'rgba(239,68,68,0.96)', border: 'rgba(239,68,68,1)', text: '#ffffff', glow: '0 4px 24px rgba(239,68,68,0.6)' },
+  };
+  const cs = colorStyles[color];
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ x: 300, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 300, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+        className="fixed z-[10000] select-none"
+        style={{ top: '12px', right: '12px' }}
+      >
+        <div
+          className="flex items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2 backdrop-blur-md"
+          style={{ background: cs.bg, borderColor: cs.border, color: cs.text, boxShadow: cs.glow }}
+        >
+          <Clock size={18} className="shrink-0" />
+          <div className="flex flex-col leading-tight">
+            <span className="text-[9px] font-semibold uppercase opacity-80">
+              {expired ? (lang === 'bn' ? 'সময় শেষ' : 'Expired') : (lang === 'bn' ? 'টাস্ক টাইমার' : 'Task Timer')}
+            </span>
+            <span className="text-lg font-extrabold tabular-nums tracking-tight">
+              {expired ? '00:00' : formatTimerString(remaining)}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-1 rounded-lg p-1 hover:bg-black/20 transition shrink-0"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
