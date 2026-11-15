@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, Calendar, TrendingUp } from 'lucide-react';
+import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, Calendar, TrendingUp, ListChecks, X } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -122,6 +122,63 @@ export function Tasks() {
   const [editTask, setEditTask] = useState<TaskRow | null>(null);
   const [timer, setTimer] = useState<{ active: boolean; title: string }>({ active: false, title: '' });
   const [celebrate, setCelebrate] = useState(false);
+  const [pendingSubs, setPendingSubs] = useState<{ id: string; task_id: string; doer_id: string; doer_name: string | null; proof_urls: string[]; notes: string; status: string; task_title: string; created_at: string }[]>([]);
+  const [reviewBusyId, setReviewBusyId] = useState<string | null>(null);
+
+  const loadPendingSubs = async () => {
+    if (!profile?.id) return;
+    const { data } = await supabase
+      .from('task_submissions')
+      .select('id, task_id, doer_id, proof_urls, notes, status, created_at, tasks!inner(title, creator_id)')
+      .eq('status', 'pending')
+      .eq('tasks.creator_id', profile.id)
+      .order('created_at', { ascending: false });
+    if (data) {
+      const mapped = (data as any[]).map((r) => ({
+        id: r.id, task_id: r.task_id, doer_id: r.doer_id, doer_name: null as string | null,
+        proof_urls: r.proof_urls || [], notes: r.notes || '', status: r.status,
+        task_title: r.tasks?.title || '', created_at: r.created_at || '',
+      }));
+      const doerIds = [...new Set(mapped.map((m) => m.doer_id))];
+      if (doerIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name, phone').in('id', doerIds);
+        const nameMap = new Map<string, string>();
+        (profiles || []).forEach((p: any) => { nameMap.set(p.id, p.full_name || p.phone || 'Lumora User'); });
+        mapped.forEach((m) => { m.doer_name = nameMap.get(m.doer_id) || 'Lumora User'; });
+      }
+      setPendingSubs(mapped);
+    }
+  };
+
+  const approveSubmission = async (subId: string) => {
+    if (reviewBusyId || !profile) return;
+    setReviewBusyId(subId);
+    try {
+      const { error } = await supabase.rpc('approve_box_task_submission', { p_submission_id: subId });
+      if (error) throw error;
+      await refreshProfile();
+      loadTasks(); loadPendingSubs();
+      setCelebrate(true);
+      notify(lang === 'bn' ? 'অনুমোদন হয়েছে! দুজনেই +১ বোনাস মিস্ট্রি বক্স পেয়েছ!' : 'Approved! Both you and your buddy got +1 Bonus Mystery Box!', 'success');
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      notify(`${lang === 'bn' ? 'অনুমোদন ব্যর্থ: ' : 'Approve failed: '}${err?.message || 'error'}`, 'error');
+    } finally { setReviewBusyId(null); }
+  };
+
+  const rejectSubmission = async (subId: string) => {
+    if (reviewBusyId || !profile) return;
+    setReviewBusyId(subId);
+    try {
+      const { error } = await supabase.rpc('reject_box_task_submission', { p_submission_id: subId });
+      if (error) throw error;
+      loadTasks(); loadPendingSubs();
+      notify(lang === 'bn' ? 'বাতিল করা হয়েছে। টাস্ক আবার খোলা হয়েছে।' : 'Rejected. Task reopened.', 'info');
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      notify(`${lang === 'bn' ? 'বাতিল ব্যর্থ: ' : 'Reject failed: '}${err?.message || 'error'}`, 'error');
+    } finally { setReviewBusyId(null); }
+  };
 
   const loadTasks = async () => {
     setLoading(true);
@@ -137,7 +194,7 @@ export function Tasks() {
     setCategories(data || []);
   };
 
-  useEffect(() => { loadTasks(); loadCategories(); }, []);
+  useEffect(() => { loadTasks(); loadCategories(); loadPendingSubs(); }, []);
 
   const myCreated = (tasks || []).filter((tk) => tk && tk.creator_id === profile?.id);
   const browseable = (tasks || []).filter((tk) => tk && tk.creator_id !== profile?.id && tk.status === 'open' && tk.filled < tk.slots);
@@ -296,6 +353,51 @@ export function Tasks() {
 
       {tab === 'mine' && (
         <div className="space-y-3">
+          {/* Pending Approvals Section */}
+          {pendingSubs.length > 0 && (
+            <div className="border border-amber-500/20 rounded-2xl p-3 bg-slate-800/50">
+              <div className="flex items-center gap-2 mb-2">
+                <ListChecks size={16} className="text-amber-400" />
+                <h4 className="text-xs font-bold text-amber-300">
+                  {lang === 'bn' ? 'অনুমোদনের অপেক্ষায়' : 'Pending Approvals'}
+                </h4>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">{pendingSubs.length}</span>
+              </div>
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                {pendingSubs.map((sub) => (
+                  <div key={sub.id} className="bg-slate-800/60 border border-amber-500/20 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-sm text-white font-medium truncate">{sub.task_title}</p>
+                      <span className="text-[10px] text-slate-400 shrink-0 ml-2">
+                        {sub.created_at ? new Date(sub.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ''}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mb-2">
+                      {lang === 'bn' ? 'জমাকারী:' : 'Submitted by:'} <span className="text-slate-200">{sub.doer_name || 'Lumora User'}</span>
+                    </p>
+                    {sub.proof_urls.length > 0 && (
+                      <div className="flex gap-1.5 mb-2 flex-wrap">
+                        {sub.proof_urls.map((url, idx) => (
+                          <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt={`Proof ${idx + 1}`} className="rounded-lg w-14 h-14 object-cover border border-white/10 hover:border-amber-400/50 transition" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button variant="ghost" className="flex-1 text-xs py-1.5 border-red-500/30 text-red-300 hover:bg-red-500/10" disabled={reviewBusyId === sub.id} onClick={() => rejectSubmission(sub.id)}>
+                        {reviewBusyId === sub.id ? '...' : (lang === 'bn' ? 'বাতিল' : 'Reject')}
+                      </Button>
+                      <Button className="flex-1 text-xs py-1.5 bg-green-600 hover:bg-green-700" disabled={reviewBusyId === sub.id} onClick={() => approveSubmission(sub.id)}>
+                        {reviewBusyId === sub.id ? '...' : (lang === 'bn' ? 'অনুমোদন (+১ বক্স)' : 'Approve (+1 Box)')}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {myCreated.length === 0 ? <EmptyState message={t('noTasks')} /> : myCreated.map((task) => (
             <TaskCard key={task.id} task={task} isOwner onEdit={() => setEditTask(task)} />
           ))}

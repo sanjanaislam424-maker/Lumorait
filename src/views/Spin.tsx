@@ -2353,10 +2353,30 @@ function TaskTimerDisplay({ timer, lang, onExpire }: { timer: TaskTimer; lang: s
 
 function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: string; onClose: () => void }) {
   const [, setTick] = useState(0);
+  const [pos, setPos] = useState({ x: 12, y: 12 });
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setPos({
+      x: Math.max(0, Math.min(window.innerWidth - 160, dragRef.current.origX + dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 60, dragRef.current.origY + dy)),
+    });
+  };
+  const handlePointerUp = () => { dragRef.current = null; };
+
   const elapsed = Date.now() - timer.startTime;
   const remaining = TASK_TIMEOUT_MS - elapsed;
   const color = getTimerColor(remaining);
@@ -2370,12 +2390,16 @@ function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: s
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ x: 300, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 300, opacity: 0 }}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-        className="fixed z-[10000] select-none"
-        style={{ top: '12px', right: '12px' }}
+        className="fixed z-[10000] select-none touch-none"
+        style={{ left: pos.x, top: pos.y, cursor: 'grab' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         <div
           className="flex items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2 backdrop-blur-md"
@@ -2391,6 +2415,7 @@ function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: s
             </span>
           </div>
           <button
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={onClose}
             className="ml-1 rounded-lg p-1 hover:bg-black/20 transition shrink-0"
           >
