@@ -2083,6 +2083,61 @@ export function Spin() {
                 )}
               </>
             )}
+
+            {/* ---- PENDING SUBMISSIONS REVIEW (creators only) ---- */}
+            {pendingSubs.length > 0 && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ListChecks size={16} className="text-amber-400" />
+                  <h4 className="text-xs font-bold text-amber-300">
+                    {lang === 'bn' ? 'অনুমোদনের অপেক্ষায়' : 'Pending Approvals'}
+                  </h4>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">{pendingSubs.length}</span>
+                </div>
+                <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                  {pendingSubs.map((sub) => (
+                    <div key={sub.id} className="bg-slate-800/60 border border-amber-500/20 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-sm text-white font-medium truncate">{sub.task_title}</p>
+                        <span className="text-[10px] text-slate-400 shrink-0 ml-2">
+                          {sub.created_at ? new Date(sub.created_at).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ''}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mb-2">
+                        {lang === 'bn' ? 'জমাকারী:' : 'Submitted by:'} <span className="text-slate-200">{sub.doer_name || 'Lumora User'}</span>
+                      </p>
+                      {sub.proof_urls.length > 0 && (
+                        <div className="flex gap-1.5 mb-2 flex-wrap">
+                          {sub.proof_urls.map((url, idx) => (
+                            <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                              <img src={url} alt={`Proof ${idx + 1}`} className="rounded-lg w-14 h-14 object-cover border border-white/10 hover:border-amber-400/50 transition" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          className="flex-1 text-xs py-1.5 border-red-500/30 text-red-300 hover:bg-red-500/10"
+                          disabled={reviewBusyId === sub.id}
+                          onClick={() => rejectSubmission(sub.id)}
+                        >
+                          {reviewBusyId === sub.id ? '...' : (lang === 'bn' ? 'বাতিল' : 'Reject')}
+                        </Button>
+                        <Button
+                          className="flex-1 text-xs py-1.5 bg-green-600 hover:bg-green-700"
+                          disabled={reviewBusyId === sub.id}
+                          onClick={() => approveSubmission(sub.id)}
+                        >
+                          {reviewBusyId === sub.id ? '...' : (lang === 'bn' ? 'অনুমোদন করো (+১ বক্স)' : 'Approve (+1 Box)')}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <Button variant="ghost" className="w-full mt-4" onClick={() => setShowTaskHub(false)}>{t('close')}</Button>
           </motion.div>
         </div>
