@@ -2288,7 +2288,7 @@ export function Spin() {
 
       {/* ===== FLOATING TASK TIMER (display-over-apps style) ===== */}
       {taskTimer && taskTimer.active && (
-        <FloatingTaskTimer timer={taskTimer} lang={lang} onClose={() => { setTaskTimer({ ...taskTimer, active: false }); }} />
+        <FloatingTaskTimer timer={taskTimer} lang={lang} />
       )}
 
       <CelebrationOverlay show={celebrate} onClose={() => setCelebrate(false)} title={t('celebrate')} />
@@ -2351,7 +2351,7 @@ function TaskTimerDisplay({ timer, lang, onExpire }: { timer: TaskTimer; lang: s
   );
 }
 
-function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: string; onClose: () => void }) {
+function FloatingTaskTimer({ timer, lang }: { timer: TaskTimer; lang: string }) {
   const [, setTick] = useState(0);
   const [pos, setPos] = useState({ x: 12, y: 12 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -2371,8 +2371,8 @@ function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: s
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
     setPos({
-      x: Math.max(0, Math.min(window.innerWidth - 160, dragRef.current.origX + dx)),
-      y: Math.max(0, Math.min(window.innerHeight - 60, dragRef.current.origY + dy)),
+      x: Math.max(0, Math.min(window.innerWidth - 170, dragRef.current.origX + dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 70, dragRef.current.origY + dy)),
     });
   };
   const handlePointerUp = () => { dragRef.current = null; };
@@ -2408,19 +2408,12 @@ function FloatingTaskTimer({ timer, lang, onClose }: { timer: TaskTimer; lang: s
           <Clock size={18} className="shrink-0" />
           <div className="flex flex-col leading-tight">
             <span className="text-[9px] font-semibold uppercase opacity-80">
-              {expired ? (lang === 'bn' ? 'সময় শেষ' : 'Expired') : (lang === 'bn' ? 'টাস্ক টাইমার' : 'Task Timer')}
+              {expired ? (lang === 'bn' ? 'সময় শেষ' : 'Expired') : 'লুমোরা আইটি'}
             </span>
             <span className="text-lg font-extrabold tabular-nums tracking-tight">
               {expired ? '00:00' : formatTimerString(remaining)}
             </span>
           </div>
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={onClose}
-            className="ml-1 rounded-lg p-1 hover:bg-black/20 transition shrink-0"
-          >
-            <X size={14} />
-          </button>
         </div>
       </motion.div>
     </AnimatePresence>

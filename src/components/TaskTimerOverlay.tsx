@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, X } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 const TASK_TIMEOUT_S = 15 * 60;
 const WARNING_THRESHOLD_S = 2 * 60;
@@ -22,7 +22,6 @@ const colorStyles: Record<TimerColor, { bg: string; border: string; text: string
 export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: boolean; onExpire: () => void; taskTitle: string }) {
   const [seconds, setSeconds] = useState(TASK_TIMEOUT_S);
   const [pos, setPos] = useState({ x: 12, y: 12 });
-  const [dismissed, setDismissed] = useState(false);
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -30,7 +29,6 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
   useEffect(() => {
     if (active) {
       setSeconds(TASK_TIMEOUT_S);
-      setDismissed(false);
       setPos({ x: 12, y: 12 });
     }
   }, [active]);
@@ -60,8 +58,8 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
     setPos({
-      x: Math.max(0, Math.min(window.innerWidth - 160, dragRef.current.origX + dx)),
-      y: Math.max(0, Math.min(window.innerHeight - 60, dragRef.current.origY + dy)),
+      x: Math.max(0, Math.min(window.innerWidth - 170, dragRef.current.origX + dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 70, dragRef.current.origY + dy)),
     });
   };
   const handlePointerUp = () => { dragRef.current = null; };
@@ -76,7 +74,7 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
 
   return (
     <AnimatePresence>
-      {active && !dismissed && (
+      {active && (
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -96,19 +94,12 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
             <Clock size={18} className="shrink-0" />
             <div className="flex flex-col leading-tight min-w-0">
               <span className="text-[9px] font-semibold uppercase opacity-80 truncate">
-                {expired ? 'Expired' : taskTitle}
+                {expired ? 'Expired' : 'লুমোরা আইটি'}
               </span>
               <span className="text-lg font-extrabold tabular-nums tracking-tight">
                 {expired ? '00:00' : timeStr}
               </span>
             </div>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => setDismissed(true)}
-              className="ml-1 rounded-lg p-1 hover:bg-black/20 transition shrink-0"
-            >
-              <X size={14} />
-            </button>
           </div>
         </motion.div>
       )}
