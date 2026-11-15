@@ -21,6 +21,7 @@ const colorStyles: Record<TimerColor, { bg: string; border: string; text: string
 
 export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: boolean; onExpire: () => void; taskTitle: string }) {
   const [seconds, setSeconds] = useState(TASK_TIMEOUT_S);
+  const [now, setNow] = useState(new Date());
   const [pos, setPos] = useState({ x: 12, y: 12 });
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
@@ -36,6 +37,7 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
   useEffect(() => {
     if (!active) return;
     const iv = setInterval(() => {
+      setNow(new Date());
       setSeconds((s) => {
         if (s <= 1) {
           clearInterval(iv);
@@ -71,6 +73,7 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
   const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const clockStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
     <AnimatePresence>
@@ -88,7 +91,7 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
           onPointerCancel={handlePointerUp}
         >
           <div
-            className="flex items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2 backdrop-blur-md max-w-[220px]"
+            className="flex items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2 backdrop-blur-md max-w-[240px]"
             style={{ background: cs.bg, borderColor: cs.border, color: cs.text, boxShadow: cs.glow }}
           >
             <Clock size={18} className="shrink-0" />
@@ -98,6 +101,9 @@ export function TaskTimerOverlay({ active, onExpire, taskTitle }: { active: bool
               </span>
               <span className="text-lg font-extrabold tabular-nums tracking-tight">
                 {expired ? '00:00' : timeStr}
+              </span>
+              <span className="text-[9px] font-medium tabular-nums opacity-75">
+                {clockStr}
               </span>
             </div>
           </div>

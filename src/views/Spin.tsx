@@ -2353,11 +2353,12 @@ function TaskTimerDisplay({ timer, lang, onExpire }: { timer: TaskTimer; lang: s
 
 function FloatingTaskTimer({ timer, lang }: { timer: TaskTimer; lang: string }) {
   const [, setTick] = useState(0);
+  const [now, setNow] = useState(new Date());
   const [pos, setPos] = useState({ x: 12, y: 12 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    const interval = setInterval(() => { setTick((t) => t + 1); setNow(new Date()); }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -2402,7 +2403,7 @@ function FloatingTaskTimer({ timer, lang }: { timer: TaskTimer; lang: string }) 
         onPointerCancel={handlePointerUp}
       >
         <div
-          className="flex items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2 backdrop-blur-md"
+          className="flex items-center gap-2.5 rounded-2xl border-2 px-3.5 py-2 backdrop-blur-md max-w-[240px]"
           style={{ background: cs.bg, borderColor: cs.border, color: cs.text, boxShadow: cs.glow }}
         >
           <Clock size={18} className="shrink-0" />
@@ -2412,6 +2413,9 @@ function FloatingTaskTimer({ timer, lang }: { timer: TaskTimer; lang: string }) 
             </span>
             <span className="text-lg font-extrabold tabular-nums tracking-tight">
               {expired ? '00:00' : formatTimerString(remaining)}
+            </span>
+            <span className="text-[9px] font-medium tabular-nums opacity-75">
+              {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
         </div>
