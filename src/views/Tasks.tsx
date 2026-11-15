@@ -188,7 +188,7 @@ export function Tasks() {
   const loadTasks = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(50);
+      const { data, error } = await supabase.from('tasks').select('*').eq('is_box_task', false).order('created_at', { ascending: false }).limit(50);
       if (error) { notify(microcopy.errorGeneric(), 'error'); return; }
       setTasks((data as TaskRow[]) || []);
     } finally { setLoading(false); }
