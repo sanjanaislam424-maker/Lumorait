@@ -1278,11 +1278,11 @@ function PromoCodesTab() {
 }
 
 function TaskManagementTab() {
-  const { t, profile } = useApp();
+  const { t, profile, lang } = useApp();
   const { notify } = useToast();
   const [categories, setCategories] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000 });
+  const [limits, setLimits] = useState({ min_task_reward: 10, max_task_reward: 10000, min_box_task_reward: 5 });
   const [newCat, setNewCat] = useState({ name: '', label: '', icon: 'other', icon_url: '', video_tutorial_url: '' });
   const [iconUploading, setIconUploading] = useState(false);
   const iconFileRef = useRef<HTMLInputElement>(null);
@@ -1295,11 +1295,11 @@ function TaskManagementTab() {
     const [catRes, taskRes, settingsRes] = await Promise.all([
       supabase.from('task_categories').select('*').order('sort_order', { ascending: true }),
       supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(50),
-      supabase.from('app_settings').select('min_task_reward, max_task_reward').eq('id', 1).maybeSingle(),
+      supabase.from('app_settings').select('min_task_reward, max_task_reward, min_box_task_reward').eq('id', 1).maybeSingle(),
     ]);
     setCategories(catRes.data || []);
     setTasks(taskRes.data || []);
-    if (settingsRes.data) setLimits(settingsRes.data);
+    if (settingsRes.data) setLimits((prev) => ({ ...prev, ...settingsRes.data }));
   };
 
   useEffect(() => { load(); }, []);
@@ -1361,6 +1361,7 @@ function TaskManagementTab() {
     await supabase.from('app_settings').update({
       min_task_reward: limits.min_task_reward,
       max_task_reward: limits.max_task_reward,
+      min_box_task_reward: Math.max(1, limits.min_box_task_reward),
     }).eq('id', 1);
     notify(t('saved'), 'success');
   };
@@ -1442,6 +1443,11 @@ function TaskManagementTab() {
           <div>
             <label className="text-xs text-slate-400 block mb-1">{t('maxRewardLimit')}</label>
             <input type="number" min={1} value={limits.max_task_reward} onChange={(e) => setLimits({ ...limits, max_task_reward: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'মিস্ট্রি বক্স টাস্কের সর্বনিম্ন কয়েন' : 'Mystery Box Task Minimum Coins'}</label>
+            <p className="text-[10px] text-slate-500 mb-1">{lang === 'bn' ? 'বোনাস মিস্ট্রি বক্স (P2P) টাস্ক পাবলিশ করার সময় সর্বনিম্ন যত কয়েন রিওয়ার্ড দিতে হবে।' : 'Lowest reward a user can offer when publishing a Bonus Mystery Box (P2P) task.'}</p>
+            <input type="number" min={1} value={limits.min_box_task_reward} onChange={(e) => setLimits({ ...limits, min_box_task_reward: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
           </div>
         </div>
         <Button className="w-full mt-3" onClick={saveLimits}>{t('save')}</Button>

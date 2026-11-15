@@ -522,6 +522,7 @@ export function Spin() {
   const [showTaskHub, setShowTaskHub] = useState(false);
   const [p2pTasks, setP2pTasks] = useState<P2pTaskRow[]>([]);
   const [addTaskForm, setAddTaskForm] = useState({ title: '', description: '', platform: 'youtube', target_url: '', cost_coins: 25 });
+  const [minBoxTaskReward, setMinBoxTaskReward] = useState(5);
   const [addTaskBusy, setAddTaskBusy] = useState(false);
   const [addTaskPhotos, setAddTaskPhotos] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -566,12 +567,12 @@ export function Spin() {
     setSuperEvent((data as SuperEvent) || null);
   }, []);
 
-  // Load admin-controlled unlock toggles + tutorial URL
+  // Load admin-controlled unlock toggles + tutorial URL + minimum box task reward
   useEffect(() => {
     (async () => {
       const { data } = await supabase
         .from('app_settings')
-        .select('box_unlock_task_enabled, box_unlock_video_enabled, box_tutorial_url')
+        .select('box_unlock_task_enabled, box_unlock_video_enabled, box_tutorial_url, min_box_task_reward')
         .eq('id', 1)
         .maybeSingle();
       if (data) {
@@ -580,6 +581,9 @@ export function Spin() {
           video: data.box_unlock_video_enabled !== false,
         });
         setTutorialUrl(data.box_tutorial_url || null);
+        if (typeof data.min_box_task_reward === 'number' && data.min_box_task_reward > 0) {
+          setMinBoxTaskReward(data.min_box_task_reward);
+        }
       }
     })();
   }, []);
@@ -1116,6 +1120,15 @@ export function Spin() {
       notify(lang === 'bn' ? 'একটা সঠিক লিংক দাও (https://...)!' : 'Please enter a valid URL (https://...)!', 'error');
       return;
     }
+    if (addTaskForm.cost_coins < minBoxTaskReward) {
+      notify(
+        lang === 'bn'
+          ? `সর্বনিম্ন ${minBoxTaskReward} কয়েন রিওয়ার্ড দিতে হবে!`
+          : `Minimum reward is ${minBoxTaskReward} coins!`,
+        'error'
+      );
+      return;
+    }
     setAddTaskBusy(true);
     try {
       const { data, error } = await supabase.rpc('publish_box_task', {
@@ -1154,6 +1167,13 @@ export function Spin() {
         notify(lang === 'bn' ? 'টাস্কের নাম ৩-১২০ অক্ষরের মধ্যে দাও।' : 'Task title must be 3-120 characters.', 'error');
       } else if (msg.includes('invalid_cost')) {
         notify(lang === 'bn' ? 'রিওয়ার্ড কয়েন সঠিক নয়!' : 'Invalid reward coins amount!', 'error');
+      } else if (msg.includes('reward_below_minimum')) {
+        notify(
+          lang === 'bn'
+            ? `সর্বনিম্ন ${minBoxTaskReward} কয়েন রিওয়ার্ড দিতে হবে!`
+            : `Minimum reward is ${minBoxTaskReward} coins!`,
+          'error'
+        );
       } else if (code === '42501' || msg.includes('permission') || msg.includes('RLS') || msg.includes('policy')) {
         notify(lang === 'bn' ? `ডাটাবেস পারমিশন এরর: ${fullDetail}` : `Database permission error: ${fullDetail}`, 'error');
       } else if (code === '42703' || msg.includes('column') || msg.includes('does not exist')) {
@@ -2036,7 +2056,8 @@ export function Spin() {
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'রিওয়ার্ড কয়েন (তোমার খরচ)' : 'Reward Coins (your cost)'}</label>
-                    <input type="number" min={0} max={100000} value={addTaskForm.cost_coins} onChange={(e) => setAddTaskForm({ ...addTaskForm, cost_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+                    <input type="number" min={minBoxTaskReward} max={100000} value={addTaskForm.cost_coins} onChange={(e) => setAddTaskForm({ ...addTaskForm, cost_coins: +e.target.value })} className="w-full bg-slate-700 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm" />
+                    <p className="text-[10px] text-slate-500 mt-1">{lang === 'bn' ? `সর্বনিম্ন: ${minBoxTaskReward} কয়েন` : `Minimum: ${minBoxTaskReward} coins`}</p>
                   </div>
                   <div className="bg-slate-700/40 border border-white/10 rounded-xl p-3 flex items-center justify-between">
                     <span className="text-xs text-slate-400">{t('lumoraCoins')}</span>
