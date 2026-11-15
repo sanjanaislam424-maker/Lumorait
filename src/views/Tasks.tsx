@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, Calendar, TrendingUp, ListChecks, X } from 'lucide-react';
+import { Plus, Facebook, Instagram, Youtube, Star, ShieldCheck, Flame, MessageSquare, LayoutGrid, ArrowLeft, Edit2, PlayCircle, Zap, ZapOff, Lock, Calendar, TrendingUp, ListChecks, X, Clock } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { supabase, TaskRow, Profile } from '@/lib/supabase';
 import { Card, Button, Modal, CoinBadge, EmptyState } from '@/components/ui';
@@ -117,7 +117,12 @@ export function Tasks() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeCategoryData, setActiveCategoryData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [proofTask, setProofTask] = useState<TaskRow | null>(null);
+  const [detailTask, setDetailTask] = useState<TaskRow | null>(null);
+  const [detailAccepted, setDetailAccepted] = useState(false);
+  const [proofPhotos, setProofPhotos] = useState<string[]>([]);
+  const [proofUploading, setProofUploading] = useState(false);
+  const proofInputRef = useRef<HTMLInputElement>(null);
+  const [submittingProof, setSubmittingProof] = useState(false);
   const [chatTask, setChatTask] = useState<TaskRow | null>(null);
   const [editTask, setEditTask] = useState<TaskRow | null>(null);
   const [timer, setTimer] = useState<{ active: boolean; title: string }>({ active: false, title: '' });
@@ -221,21 +226,41 @@ export function Tasks() {
     }
     await supabase.from('tasks').update({ status: 'in_progress', filled: task.filled + 1 }).eq('id', task.id);
     setTimer({ active: true, title: task.title });
-    notify(t('taskClaimed'), 'info');
-    setProofTask(task);
+    setDetailAccepted(true);
+    notify(lang === 'bn' ? 'টাস্ক গ্রহণ হয়েছে! ১৫ মিনিট সময় — দ্রুত করো!' : 'Task accepted! 15 minutes on the clock — hurry up!', 'info');
     await loadTasks();
   };
 
-  const submitProof = async (task: TaskRow, urls: string[], notes: string) => {
-    if (urls.length === 0) { notify(t('noProofs'), 'error'); return; }
-    await supabase.from('task_submissions').insert({
-      task_id: task.id, doer_id: profile!.id, proof_urls: urls, notes, status: 'pending',
-    });
-    setProofTask(null);
-    setTimer({ active: false, title: '' });
-    setCelebrate(true);
-    notify(t('celebrate'), 'success');
-    await loadTasks();
+  const uploadTaskProof = async (file: File) => {
+    if (!file.type.startsWith('image/') || !detailTask) return;
+    if (proofPhotos.length >= 3) return;
+    setProofUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const fileName = `task-proofs/${detailTask.id}/${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+      const { error } = await supabase.storage.from('support-screenshots').upload(fileName, file, { cacheControl: '3600', upsert: true });
+      if (error) throw error;
+      const { data } = supabase.storage.from('support-screenshots').getPublicUrl(fileName);
+      setProofPhotos((prev) => [...prev, data.publicUrl]);
+    } catch {
+      notify(lang === 'bn' ? 'ছবি আপলোড করা যায়নি।' : 'Could not upload photo.', 'error');
+    } finally { setProofUploading(false); }
+  };
+
+  const submitProof = async () => {
+    if (!profile || !detailTask || submittingProof) return;
+    if (proofPhotos.length < 1) { notify(t('noProofs'), 'error'); return; }
+    setSubmittingProof(true);
+    try {
+      await supabase.from('task_submissions').insert({
+        task_id: detailTask.id, doer_id: profile.id, proof_urls: proofPhotos, notes: 'Submitted from Tasks', status: 'pending',
+      });
+      setDetailTask(null); setDetailAccepted(false); setProofPhotos([]);
+      setTimer({ active: false, title: '' });
+      setCelebrate(true);
+      notify(lang === 'bn' ? 'প্রমাণ জমা হয়েছে! ক্রিয়েটর অনুমোদন করলেই তুমি +১ বোনাস মিস্ট্রি বক্স পাবে!' : 'Proof submitted! When the creator approves, you get +1 Bonus Mystery Box!', 'success');
+      await loadTasks();
+    } finally { setSubmittingProof(false); }
   };
 
   const saveEdit = async (updated: TaskRow) => {
@@ -261,12 +286,12 @@ export function Tasks() {
           profile={profile}
           loading={loading}
           onBack={closeCategory}
-          onAccept={acceptTask}
+          onAccept={(tk) => setDetailTask(tk)}
           onChat={(task) => setChatTask(task)}
           onEdit={(task) => setEditTask(task)}
           t={t}
         />
-        <ProofModal task={proofTask} onClose={() => setProofTask(null)} onSubmit={submitProof} />
+        <TaskDetailModal task={detailTask} accepted={detailAccepted} photos={proofPhotos} uploading={proofUploading} submitting={submittingProof} timerActive={timer.active} onAccept={() => detailTask && acceptTask(detailTask)} onUpload={uploadTaskProof} onRemovePhoto={(idx) => setProofPhotos((prev) => prev.filter((_, i) => i !== idx))} onSubmit={submitProof} onClose={() => { setDetailTask(null); setDetailAccepted(false); setProofPhotos([]); }} />
         <ChatModal task={chatTask} onClose={() => setChatTask(null)} />
         <EditTaskModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} />
         <TaskTimerOverlay active={timer.active} onExpire={() => setTimer({ active: false, title: '' })} taskTitle={timer.title} />
@@ -342,7 +367,7 @@ export function Tasks() {
                       <p className="text-sm text-slate-400">{microcopy.categoryEmpty()}</p>
                     </div>
                   ) : allAvailable.map((task) => (
-                    <TaskCard key={task.id} task={task} isOwner={task.creator_id === profile?.id} onAccept={() => acceptTask(task)} onChat={() => setChatTask(task)} />
+                    <TaskCard key={task.id} task={task} isOwner={task.creator_id === profile?.id} onAccept={() => setDetailTask(task)} onChat={() => setChatTask(task)} />
                   ))}
                 </div>
               )}
@@ -404,7 +429,7 @@ export function Tasks() {
         </div>
       )}
 
-      <ProofModal task={proofTask} onClose={() => setProofTask(null)} onSubmit={submitProof} />
+      <TaskDetailModal task={detailTask} accepted={detailAccepted} photos={proofPhotos} uploading={proofUploading} submitting={submittingProof} timerActive={timer.active} onAccept={() => detailTask && acceptTask(detailTask)} onUpload={uploadTaskProof} onRemovePhoto={(idx) => setProofPhotos((prev) => prev.filter((_, i) => i !== idx))} onSubmit={submitProof} onClose={() => { setDetailTask(null); setDetailAccepted(false); setProofPhotos([]); }} />
       <ChatModal task={chatTask} onClose={() => setChatTask(null)} />
       <EditTaskModal task={editTask} onClose={() => setEditTask(null)} onSave={saveEdit} />
       <TaskTimerOverlay active={timer.active} onExpire={() => setTimer({ active: false, title: '' })} taskTitle={timer.title} />
@@ -1027,25 +1052,102 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function ProofModal({ task, onClose, onSubmit }: { task: TaskRow | null; onClose: () => void; onSubmit: (task: TaskRow, urls: string[], notes: string) => void }) {
-  const { t } = useApp();
-  const [urls, setUrls] = useState<string[]>(['']);
-  const [notes, setNotes] = useState('');
-
-  useEffect(() => { if (task) { setUrls(['']); setNotes(''); } }, [task]);
-
+function TaskDetailModal({ task, accepted, photos, uploading, submitting, timerActive, onAccept, onUpload, onRemovePhoto, onSubmit, onClose }: {
+  task: TaskRow | null;
+  accepted: boolean;
+  photos: string[];
+  uploading: boolean;
+  submitting: boolean;
+  timerActive: boolean;
+  onAccept: () => void;
+  onUpload: (file: File) => void;
+  onRemovePhoto: (idx: number) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  const { t, lang } = useApp();
+  const inputRef = useRef<HTMLInputElement>(null);
+  if (!task) return null;
+  const refPhotos = (task as unknown as { photo_urls?: string[] }).photo_urls || [];
   return (
-    <Modal open={!!task} onClose={onClose} title={t('submitProof')}>
+    <Modal open={!!task} onClose={onClose} title={lang === 'bn' ? 'টাস্ক বিস্তারিত' : 'Task Details'}>
       <div className="space-y-3">
-        {urls.map((u, i) => (
-          <Input key={i} label={`${t('screenshots')} ${i + 1}`} value={u} onChange={(v) => setUrls(urls.map((x, j) => j === i ? v : x))} />
-        ))}
-        <Button variant="ghost" className="text-sm" onClick={() => setUrls([...urls, ''])}>+ {t('addScreenshot')}</Button>
-        <Input label={t('taskNotes')} value={notes} onChange={setNotes} />
-        <div className="flex gap-2">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>{t('cancel')}</Button>
-          <Button className="flex-1" onClick={() => task && onSubmit(task, urls.filter((u) => u.trim()), notes)}>{t('submit')}</Button>
+        <div>
+          <label className="text-xs text-slate-400 block mb-1">{t('title')}</label>
+          <p className="text-sm text-white bg-slate-700/40 rounded-lg px-3 py-2">{task.title}</p>
         </div>
+        {task.description && (
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'সম্পূর্ণ নির্দেশনামা' : 'Full Instructions'}</label>
+            <div className="text-sm text-slate-200 bg-slate-700/40 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap">{task.description}</div>
+          </div>
+        )}
+        {task.target_url && (
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'টাস্ক লিংক (এখানে যাও)' : 'Task Link (go here)'}</label>
+            <a href={task.target_url} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 underline bg-slate-700/40 rounded-lg px-3 py-2 break-all">{task.target_url}</a>
+          </div>
+        )}
+        {refPhotos.length > 0 && (
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'তথ্যসূত্র ছবি' : 'Reference Photos'}</label>
+            <div className="flex gap-2 flex-wrap">
+              {refPhotos.map((url, idx) => (
+                <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                  <img src={url} alt={`Ref ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+          <p className="text-xs text-amber-300/90 leading-relaxed">
+            {lang === 'bn'
+              ? 'নির্দেশনামা ও লিংক অনুসরণ করে টাস্কটি সম্পন্ন করো, তারপর ১–৩টি স্ক্রিনশট প্রমাণ হিসেবে আপলোড করো। ক্রিয়েটর অনুমোদন করলে দুজনেই +১ বোনাস মিস্ট্রি বক্স পাবে। গ্রহণের পর ১৫ মিনিটের মধ্যে জমা দিতে হবে!'
+              : 'Follow the instructions and link to complete the task, then upload 1-3 screenshots as proof. When the creator approves, you both get +1 Bonus Mystery Box. Submit within 15 minutes of accepting!'}
+          </p>
+        </div>
+        {!accepted ? (
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={onClose}>{t('cancel')}</Button>
+            <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={onAccept}>
+              {lang === 'bn' ? 'টাস্ক গ্রহণ করো (১৫ মিনিট)' : 'Accept Task (15 min)'}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="text-[11px] text-green-300 flex items-center gap-1.5">
+              <Clock size={13} /> {timerActive ? (lang === 'bn' ? 'টাইমার চালু — ১৫ মিনিটের মধ্যে জমা দাও!' : 'Timer running — submit within 15 minutes!') : (lang === 'bn' ? 'সময় শেষ!' : 'Time is up!')}
+            </p>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">{lang === 'bn' ? 'প্রমাণ স্ক্রিনশট (১–৩টি)' : 'Proof Screenshots (1-3)'}</label>
+              <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ''; }} className="hidden" />
+              <div className="flex items-center gap-2 flex-wrap">
+                {photos.map((url, idx) => (
+                  <div key={idx} className="relative inline-block">
+                    <img src={url} alt={`Proof ${idx + 1}`} className="rounded-lg w-16 h-16 object-cover border border-white/10" />
+                    <button onClick={() => onRemovePhoto(idx)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white">
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                {photos.length < 3 && !uploading && (
+                  <button onClick={() => inputRef.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-slate-400 hover:border-amber-400/50 hover:text-amber-400 transition">
+                    <Plus size={18} />
+                  </button>
+                )}
+                {uploading && <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center text-slate-400 text-xs">...</div>}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">{photos.length}/3 {lang === 'bn' ? 'আপলোড হয়েছে' : 'uploaded'}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={onClose}>{t('cancel')}</Button>
+              <Button className="flex-1" disabled={submitting || photos.length < 1} onClick={onSubmit}>
+                {submitting ? '...' : (lang === 'bn' ? 'প্রমাণ জমা দাও' : 'Submit Proof')}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );

@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap, Plus, Users } from 'lucide-react';
+import { Gift, Play, ListChecks, Sparkles, Volume2, VolumeX, Star, X, Clock, Trophy, Crown, Zap, Plus, Users, ExternalLink, Check, ThumbsDown, ArrowLeft, Upload } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { createMicrocopy } from '@/lib/microcopy';
 import { supabase } from '@/lib/supabase';
 import { Card, Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
+import { TaskTimerOverlay } from '@/components/TaskTimerOverlay';
 
 type WinnerRow = {
   id: string;
