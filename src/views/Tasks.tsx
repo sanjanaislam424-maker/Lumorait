@@ -199,7 +199,13 @@ export function Tasks() {
     setCategories(data || []);
   };
 
-  useEffect(() => { loadTasks(); loadCategories(); loadPendingSubs(); }, []);
+  useEffect(() => { loadCategories(); }, []);
+  useEffect(() => {
+    // RLS only returns rows for a signed-in session; profile arriving means auth is ready.
+    if (!profile?.id) return;
+    loadTasks();
+    loadPendingSubs();
+  }, [profile?.id]);
 
   const myCreated = (tasks || []).filter((tk) => tk && tk.creator_id === profile?.id);
   const browseable = (tasks || []).filter((tk) => tk && tk.creator_id !== profile?.id && tk.status === 'open' && tk.filled < tk.slots);
@@ -924,7 +930,7 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         : (tier ? (tier.duration_days === 0 ? null : new Date(now.getTime() + tier.duration_days * 86400000).toISOString()) : null);
       const lockedUntil = (isPromoted && lt) ? new Date(now.getTime() + 8 * 86400000).toISOString() : null;
 
-      await supabase.from('tasks').insert({
+      const { error: insertError } = await supabase.from('tasks').insert({
         creator_id: profile.id,
         platform: form.platform,
         title: form.title,
@@ -946,6 +952,10 @@ function CreateTaskForm({ onDone }: { onDone: () => void }) {
         promotion_end_at: lt ? promotionExpiry : null,
         promotion_last_charged_at: lt ? now.toISOString() : null,
       });
+      if (insertError) {
+        notify(`${lang === 'bn' ? 'টাস্ক পোস্ট করা যায়নি: ' : 'Could not post task: '}${insertError.message}`, 'error');
+        return;
+      }
       if (!isAdmin && totalCost > 0) {
         await supabase.from('profiles').update({ lumora_coins: profile.lumora_coins - totalCost }).eq('id', profile.id);
         await supabase.from('transactions').insert({ user_id: profile.id, type: 'task_spend', amount: -totalCost, status: 'completed', note: `Created: ${form.title}${isPromoted ? ` + ${t('promoteTask')}` : ''}` });

@@ -593,8 +593,9 @@ export function Spin() {
     if (!profile?.id) return;
     const { data } = await supabase
       .from('tasks')
-      .select('id, title, description, platform, target_url, reward_coins, cost_coins, creator_id, status, filled, photo_urls')
+      .select('id, title, description, platform, target_url, reward_coins, cost_coins, creator_id, status, filled, photo_urls, is_box_task')
       .eq('is_admin_task', false)
+      .eq('is_box_task', true)
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: false })
       .limit(20);
